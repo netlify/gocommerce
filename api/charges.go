@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/guregu/kami"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stripe/stripe-go"
@@ -147,14 +149,31 @@ func (a *API) verifyLineItems(items []models.LineItem) error {
 }
 
 func (a *API) verifyLineItem(item *models.LineItem) error {
-	fmt.Printf("Verifying line item %v", item.Path)
-	resp, err := http.Get(a.config.SiteURL + item.Path)
+	fmt.Printf("Verifying line item %v", a.config.SiteURL+item.Path)
+	doc, err := goquery.NewDocument(a.config.SiteURL + item.Path)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Got response: %v", resp)
-	// Make http request to URL for item
-	// Parse meta data
-	// compare price with meta data
+	metaTag := doc.Find("head meta[name='product:price:amount']").First()
+	if metaTag.Length() == 0 {
+		return fmt.Errorf("No meta product tag found for '%v'", item.Title)
+	}
+	content, ok := metaTag.Attr("content")
+	if !ok {
+		return fmt.Errorf("No price set in meta tag for '%v'", item.Title)
+	}
+	amount, err := strconv.ParseUint(content, 10, 64)
+	if err != nil {
+		return fmt.Errorf("Malformed price set in meta tag for '%v'", item.Title)
+	}
+	if amount != item.Price {
+		return fmt.Errorf(
+			"Price for '%v' didn't match (%v on product page vs %v in order)",
+			item.Title,
+			amount,
+			item.Price,
+		)
+	}
+
 	return nil
 }
