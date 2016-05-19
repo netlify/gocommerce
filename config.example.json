@@ -1,0 +1,35 @@
+{
+  "site_url": "https://my-jam-store.example.com",
+  "jwt": {
+    "secret": "CHANGE-THIS! VERY IMPORTANT!",
+  },
+  "db": {
+    "driver": "sqlite3",
+    "url": "gorm.db"
+  },
+  "api": {
+    "host": "localhost",
+    "port": 9111
+  },
+  "mailer": {
+    "host": "smtp.mandrillapp.com",
+    "port": 587,
+    "user": "test@example.com",
+    "pass": "super-secret-password",
+    "template_folder": "/mail_templates",
+    "member_folder": "/users",
+    "admin_email": "admin@example.com",
+    "mail_subjects": {
+      "confirmation": "Welcome to Authlify!",
+      "recovery": "Reset your Authlify password!"
+    }
+  },
+  "payments": {
+    "stripe": {
+
+    },
+    "paypal": {
+
+    }
+  }
+}
