@@ -10,7 +10,7 @@ type LineItem struct {
 	SKU         string `json:"sku"`
 	Description string `json:"description"`
 
-	Path string `json:"-"`
+	Path string `json:"path"`
 
 	Price    uint64 `json:"price"`
 	Quantity uint64 `json:"quantity"`

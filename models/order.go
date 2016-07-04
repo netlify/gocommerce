@@ -29,7 +29,8 @@ type Order struct {
 	FulfillmentState string `json:"fulfillment_state"`
 	State            string `json:"state"`
 
-	Notes []OrderNote `json:"notes"`
+	Transactions []Transaction `json:"transactions"`
+	Notes        []OrderNote   `json:"notes"`
 
 	ShippingAddress   Address `json:"shipping_address",gorm:"ForeignKey:ShippingAddressID"`
 	ShippingAddressID string

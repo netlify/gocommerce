@@ -18,12 +18,35 @@ import (
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
 const MaxConcurrentLookups = 10
 
-type ChargeParams struct {
+// PaymentParams holds the parameters for creating a payment
+type PaymentParams struct {
 	StripeToken string `json:"stripe_token"`
 }
 
-func (a *API) ChargeDo(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	params := &ChargeParams{}
+// PaymentList is the endpoint for listing transactions for an order
+func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	token := getToken(ctx)
+	if token == nil {
+		UnauthorizedError(w, "Listing payments requires authentication")
+		return
+	}
+
+	orderID := kami.Param(ctx, "order_id")
+	order := &models.Order{}
+	if result := a.db.Preload("Transactions").First(order, "id = ?", orderID); result.Error != nil {
+		if result.RecordNotFound() {
+			NotFoundError(w, "Order not found")
+		} else {
+			InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+		}
+	}
+
+	sendJSON(w, 200, order.Transactions)
+}
+
+// PaymentCreate is the endpoint for creating a payment for an order
+func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	params := &PaymentParams{}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
@@ -89,12 +112,7 @@ func (a *API) ChargeDo(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		Source:   &stripe.SourceParams{Token: params.StripeToken},
 		Currency: "USD",
 	})
-	tr := &models.Transaction{
-		OrderID:  order.ID,
-		UserID:   order.UserID,
-		Currency: "USD",
-		Amount:   order.Total,
-	}
+	tr := models.NewTransaction(order)
 	if ch != nil {
 		tr.ProcessorID = ch.ID
 	}
@@ -149,7 +167,6 @@ func (a *API) verifyLineItems(items []models.LineItem) error {
 }
 
 func (a *API) verifyLineItem(item *models.LineItem) error {
-	fmt.Printf("Verifying line item %v", a.config.SiteURL+item.Path)
 	doc, err := goquery.NewDocument(a.config.SiteURL + item.Path)
 	if err != nil {
 		return err

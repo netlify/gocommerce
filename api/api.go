@@ -66,7 +66,8 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	mux.Get("/orders", api.OrderList)
 	mux.Post("/orders", api.OrderCreate)
 	mux.Get("/orders/:id", api.OrderView)
-	mux.Post("/orders/:order_id/payments", api.ChargeDo)
+	mux.Get("/orders/:order_id/payments", api.PaymentList)
+	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},

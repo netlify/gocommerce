@@ -1,15 +1,20 @@
 package models
 
-import "time"
+import (
+	"time"
 
+	"github.com/pborman/uuid"
+)
+
+// Transaction is an transaction with a payment provider
 type Transaction struct {
 	ID      string `json:"id"`
-	Order   Order
+	Order   Order  `json:"-"`
 	OrderID string `json:"order_id"`
 
 	ProcessorID string `json:"processor_id"`
 
-	User   *User
+	User   *User  `json:"-"`
 	UserID string `json:"user_id"`
 
 	Amount         uint64 `json:"amount"`
@@ -22,6 +27,17 @@ type Transaction struct {
 	Status string `json:"status"`
 	Type   string `json:"type"`
 
-	CreatedAt time.Time
-	DeletedAt *time.Time
+	CreatedAt time.Time  `json:"created_at"`
+	DeletedAt *time.Time `json:"-"`
+}
+
+// NewTransaction returns a new transaction for an order
+func NewTransaction(order *Order) *Transaction {
+	return &Transaction{
+		ID:       uuid.NewRandom().String(),
+		OrderID:  order.ID,
+		UserID:   order.UserID,
+		Currency: "USD",
+		Amount:   order.Total,
+	}
 }
