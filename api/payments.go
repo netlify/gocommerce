@@ -135,6 +135,8 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tx.Save(order)
 	tx.Commit()
 
+	a.mailer.OrderConfirmationMail(tr)
+
 	sendJSON(w, 200, tr)
 }
 
