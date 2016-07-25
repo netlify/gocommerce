@@ -137,9 +137,8 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
-	claims := token.Claims.(*JWTClaims)
-
 	if token != nil {
+		claims := token.Claims.(*JWTClaims)
 		if claims.ID == "" {
 			tx.Rollback()
 			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", claims.ID)}
