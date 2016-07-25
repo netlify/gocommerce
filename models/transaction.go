@@ -9,7 +9,7 @@ import (
 // Transaction is an transaction with a payment provider
 type Transaction struct {
 	ID      string `json:"id"`
-	Order   Order  `json:"-"`
+	Order   *Order `json:"-"`
 	OrderID string `json:"order_id"`
 
 	ProcessorID string `json:"processor_id"`
@@ -35,7 +35,9 @@ type Transaction struct {
 func NewTransaction(order *Order) *Transaction {
 	return &Transaction{
 		ID:       uuid.NewRandom().String(),
+		Order:    order,
 		OrderID:  order.ID,
+		User:     order.User,
 		UserID:   order.UserID,
 		Currency: "USD",
 		Amount:   order.Total,

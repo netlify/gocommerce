@@ -31,7 +31,7 @@ type Configuration struct {
 		TemplateFolder string `json:"template_folder"`
 		AdminEmail     string `json:"admin_email"`
 		MailSubjects   struct {
-			OrderMail string `json:"confirmation"`
+			OrderConfirmationMail string `json:"confirmation"`
 		} `json:"mail_subjects"`
 	} `json:"mailer"`
 
