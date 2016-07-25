@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -25,6 +26,12 @@ type API struct {
 	mailer  *mailer.Mailer
 }
 
+type JWTClaims struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	*jwt.StandardClaims
+}
+
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -37,7 +44,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 
-	token, err := jwt.Parse(matches[1], func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(matches[1], &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if token.Header["alg"] != "HS256" {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
@@ -45,6 +52,11 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	})
 	if err != nil {
 		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
+		return nil
+	}
+	claims := token.Claims.(*JWTClaims)
+	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
+		UnauthorizedError(w, fmt.Sprintf("Expired token: %v", err))
 		return nil
 	}
 

@@ -47,8 +47,10 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	claims := token.Claims.(*JWTClaims)
+
 	var orders []models.Order
-	result := a.db.Preload("LineItems").Preload("ShippingAddress").Where("user_id = ?", token.Claims["id"]).Find(&orders)
+	result := a.db.Preload("LineItems").Preload("ShippingAddress").Where("user_id = ?", claims.ID).Find(&orders)
 	if result.Error != nil {
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
@@ -135,21 +137,20 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
+	claims := token.Claims.(*JWTClaims)
+
 	if token != nil {
-		id, ok := token.Claims["id"].(string)
-		if !ok {
+		if claims.ID == "" {
 			tx.Rollback()
-			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", id)}
+			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", claims.ID)}
 		}
-		order.UserID = id
-		if result := tx.First(user, "id = ?", id); result.Error != nil {
+		order.UserID = claims.ID
+		if result := tx.First(user, "id = ?", claims.ID); result.Error != nil {
 			if result.RecordNotFound() {
-				user.ID = id
-				email, ok := token.Claims["email"].(string)
-				if ok {
-					user.Email = email
-				}
-				if order.Email == "" {
+				user.ID = claims.ID
+				if claims.Email != "" {
+					user.Email = claims.Email
+				} else {
 					order.Email = user.Email
 				}
 				tx.Create(user)

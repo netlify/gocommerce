@@ -33,8 +33,9 @@ func userIDFromToken(token *jwt.Token) string {
 	if token == nil {
 		return ""
 	}
-	id, _ := token.Claims["id"].(string)
-	return id
+
+	claims := token.Claims.(*JWTClaims)
+	return claims.ID
 }
 
 // BadRequestError is simple Error Wrapper

@@ -82,8 +82,8 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	token := getToken(ctx)
 	if order.UserID == "" {
 		if token != nil {
-			id := token.Claims["id"].(string)
-			order.UserID = id
+			claims := token.Claims.(*JWTClaims)
+			order.UserID = claims.ID
 			tx.Save(order)
 		}
 	} else {
@@ -92,8 +92,8 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 			UnauthorizedError(w, "You must be logged in to pay for this order")
 			return
 		}
-		id := token.Claims["id"].(string)
-		if order.UserID != id {
+		claims := token.Claims.(*JWTClaims)
+		if order.UserID != claims.ID {
 			tx.Rollback()
 			UnauthorizedError(w, "You must be logged in to pay for this order")
 			return
