@@ -6,7 +6,7 @@ type LineItem struct {
 	ID      int64  `json:"id"`
 	OrderID string `json:"-"`
 
-	Title       string `json:"titel"`
+	Title       string `json:"title"`
 	SKU         string `json:"sku"`
 	Description string `json:"description"`
 
