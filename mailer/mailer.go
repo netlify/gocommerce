@@ -62,7 +62,7 @@ func (m *Mailer) OrderConfirmationMail(transaction *models.Transaction) error {
 	mail.SetHeader("BCC", m.AdminEmail)
 	mail.SetHeader("Subject", m.MailSubjects.OrderConfirmationMail)
 	mail.SetBody("text/html", body)
-	dial := gomail.NewDialer(m.Host, m.Port, m.User, m.Pass)
+	dial := gomail.NewPlainDialer(m.Host, m.Port, m.User, m.Pass)
 	return dial.DialAndSend(mail)
 }
 
@@ -83,6 +83,6 @@ func (m *Mailer) OrderReceivedMail(transaction *models.Transaction) error {
 	mail.SetHeader("Reply-To", transaction.Order.Email)
 	mail.SetHeader("Subject", "New order from "+transaction.Order.Email)
 	mail.SetBody("text/html", body)
-	dial := gomail.NewDialer(m.Host, m.Port, m.User, m.Pass)
+	dial := gomail.NewPlainDialer(m.Host, m.Port, m.User, m.Pass)
 	return dial.DialAndSend(mail)
 }

@@ -1,67 +1,99 @@
 package conf
 
 import (
-	"encoding/json"
-	"os"
+	"strings"
+
+	"github.com/spf13/viper"
 )
 
 // Configuration holds all the confiruation for authlify
 type Configuration struct {
-	SiteURL string `json:"site_url"`
+	SiteURL string `mapstructure:"site_url" json:"site_url"`
 
 	JWT struct {
-		Secret string `json:"secret"`
-	} `json:"jwt"`
+		Secret string `mapstructure:"" json:"secret"`
+	} `mapstructure:"jwt" json:"jwt"`
 
 	DB struct {
-		Driver  string `json:"driver"`
-		ConnURL string `json:"url"`
+		Driver  string `mapstructure:"driver" json:"driver"`
+		ConnURL string `mapstructure:"url" json:"url"`
 	}
 
 	API struct {
-		Host string `json:"host"`
-		Port int    `json:"port"`
-	} `json:"api"`
+		Host string `mapstructure:"host" json:"host"`
+		Port int    `mapstructure:"port" json:"port"`
+	} `mapstructure:"api" json:"api"`
 
 	Mailer struct {
-		Host           string `json:"host"`
-		Port           int    `json:"port"`
-		User           string `json:"user"`
-		Pass           string `json:"pass"`
-		TemplateFolder string `json:"template_folder"`
-		AdminEmail     string `json:"admin_email"`
+		Host           string `mapstructure:"host" json:"host"`
+		Port           int    `mapstructure:"port" json:"port"`
+		User           string `mapstructure:"user" json:"user"`
+		Pass           string `mapstructure:"pass" json:"pass"`
+		TemplateFolder string `mapstructure:"template_folder" json:"template_folder"`
+		AdminEmail     string `mapstructure:"admin_email" json:"admin_email"`
 		MailSubjects   struct {
-			OrderConfirmationMail string `json:"confirmation"`
-		} `json:"mail_subjects"`
-	} `json:"mailer"`
+			OrderConfirmationMail string `mapstructure:"confirmation" json:"confirmation"`
+		} `mapstructure:"mail_subjects" json:"mail_subjects"`
+	} `mapstructure:"mailer" json:"mailer"`
 
 	Payment struct {
 		Stripe struct {
-			SecretKey string `json:"secret_key"`
-		} `json:"stripe"`
+			SecretKey string `mapstructure:"secret_key" json:"secret_key"`
+		} `mapstructure:"stripe" json:"stripe"`
 		Paypal struct {
-		} `json:"paypal"`
-	} `json:"payment"`
+		} `mapstructure:"paypal" json:"paypal"`
+	} `mapstructure:"payment" json:"payment"`
 }
 
 // Load will construct the config from the file `config.json`
-func Load() (*Configuration, error) {
-	return LoadWithFile("config.json")
+func Load(configFile string) (*Configuration, error) {
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("config")
+		viper.AddConfigPath("./")                 // ./config.[json | toml]
+		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml]
+	}
+
+	viper.SetEnvPrefix("GCOM")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, err
+	}
+
+	config := new(Configuration)
+
+	if err := viper.Unmarshal(config); err != nil {
+		return nil, err
+	}
+
+	return handleNested(config), nil
 }
 
-// LoadWithFile constructs the config from the specified file
-func LoadWithFile(filePath string) (*Configuration, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return nil, err
-	}
+// This is supppper sad. It is b/c the marshal function doesn't work on nested
+// values. The overrides work, but the marshal won't discover them.
+// see: https://github.com/spf13/viper/issues/190
+func handleNested(config *Configuration) *Configuration {
+	config.JWT.Secret = viper.GetString("jwt.secret")
 
-	decoder := json.NewDecoder(file)
+	config.DB.Driver = viper.GetString("db.driver")
+	config.DB.ConnURL = viper.GetString("db.url")
 
-	var conf Configuration
-	if err := decoder.Decode(&conf); err != nil {
-		return nil, err
-	}
+	config.API.Host = viper.GetString("api.host")
+	config.API.Port = viper.GetInt("api.port")
 
-	return &conf, nil
+	config.Mailer.Host = viper.GetString("mailer.host")
+	config.Mailer.Port = viper.GetInt("mailer.port")
+	config.Mailer.User = viper.GetString("mailer.user")
+	config.Mailer.Pass = viper.GetString("mailer.pass")
+	config.Mailer.TemplateFolder = viper.GetString("mailer.template_folder")
+	config.Mailer.AdminEmail = viper.GetString("mailer.admin_email")
+	// TODO mail subjects....
+
+	config.Payment.Stripe.SecretKey = viper.GetString("payment.stripe.secret_key")
+	// TODO paypal
+
+	return config
 }
