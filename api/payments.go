@@ -100,7 +100,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 	}
 
-	err = a.verifyLineItems(order.LineItems)
+	err = a.verifyLineItems(ctx, order.LineItems)
 	if err != nil {
 		tx.Rollback()
 		InternalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
@@ -141,7 +141,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	sendJSON(w, 200, tr)
 }
 
-func (a *API) verifyLineItems(items []models.LineItem) error {
+func (a *API) verifyLineItems(ctx context.Context, items []models.LineItem) error {
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
@@ -156,7 +156,7 @@ func (a *API) verifyLineItems(items []models.LineItem) error {
 				return
 			}
 
-			err := a.verifyLineItem(item)
+			err := a.verifyLineItem(ctx, item)
 			if err != nil {
 				sharedErr.setError(err)
 			}
@@ -169,11 +169,14 @@ func (a *API) verifyLineItems(items []models.LineItem) error {
 	return sharedErr.err
 }
 
-func (a *API) verifyLineItem(item *models.LineItem) error {
-	doc, err := goquery.NewDocument(a.config.SiteURL + item.Path)
+func (a *API) verifyLineItem(ctx context.Context, item *models.LineItem) error {
+	config := getConfig(ctx)
+
+	doc, err := goquery.NewDocument(config.SiteURL + item.Path)
 	if err != nil {
 		return err
 	}
+
 	metaTag := doc.Find("head meta[name='product:price:amount']").First()
 	if metaTag.Length() == 0 {
 		return fmt.Errorf("No meta product tag found for '%v'", item.Title)

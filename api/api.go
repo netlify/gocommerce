@@ -32,6 +32,10 @@ type JWTClaims struct {
 	*jwt.StandardClaims
 }
 
+func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	return context.WithValue(ctx, "config", a.config)
+}
+
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -48,7 +52,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if token.Header["alg"] != "HS256" {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(a.config.JWT.Secret), nil
+		return []byte(getConfig(ctx).JWT.Secret), nil
 	})
 	if err != nil {
 		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
@@ -73,6 +77,7 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	api := &API{config: config, db: db, mailer: mailer}
 	mux := kami.New()
 
+	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
 	mux.Get("/", api.Index)
 	mux.Get("/orders", api.OrderList)

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/netlify/gocommerce/conf"
 	"golang.org/x/net/context"
 )
 
@@ -27,6 +28,14 @@ func getToken(ctx context.Context) *jwt.Token {
 		return nil
 	}
 	return obj.(*jwt.Token)
+}
+
+func getConfig(ctx context.Context) *conf.Configuration {
+	obj := ctx.Value("config")
+	if obj == nil {
+		return nil
+	}
+	return obj.(*conf.Configuration)
 }
 
 func userIDFromToken(token *jwt.Token) string {

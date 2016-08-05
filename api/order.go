@@ -50,7 +50,12 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	claims := token.Claims.(*JWTClaims)
 
 	var orders []models.Order
-	result := a.db.Preload("LineItems").Preload("ShippingAddress").Where("user_id = ?", claims.ID).Find(&orders)
+	result := a.db.
+		Preload("LineItems").
+		Preload("ShippingAddress").
+		Preload("BillingAddress").
+		Where("user_id = ?", claims.ID).
+		Find(&orders)
 	if result.Error != nil {
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
