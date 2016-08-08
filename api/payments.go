@@ -4,10 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
-	"sync"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/guregu/kami"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stripe/stripe-go"
@@ -20,6 +17,8 @@ const MaxConcurrentLookups = 10
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
+	Amount      uint64 `json:"amount"`
+	Currency    string `json:"currency"`
 	StripeToken string `json:"stripe_token"`
 }
 
@@ -46,7 +45,7 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 // PaymentCreate is the endpoint for creating a payment for an order
 func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	params := &PaymentParams{}
+	params := &PaymentParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
@@ -63,7 +62,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tx := a.db.Begin()
 	order := &models.Order{}
 
-	if result := tx.Preload("LineItems").First(order, "id = ?", orderID); result.Error != nil {
+	if result := tx.Preload("LineItems").Preload("BillingAddress").First(order, "id = ?", orderID); result.Error != nil {
 		tx.Rollback()
 		if result.RecordNotFound() {
 			NotFoundError(w, "No order with this ID found")
@@ -76,6 +75,12 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	if order.PaymentState == models.PaidState {
 		tx.Rollback()
 		BadRequestError(w, "This order has already been paid")
+		return
+	}
+
+	if order.Currency != params.Currency {
+		tx.Rollback()
+		BadRequestError(w, fmt.Sprintf("Currencies doesn't match - %v vs %v", order.Currency, params.Currency))
 		return
 	}
 
@@ -100,7 +105,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 	}
 
-	err = a.verifyLineItems(ctx, order.LineItems)
+	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
 		InternalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
@@ -108,7 +113,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	ch, err := charge.New(&stripe.ChargeParams{
-		Amount:   order.Total,
+		Amount:   params.Amount,
 		Source:   &stripe.SourceParams{Token: params.StripeToken},
 		Currency: "USD",
 	})
@@ -141,61 +146,26 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	sendJSON(w, 200, tr)
 }
 
-func (a *API) verifyLineItems(ctx context.Context, items []models.LineItem) error {
-	sem := make(chan int, MaxConcurrentLookups)
-	var wg sync.WaitGroup
-	sharedErr := verificationError{}
-	for _, item := range items {
-		sem <- 1
-		wg.Add(1)
-		go func(item *models.LineItem) {
-			// Stop doing any work if there's already an error
-			if sharedErr.err != nil {
-				<-sem
-				wg.Done()
-				return
-			}
-
-			err := a.verifyLineItem(ctx, item)
-			if err != nil {
-				sharedErr.setError(err)
-			}
-			wg.Done()
-			<-sem
-		}(&item)
-	}
-	wg.Wait()
-
-	return sharedErr.err
-}
-
-func (a *API) verifyLineItem(ctx context.Context, item *models.LineItem) error {
+func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint64) error {
 	config := getConfig(ctx)
 
-	doc, err := goquery.NewDocument(config.SiteURL + item.Path)
+	settings := &models.SiteSettings{}
+	resp, err := a.httpClient.Get(config.SiteURL + "/gocommerce/settings.json")
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		decoder := json.NewDecoder(resp.Body)
+		if err := decoder.Decode(settings); err != nil {
+			return err
+		}
+	}
 
-	metaTag := doc.Find("head meta[name='product:price:amount']").First()
-	if metaTag.Length() == 0 {
-		return fmt.Errorf("No meta product tag found for '%v'", item.Title)
-	}
-	content, ok := metaTag.Attr("content")
-	if !ok {
-		return fmt.Errorf("No price set in meta tag for '%v'", item.Title)
-	}
-	amount, err := strconv.ParseUint(content, 10, 64)
-	if err != nil {
-		return fmt.Errorf("Malformed price set in meta tag for '%v'", item.Title)
-	}
-	if amount != item.Price {
-		return fmt.Errorf(
-			"Price for '%v' didn't match (%v on product page vs %v in order)",
-			item.Title,
-			amount,
-			item.Price,
-		)
+	order.CalculateTotal(settings)
+
+	if order.Total != amount {
+		return fmt.Errorf("Amount calculated for order didn't match amount to charge. %v vs %v", order.Total, amount)
 	}
 
 	return nil

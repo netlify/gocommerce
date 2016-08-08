@@ -20,10 +20,11 @@ var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 
 // API is the main REST API
 type API struct {
-	handler http.Handler
-	db      *gorm.DB
-	config  *conf.Configuration
-	mailer  *mailer.Mailer
+	handler    http.Handler
+	db         *gorm.DB
+	config     *conf.Configuration
+	mailer     *mailer.Mailer
+	httpClient *http.Client
 }
 
 type JWTClaims struct {
@@ -74,7 +75,7 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	api := &API{config: config, db: db, mailer: mailer}
+	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
 	mux := kami.New()
 
 	mux.Use("/", api.withConfig)

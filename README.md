@@ -29,10 +29,10 @@ the order is legitimate before using Stripe to charge the client.
 The metadata can be anywhere on the page, and goes in a script tag in this format:
 
 <script id="gocommerce-product" type="application/json">
-{"sku": "my-product", "prices": [{"amount": "49.99"}], "type": "ebook"}
+{"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
 </script>
 
-More about what the product metadata can contain. The minimum required is the SKU and at
+More about what the product metadata can contain. The minimum required is the SKU, title and at
 least one "price". Default currency is USD if nothing else specified.
 
 ### Mail templates
@@ -70,7 +70,7 @@ Here's an example settings file:
     "countries": ["Austria", "Bulgaria", "Estonia", "France", "Gibraltar", "Slovakia", "United Kingdom"]
   }, {
     "percentage": 7,
-    "product_type": ["book"],
+    "product_types": ["book"],
     "countries": ["Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Denmark", "Estonia"]
   }]
 }
