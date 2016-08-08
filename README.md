@@ -32,10 +32,9 @@ The metadata can be anywhere on the page, and goes in a script tag in this forma
 {"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
 </script>
 
-More about what the product metadata can contain. The minimum required is the SKU, title and at
-least one "price". Default currency is USD if nothing else specified.
+The minimum required is the SKU, title and at least one "price". Default currency is USD if nothing else specified.
 
-### Mail templates
+### Mail templates (Not implemented yet)
 
 Gocommerce will look for mail templates inside `https://yoursite.com/gocommerce/emails/`
 when sending mails to users or administrators.
@@ -50,10 +49,8 @@ Gocommerce will regularly check for a file called `https://yoursite.com/gocommer
 
 This file should have settings with rules for VAT or currency regions.
 
-This file is not required for gocommerce to work, but if you want to validate shipping/billing
-address countries/states and handle VAT calculations or limit certain prices to parts of the
-world, you should include one. You can find an example of a real world settings.json in
-`examples/settings.json`.
+This file is not required for gocommerce to work, but will enable support for various advanced
+features. Currently it enables VAT calculations on a per country/product type basic.
 
 The reason we make you include the file in the static site, is that you'll need to do the same
 VAT calculations client side during checkout to be able to show this to the user. The
