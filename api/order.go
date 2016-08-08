@@ -196,18 +196,18 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		sem <- 1
 		wg.Add(1)
 		go func(item *models.LineItem) {
+			defer func() {
+				wg.Done()
+				<-sem
+			}()
 			// Stop doing any work if there's already an error
 			if sharedErr.err != nil {
-				<-sem
-				wg.Done()
 				return
 			}
 
 			if err := a.processLineItem(ctx, order, item); err != nil {
 				sharedErr.setError(err)
 			}
-			wg.Done()
-			<-sem
 		}(lineItem)
 	}
 	wg.Wait()
