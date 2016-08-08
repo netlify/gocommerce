@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"sync"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
@@ -14,6 +15,12 @@ import (
 
 	"golang.org/x/net/context"
 )
+
+type OrderLineItem struct {
+	SKU      string `json:sku`
+	Path     string `jsonx:"path"`
+	Quantity uint64 `json:"quantity"`
+}
 
 type OrderParams struct {
 	SessionID string `json:"session_id"`
@@ -26,7 +33,11 @@ type OrderParams struct {
 	BillingAddressID string          `json:"billing_address_id"`
 	BillingAddress   *models.Address `json:"billing_address"`
 
-	LineItems []models.LineItem `json:"line_items"`
+	Data map[string]interface{} `json:"data"`
+
+	LineItems []*OrderLineItem `json:"line_items"`
+
+	Currency string `json:"currency"`
 }
 
 type verificationError struct {
@@ -50,7 +61,12 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	claims := token.Claims.(*JWTClaims)
 
 	var orders []models.Order
-	result := a.db.Preload("LineItems").Preload("ShippingAddress").Where("user_id = ?", claims.ID).Find(&orders)
+	result := a.db.
+		Preload("LineItems").
+		Preload("ShippingAddress").
+		Preload("BillingAddress").
+		Where("user_id = ?", claims.ID).
+		Find(&orders)
 	if result.Error != nil {
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
@@ -83,7 +99,7 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 // OrderCreate endpoint
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	params := &OrderParams{}
+	params := &OrderParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
@@ -93,7 +109,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	token := getToken(ctx)
 
-	order := models.NewOrder(params.SessionID, params.Email)
+	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
 
 	tx := a.db.Begin()
 
@@ -103,7 +119,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if httpError := a.createLineItems(tx, order, params.LineItems); httpError != nil {
+	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
@@ -128,6 +144,14 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		order.BillingAddressID = billingID
 	} else {
 		order.BillingAddressID = shippingID
+	}
+
+	if params.Data != nil {
+		if err := order.UpdateOrderData(tx, &params.Data); err != nil {
+			tx.Rollback()
+			BadRequestError(w, fmt.Sprintf("Bad order metadata %v", err))
+			return
+		}
 	}
 
 	tx.Create(order)
@@ -162,17 +186,45 @@ func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.O
 	return nil
 }
 
-func (a *API) createLineItems(tx *gorm.DB, order *models.Order, items []models.LineItem) *HTTPError {
+func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*OrderLineItem) *HTTPError {
+	sem := make(chan int, MaxConcurrentLookups)
+	var wg sync.WaitGroup
+	sharedErr := verificationError{}
 	for _, item := range items {
-		item.ID = 0 // Making sure you can't set this via params
-		item.OrderID = order.ID
+		lineItem := &models.LineItem{SKU: item.SKU, Quantity: item.Quantity, Path: item.Path, OrderID: order.ID}
+		order.LineItems = append(order.LineItems, lineItem)
+		sem <- 1
+		wg.Add(1)
+		go func(item *models.LineItem) {
+			// Stop doing any work if there's already an error
+			if sharedErr.err != nil {
+				<-sem
+				wg.Done()
+				return
+			}
+
+			if err := a.processLineItem(ctx, order, item); err != nil {
+				sharedErr.setError(err)
+			}
+			wg.Done()
+			<-sem
+		}(lineItem)
+	}
+	wg.Wait()
+
+	if sharedErr.err != nil {
+		tx.Rollback()
+		return &HTTPError{Code: 500, Message: fmt.Sprintf("Error processing line item: %v", sharedErr.err)}
+	}
+
+	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + item.Price*item.Quantity
 		if err := tx.Create(&item).Error; err != nil {
 			tx.Rollback()
 			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating line item: %v", err)}
 		}
 	}
-	order.Total = order.SubTotal
+
 	return nil
 }
 
@@ -201,4 +253,30 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.A
 		}
 	}
 	return address.ID, nil
+}
+
+func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem) error {
+	config := getConfig(ctx)
+	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromResponse(resp)
+	if err != nil {
+		return err
+	}
+
+	metaTag := doc.Find("#gocommerce-product").First()
+	if metaTag.Length() == 0 {
+		return fmt.Errorf("No script tag with id gocommerce-product tag found for '%v'", item.Title)
+	}
+	meta := &models.LineItemMetadata{}
+	err = json.Unmarshal([]byte(metaTag.Text()), meta)
+	if err != nil {
+		return err
+	}
+
+	return item.Process(order, meta)
 }

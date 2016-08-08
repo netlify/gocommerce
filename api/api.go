@@ -20,16 +20,21 @@ var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 
 // API is the main REST API
 type API struct {
-	handler http.Handler
-	db      *gorm.DB
-	config  *conf.Configuration
-	mailer  *mailer.Mailer
+	handler    http.Handler
+	db         *gorm.DB
+	config     *conf.Configuration
+	mailer     *mailer.Mailer
+	httpClient *http.Client
 }
 
 type JWTClaims struct {
 	ID    string `json:"id"`
 	Email string `json:"email"`
 	*jwt.StandardClaims
+}
+
+func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	return context.WithValue(ctx, "config", a.config)
 }
 
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
@@ -48,7 +53,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if token.Header["alg"] != "HS256" {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(a.config.JWT.Secret), nil
+		return []byte(getConfig(ctx).JWT.Secret), nil
 	})
 	if err != nil {
 		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
@@ -70,9 +75,10 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	api := &API{config: config, db: db, mailer: mailer}
+	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
 	mux := kami.New()
 
+	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
 	mux.Get("/", api.Index)
 	mux.Get("/orders", api.OrderList)
