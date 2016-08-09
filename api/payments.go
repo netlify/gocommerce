@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/guregu/kami"
+	"github.com/mattes/vat"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
@@ -159,6 +160,16 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 		decoder := json.NewDecoder(resp.Body)
 		if err := decoder.Decode(settings); err != nil {
 			return err
+		}
+	}
+
+	if order.VATNumber != "" {
+		valid, err := vat.IsValidVAT(order.VATNumber)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return fmt.Errorf("Vat number %v is not valid", order.VATNumber)
 		}
 	}
 
