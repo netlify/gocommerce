@@ -42,6 +42,8 @@ type Order struct {
 	BillingAddress   Address `json:"billing_address",gorm:"ForeignKey:BillingAddressID"`
 	BillingAddressID string
 
+	VATNumber string `json:"vatnumber"`
+
 	Data []Data `json:"-"`
 
 	CreatedAt time.Time  `json:"created_at"`
@@ -172,8 +174,10 @@ func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) er
 func (o *Order) CalculateTotal(settings *SiteSettings) {
 	// Calculate taxes/shipping here
 	var taxes uint64
-	for _, item := range o.LineItems {
-		taxes += taxFor(item, settings.Taxes, o.BillingAddress.Country)
+	if o.VATNumber == "" {
+		for _, item := range o.LineItems {
+			taxes += taxFor(item, settings.Taxes, o.BillingAddress.Country)
+		}
 	}
 
 	o.Total = o.SubTotal + taxes
