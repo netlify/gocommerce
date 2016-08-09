@@ -10,6 +10,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
+	"github.com/mattes/vat"
 	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
 
@@ -32,6 +33,8 @@ type OrderParams struct {
 
 	BillingAddressID string          `json:"billing_address_id"`
 	BillingAddress   *models.Address `json:"billing_address"`
+
+	VATNumber string `json:"vatnumber"`
 
 	Data map[string]interface{} `json:"data"`
 
@@ -144,6 +147,21 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		order.BillingAddressID = billingID
 	} else {
 		order.BillingAddressID = shippingID
+	}
+
+	if params.VATNumber != "" {
+		valid, err := vat.IsValidVAT(params.VATNumber)
+		if err != nil {
+			tx.Rollback()
+			InternalServerError(w, fmt.Sprintf("Error verifying VAT number %v", err))
+			return
+		}
+		if !valid {
+			tx.Rollback()
+			BadRequestError(w, fmt.Sprintf("Vat number %v is not valid", order.VATNumber))
+			return
+		}
+		order.VATNumber = params.VATNumber
 	}
 
 	if params.Data != nil {
