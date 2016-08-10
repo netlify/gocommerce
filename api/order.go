@@ -108,8 +108,25 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		query = query.Where("state = ?", state)
 	}
 
-	page, _ := strconv.ParseUint(kami.Param(ctx, "page"), 10, 64)
-	perPage, _ := strconv.ParseUint(kami.Param(ctx, "per_page"), 10, 64)
+	var (
+		badPage    error
+		badPerPage error
+		page       uint64
+		perPage    uint64
+	)
+	pageParam := kami.Param(ctx, "page")
+	perPageParam := kami.Param(ctx, "per_page")
+	if pageParam != "" {
+		page, badPage = strconv.ParseUint(pageParam, 10, 64)
+	}
+	if perPageParam != "" {
+		perPage, badPerPage = strconv.ParseUint(perPageParam, 10, 64)
+	}
+	if badPage != nil || badPerPage != nil {
+		BadRequestError(w, "Bad pagination parameters. Both page and per_page must be positive integers")
+		return
+	}
+
 	if page == 0 {
 		page = 1
 	}
