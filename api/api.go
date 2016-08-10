@@ -28,9 +28,19 @@ type API struct {
 }
 
 type JWTClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID    string   `json:"id"`
+	Email string   `json:"email"`
+	Roles []string `json:"roles"`
 	*jwt.StandardClaims
+}
+
+func (c *JWTClaims) HasRole(role string) bool {
+	for _, candidate := range c.Roles {
+		if role == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {

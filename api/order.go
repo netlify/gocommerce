@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 
 	"github.com/PuerkitoBio/goquery"
@@ -64,17 +65,73 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	claims := token.Claims.(*JWTClaims)
 
 	var orders []models.Order
-	result := a.db.
+	query := a.db.
 		Preload("LineItems").
 		Preload("ShippingAddress").
-		Preload("BillingAddress").
-		Where("user_id = ?", claims.ID).
-		Find(&orders)
+		Preload("BillingAddress")
+
+	// Filters
+	userID := kami.Param(ctx, "user_id")
+	if userID != "" && !(claims.HasRole("admin") || claims.HasRole("shop_admin")) {
+		UnauthorizedError(w, "Must be shop admin to filter by user ID")
+		return
+	}
+	if userID == "" {
+		query = query.Where("user_id = ?", claims.ID)
+	} else if userID == "all" {
+		// No filtering
+	} else {
+		query = query.Where("user_id = ?", userID)
+	}
+	currency := kami.Param(ctx, "currency")
+	if currency != "" {
+		query = query.Where("currency = ?", currency)
+	}
+	max := kami.Param(ctx, "max")
+	if max != "" {
+		query = query.Where("total <= ?", max)
+	}
+	min := kami.Param(ctx, "min")
+	if min != "" {
+		query = query.Where("total >= ?", min)
+	}
+	start := kami.Param(ctx, "start")
+	if start != "" {
+		query = query.Where("created_at >= ?", start)
+	}
+	end := kami.Param(ctx, "end")
+	if end != "" {
+		query = query.Where("created_at <= ?", end)
+	}
+	state := kami.Param(ctx, "state")
+	if state != "" {
+		query = query.Where("state = ?", state)
+	}
+
+	page, _ := strconv.ParseUint(kami.Param(ctx, "page"), 10, 64)
+	perPage, _ := strconv.ParseUint(kami.Param(ctx, "per_page"), 10, 64)
+	if page == 0 {
+		page = 1
+	}
+	if perPage == 0 {
+		perPage = 50
+	}
+	limit := perPage
+	offset := (page - 1) * perPage
+
+	result := query.Limit(int(limit)).Offset(int(offset)).Find(&orders)
 	if result.Error != nil {
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
 	}
 
+	var total uint64
+	if count := result.Limit(-1).Offset(-1).Count(&total); count.Error != nil {
+		InternalServerError(w, fmt.Sprintf("Error during database query: %v", count.Error))
+		return
+	}
+
+	addPaginationHeaders(w, r, page, perPage, total)
 	sendJSON(w, 200, orders)
 }
 
