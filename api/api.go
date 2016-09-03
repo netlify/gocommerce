@@ -28,8 +28,9 @@ type API struct {
 }
 
 type JWTClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID     string   `json:"id"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
 	*jwt.StandardClaims
 }
 

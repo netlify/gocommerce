@@ -11,7 +11,8 @@ type Configuration struct {
 	SiteURL string `mapstructure:"site_url" json:"site_url"`
 
 	JWT struct {
-		Secret string `mapstructure:"" json:"secret"`
+		Secret         string `mapstructure:"secret" json:"secret"`
+		AdminGroupName string `json:"admin_group_name"`
 	} `mapstructure:"jwt" json:"jwt"`
 
 	DB struct {

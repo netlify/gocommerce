@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/dgrijalva/jwt-go"
@@ -54,7 +55,43 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
+func parseParams(query *gorm.DB, params http.Value) (*gorm.DB, error) {
+	if values, exists := params["from"]; exists {
+		date, err := time.Parse(time.RFC3339, values[0])
+		if err != nil {
+			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
+		}
+		query = query.Where("created_at >= ?", date)
+	}
+
+	if values, exists := params["to"]; exists {
+		date, err := time.Parse(time.RFC3339, values[0])
+		if err != nil {
+			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
+		}
+		query = query.Where("created_at <= ?", date)
+	}
+
+	if values, exists := params["sort"]; exists {
+		switch values[0] {
+		case "desc":
+			query = query.Order("created_at DESC")
+		case "asc":
+			query = query.Order("created_at ASC")
+		default:
+			return nil, fmt.Errorf("bad value for 'sort' parameter: only 'asc' or 'desc' are accepted")
+		}
+	}
+
+	return query, nil
+}
+
+// OrderList can query based on
+//  - orders since        &from=iso8601      - default = 0
+//  - orders before       &to=iso8601        - default = now
+//  - sort asc or desc    &sort=[asc | desc] - default = desc
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	var err error
 	token := getToken(ctx)
 	if token == nil {
 		UnauthorizedError(w, "Order History Requires Authentication")
@@ -63,13 +100,31 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	claims := token.Claims.(*JWTClaims)
 
-	var orders []models.Order
-	result := a.db.
+	params := r.URL.Query()
+	query := a.db.
 		Preload("LineItems").
 		Preload("ShippingAddress").
-		Preload("BillingAddress").
-		Where("user_id = ?", claims.ID).
-		Find(&orders)
+		Preload("BillingAddress")
+	query, err = parseParams(query, params)
+	if err != nil {
+		// TODO return an error
+		return
+	}
+
+	// handle the admin info
+	id := claims.ID
+	if values, exists := params["user_id"]; exists {
+		if isAdmin(ctx, claims) {
+			id = values[0]
+		} else {
+			// TODO ERROR
+			return
+		}
+	}
+	query = query.Where("user_id = ?", id)
+
+	var orders []models.Order
+	result := query.Find(&orders)
 	if result.Error != nil {
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return

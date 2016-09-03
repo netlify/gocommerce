@@ -38,6 +38,25 @@ func getConfig(ctx context.Context) *conf.Configuration {
 	return obj.(*conf.Configuration)
 }
 
+func isAdmin(ctx context.Context, claims *JWTClaims) bool {
+	if claims == nil {
+		return false
+	}
+
+	config := getConfig(ctx)
+	if config == nil {
+		return false
+	}
+
+	for _, v := range claims.Groups {
+		if v == config.JWT.AdminGroupName {
+			return true
+		}
+	}
+
+	return false
+}
+
 func userIDFromToken(token *jwt.Token) string {
 	if token == nil {
 		return ""
