@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -55,7 +56,7 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
-func parseParams(query *gorm.DB, params http.Value) (*gorm.DB, error) {
+func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	if values, exists := params["from"]; exists {
 		date, err := time.Parse(time.RFC3339, values[0])
 		if err != nil {
@@ -90,15 +91,13 @@ func parseParams(query *gorm.DB, params http.Value) (*gorm.DB, error) {
 //  - orders since        &from=iso8601      - default = 0
 //  - orders before       &to=iso8601        - default = now
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
-func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Request) {
 	var err error
-	token := getToken(ctx)
-	if token == nil {
+	claims := ctx.Claims()
+	if claims == nil {
 		UnauthorizedError(w, "Order History Requires Authentication")
 		return
 	}
-
-	claims := token.Claims.(*JWTClaims)
 
 	params := r.URL.Query()
 	query := a.db.
@@ -107,17 +106,17 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		Preload("BillingAddress")
 	query, err = parseParams(query, params)
 	if err != nil {
-		// TODO return an error
+		BadRequestError(w, "Bad parameters in query: "+err.Error())
 		return
 	}
 
 	// handle the admin info
 	id := claims.ID
 	if values, exists := params["user_id"]; exists {
-		if isAdmin(ctx, claims) {
+		if ctx.IsAdmin() {
 			id = values[0]
 		} else {
-			// TODO ERROR
+			BadRequestError(w, "Can't request user id if you're not that user, or an admin")
 			return
 		}
 	}
@@ -133,7 +132,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	sendJSON(w, 200, orders)
 }
 
-func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderView(ctx RequestContext, w http.ResponseWriter, r *http.Request) {
 	token := getToken(ctx)
 	id := kami.Param(ctx, "id")
 

@@ -8,12 +8,14 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/mailer"
 	"github.com/rs/cors"
+	"github.com/satori/go.uuid"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -25,6 +27,7 @@ type API struct {
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
+	log        *logrus.Entry
 }
 
 type JWTClaims struct {
@@ -76,15 +79,21 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
+	api := &API{
+		config:     config,
+		db:         db,
+		mailer:     mailer,
+		httpClient: &http.Client{},
+		log:        logrus.NewEntry(logrus.StandardLogger()),
+	}
 	mux := kami.New()
 
 	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
 	mux.Get("/", api.Index)
-	mux.Get("/orders", api.OrderList)
+	mux.Get("/orders", api.trace(api.OrderList))
 	mux.Post("/orders", api.OrderCreate)
-	mux.Get("/orders/:id", api.OrderView)
+	mux.Get("/orders/:id", api.trace(api.OrderView))
 	mux.Get("/orders/:order_id/payments", api.PaymentList)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
@@ -97,4 +106,22 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	api.handler = corsHandler.Handler(mux)
 	return api
+}
+
+func (a *API) trace(f func(RequestContext, http.ResponseWriter, *http.Request)) func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		id := uuid.NewV4()
+		log := a.log.WithFields(logrus.Fields{
+			"request_id": id,
+			"method":     r.Method,
+			"url":        r.URL.String(),
+		})
+		log.Debug("request started")
+		defer log.Debug("request completed")
+
+		reqContext := &RequestContext{ctx}
+		reqContext = reqContext.WithLogger(log).WithConfig(a.config)
+
+		f(*reqContext, w, r)
+	}
 }
