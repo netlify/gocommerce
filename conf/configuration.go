@@ -15,10 +15,7 @@ type Configuration struct {
 		AdminGroupName string `json:"admin_group_name"`
 	} `mapstructure:"jwt" json:"jwt"`
 
-	DB struct {
-		Driver  string `mapstructure:"driver" json:"driver"`
-		ConnURL string `mapstructure:"url" json:"url"`
-	}
+	DB DBConfig `mapstructure:"db" json:"db"`
 
 	API struct {
 		Host string `mapstructure:"host" json:"host"`
@@ -44,6 +41,12 @@ type Configuration struct {
 		Paypal struct {
 		} `mapstructure:"paypal" json:"paypal"`
 	} `mapstructure:"payment" json:"payment"`
+}
+
+// DBConfig represents what is needed to connect to a DB
+type DBConfig struct {
+	Driver  string `mapstructure:"driver" json:"driver"`
+	ConnURL string `mapstructure:"url" json:"url"`
 }
 
 // Load will construct the config from the file `config.json`
