@@ -29,10 +29,8 @@ func TestMain(m *testing.M) {
 	}
 	defer os.Remove(f.Name())
 
-	config.DB = conf.DBConfig{
-		Driver:  "sqlite3",
-		ConnURL: f.Name(),
-	}
+	config.DB.Driver = "sqlite3"
+	config.DB.ConnURL = f.Name()
 
 	// setup test db
 	db, err = models.Connect(config)
@@ -47,6 +45,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestQueryForOrdersAsTheUser(t *testing.T) {
+	a := assert.New(t)
 	token := token(testUser.ID, testUser.Email, nil)
 	ctx := &RequestContext{}
 	ctx = ctx.WithConfig(config).WithLogger(testLogger).WithToken(token)
@@ -56,11 +55,12 @@ func TestQueryForOrdersAsTheUser(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(*ctx, recorder, req)
+	a.Equal(200, recorder.Code)
 
 	orders := []models.Order{}
 	err := json.NewDecoder(recorder.Body).Decode(&orders)
-	assert.Nil(t, err)
-	assert.Equal(t, 2, len(orders))
+	a.Nil(err)
+	a.Equal(2, len(orders))
 
 	for _, o := range orders {
 		switch o.ID {
@@ -69,9 +69,76 @@ func TestQueryForOrdersAsTheUser(t *testing.T) {
 		case secondOrder.ID:
 			validateOrder(t, secondOrder, &o)
 		default:
-			assert.Fail(t, fmt.Sprintf("unexpected order: %+v\n", o))
+			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
 	}
+}
+
+func TestQueryForOrdersAsAdmin(t *testing.T) {
+	a := assert.New(t)
+	config.JWT.AdminGroupName = "admin"
+	token := token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"})
+	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
+
+	api := NewAPI(config, db, nil)
+	api.OrderList(*ctx, recorder, req)
+	a.Equal(200, recorder.Code)
+
+	orders := []models.Order{}
+	err := json.NewDecoder(recorder.Body).Decode(&orders)
+	a.Nil(err)
+	a.Equal(2, len(orders))
+
+	for _, o := range orders {
+		switch o.ID {
+		case firstOrder.ID:
+			validateOrder(t, firstOrder, &o)
+		case secondOrder.ID:
+			validateOrder(t, secondOrder, &o)
+		default:
+			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
+		}
+	}
+}
+
+func TestQueryForOrdersAsStranger(t *testing.T) {
+	a := assert.New(t)
+	token := token("stranger", "stranger-danger@wayneindustries.com", nil)
+	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real", nil)
+
+	api := NewAPI(config, db, nil)
+	api.OrderList(*ctx, recorder, req)
+	a.Equal(200, recorder.Code)
+	a.Equal("[]\n", recorder.Body.String())
+}
+
+func TestQueryForOrderNotWithAdminRights(t *testing.T) {
+	a := assert.New(t)
+	token := token("stranger", "stranger-danger@wayneindustries.com", nil)
+	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
+
+	api := NewAPI(config, db, nil)
+	api.OrderList(*ctx, recorder, req)
+
+	errRsp := make(map[string]interface{})
+	err := json.NewDecoder(recorder.Body).Decode(&errRsp)
+	a.Nil(err)
+
+	code, exists := errRsp["code"]
+	a.True(exists)
+	a.EqualValues(400, code)
+
+	_, exists = errRsp["msg"]
+	a.True(exists)
 }
 
 func validateOrder(t *testing.T, expected, actual *models.Order) {
@@ -137,17 +204,4 @@ func validateLineItem(t *testing.T, expected *models.LineItem, actual *models.Li
 	a.Equal(expected.Path, actual.Path)
 	a.Equal(expected.Price, actual.Price)
 	a.Equal(expected.Quantity, actual.Quantity)
-}
-
-//Transactions []*Transaction `json:"transactions"`
-//Notes        []*OrderNote   `json:"notes"`
-
-//ShippingAddress   Address `json:"shipping_address",gorm:"ForeignKey:ShippingAddressID"`
-
-//BillingAddress   Address `json:"billing_address",gorm:"ForeignKey:BillingAddressID"`
-
-func TestQueryForOrdersAsAdmin(t *testing.T) {
-}
-
-func TestQueryForOrdersAsStranger(t *testing.T) {
 }

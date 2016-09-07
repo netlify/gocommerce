@@ -15,7 +15,7 @@ const PaidState = "paid"
 type Order struct {
 	ID string `json:"id"`
 
-	User      *User  `json:"user,omitempty"`
+	User      *User  `json:"user,omitempty",gorm:"ForeignKey:UserID"`
 	UserID    string `json:"user_id,omitempty"`
 	SessionID string `json:"-"`
 

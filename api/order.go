@@ -118,8 +118,9 @@ func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Reque
 	if values, exists := params["user_id"]; exists {
 		if ctx.IsAdmin() {
 			id = values[0]
+			log.WithField("admin_id", claims.ID).Debugf("Making admin request for user %s by %s", id, claims.ID)
 		} else {
-			log.Infof("Request for user id %s as user %s - but not an admin", values[0], id)
+			log.Warnf("Request for user id %s as user %s - but not an admin", values[0], id)
 			BadRequestError(w, "Can't request user id if you're not that user, or an admin")
 			return
 		}
