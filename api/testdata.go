@@ -69,11 +69,7 @@ func loadTestData(db *gorm.DB) {
 	firstOrder.CalculateTotal(&models.SiteSettings{})
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress
-	db.Create(&firstLineItem)
-	db.Create(firstTransaction)
-	db.Create(firstOrder)
 	firstOrder.User = &testUser
-
 	db.Create(&firstLineItem)
 	db.Create(firstTransaction)
 	db.Create(firstOrder)
