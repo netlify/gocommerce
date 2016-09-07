@@ -52,10 +52,6 @@ imports:
   version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
   version: 21a35fb16463dfb7c8eee579c65d995d95e64d1e
-- name: github.com/netlify/proxy
-  version: 9af6fa4a52913a8a91e618f5e770652636e2cf02
-  subpackages:
-  - conf
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/PuerkitoBio/goquery
