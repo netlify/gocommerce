@@ -21,25 +21,50 @@ var testAddress = models.Address{
 	User:     &testUser,
 }
 
-// All necessary for *an* order
 var firstOrder = models.NewOrder("session1", testUser.Email, "usd")
+var firstTransaction = models.NewTransaction(firstOrder)
 var firstLineItem = models.LineItem{
-	ID:          798345,
+	ID:          11,
 	OrderID:     firstOrder.ID,
 	Title:       "batwing",
 	SKU:         "123-i-can-fly-456",
 	Type:        "plane",
 	Description: "it's the batwing.",
-	Price:       123123123,
+	Price:       12,
 	Quantity:    2,
 	Path:        "/i/believe/i/can/fly",
 }
-var firstTransaction = models.NewTransaction(firstOrder)
+
+var secondOrder = models.NewOrder("session2", testUser.Email, "usd")
+var secondTransaction = models.NewTransaction(secondOrder)
+var secondLineItem1 = models.LineItem{
+	ID:          21,
+	OrderID:     secondOrder.ID,
+	Title:       "tumbler",
+	SKU:         "456-i-rollover-all-things",
+	Type:        "tank",
+	Description: "OMG yes",
+	Price:       5,
+	Quantity:    2,
+	Path:        "/i/crush/villians/dreams",
+}
+var secondLineItem2 = models.LineItem{
+	ID:          22,
+	OrderID:     secondOrder.ID,
+	Title:       "utility belt",
+	SKU:         "234-fancy-belts",
+	Type:        "clothes",
+	Description: "stlyish but still useful",
+	Price:       45,
+	Quantity:    1,
+	Path:        "/i/hold/the/universe/on/my/waist",
+}
 
 func loadTestData(db *gorm.DB) {
 	db.Create(&testUser)
 	db.Create(&testAddress)
 
+	firstOrder.ID = "first-order"
 	firstOrder.LineItems = []*models.LineItem{&firstLineItem}
 	firstOrder.CalculateTotal(&models.SiteSettings{})
 	firstOrder.BillingAddress = testAddress
@@ -47,6 +72,22 @@ func loadTestData(db *gorm.DB) {
 	db.Create(&firstLineItem)
 	db.Create(firstTransaction)
 	db.Create(firstOrder)
+	firstOrder.User = &testUser
+
+	db.Create(&firstLineItem)
+	db.Create(firstTransaction)
+	db.Create(firstOrder)
+
+	secondOrder.ID = "second-order"
+	secondOrder.LineItems = []*models.LineItem{&secondLineItem1, &secondLineItem2}
+	secondOrder.CalculateTotal(&models.SiteSettings{})
+	secondOrder.BillingAddress = testAddress
+	secondOrder.ShippingAddress = testAddress
+	secondOrder.User = &testUser
+	db.Create(&secondLineItem1)
+	db.Create(&secondLineItem2)
+	db.Create(secondTransaction)
+	db.Create(secondOrder)
 }
 
 func token(id, email string, groups *[]string) *jwt.Token {

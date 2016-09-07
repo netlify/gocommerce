@@ -92,9 +92,11 @@ func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 //  - orders before       &to=iso8601        - default = now
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
 func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Request) {
+	log := ctx.Logger()
 	var err error
 	claims := ctx.Claims()
 	if claims == nil {
+		log.Info("Request with no claims made")
 		UnauthorizedError(w, "Order History Requires Authentication")
 		return
 	}
@@ -106,6 +108,7 @@ func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Reque
 		Preload("BillingAddress")
 	query, err = parseParams(query, params)
 	if err != nil {
+		log.WithError(err).Info("Bad query parameters in request")
 		BadRequestError(w, "Bad parameters in query: "+err.Error())
 		return
 	}
@@ -116,19 +119,23 @@ func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Reque
 		if ctx.IsAdmin() {
 			id = values[0]
 		} else {
+			log.Infof("Request for user id %s as user %s - but not an admin", values[0], id)
 			BadRequestError(w, "Can't request user id if you're not that user, or an admin")
 			return
 		}
 	}
 	query = query.Where("user_id = ?", id)
+	log.WithField("query_user_id", id).Debug("URL parsed and query perpared")
 
 	var orders []models.Order
 	result := query.Find(&orders)
 	if result.Error != nil {
+		log.WithError(err).Warn("Error while querying database")
 		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
 	}
 
+	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
 	sendJSON(w, 200, orders)
 }
 
