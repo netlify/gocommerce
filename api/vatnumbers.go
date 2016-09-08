@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/guregu/kami"
 	"github.com/mattes/vat"
+	"github.com/rybit/kami"
 )
 
 func (a *API) VatnumberLookup(ctx context.Context, w http.ResponseWriter, r *http.Request) {

@@ -9,12 +9,13 @@ import (
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
 	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
+	"github.com/rybit/kami"
 
 	"golang.org/x/net/context"
 )
@@ -91,10 +92,10 @@ func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 //  - orders since        &from=iso8601      - default = 0
 //  - orders before       &to=iso8601        - default = now
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
-func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Request) {
-	log := ctx.Logger()
+func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := Logger(ctx)
 	var err error
-	claims := ctx.Claims()
+	claims := Claims(ctx)
 	if claims == nil {
 		log.Info("Request with no claims made")
 		UnauthorizedError(w, "Order History Requires Authentication")
@@ -116,7 +117,7 @@ func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Reque
 	// handle the admin info
 	id := claims.ID
 	if values, exists := params["user_id"]; exists {
-		if ctx.IsAdmin() {
+		if IsAdmin(ctx) {
 			id = values[0]
 			log.WithField("admin_id", claims.ID).Debugf("Making admin request for user %s by %s", id, claims.ID)
 		} else {
@@ -140,26 +141,47 @@ func (a *API) OrderList(ctx RequestContext, w http.ResponseWriter, r *http.Reque
 	sendJSON(w, 200, orders)
 }
 
-func (a *API) OrderView(ctx RequestContext, w http.ResponseWriter, r *http.Request) {
-	token := getToken(ctx)
+// OrderView will request a specific order using the 'id' parameter.
+// Only the owner of the order, an admin, or an anon order are allowed to be seen
+func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := Logger(ctx)
+	claims := Claims(ctx)
+	if claims == nil {
+		log.Info("Request with no claims made")
+		UnauthorizedError(w, "Order History Requires Authentication")
+		return
+	}
+
 	id := kami.Param(ctx, "id")
+	if id == "" {
+		log.Warn("Request made with no id parameter")
+		BadRequestError(w, "Must pass an id parameter")
+		return
+	}
+	log = log.WithField("order_id", id)
 
 	order := &models.Order{}
 	if result := a.db.Preload("LineItems").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
+			log.Debug("Requested record that doesn't exist")
 			NotFoundError(w, "Order not found")
 		} else {
-			InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			log.WithError(result.Error).Warn("Error while querying database: %s", result.Error.Error())
+			InternalServerError(w, "Error during database query")
 		}
 		return
 	}
 
-	if order.UserID != "" && (order.UserID != userIDFromToken(token)) {
-		UnauthorizedError(w, "You don't have access to this order")
-		return
+	if order.UserID == "" || (order.UserID == claims.ID) || IsAdmin(ctx) {
+		log.Debug("Successfully got order %s", order.ID)
+		sendJSON(w, 200, order)
 	}
 
-	sendJSON(w, 200, order)
+	log.WithFields(logrus.Fields{
+		"user_id":     claims.ID,
+		"user_groups": claims.Groups,
+	}).Warn("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
+	UnauthorizedError(w, "You don't have access to this order")
 }
 
 // OrderCreate endpoint

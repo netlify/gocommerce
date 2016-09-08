@@ -1,5 +1,5 @@
-hash: b6d1086702791f000a7ccf66cd3f2a6a51e82ec76842320505fe8459b72e94c8
-updated: 2016-09-06T18:07:20.692544595-07:00
+hash: dc16240b13f78156fe267df4fbbb4f65682a668c7a320e2aa5c7ee5a4eba3107
+updated: 2016-09-08T09:22:57.788091944-07:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 3ad29d1ad1c4f2023e355603324348cf1f4b2d48
@@ -38,6 +38,8 @@ imports:
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jinzhu/gorm
   version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
+  subpackages:
+  - dialects/sqlite
 - name: github.com/jinzhu/inflection
   version: 8f4d3a0d04ce0b7c0cf3126fb98524246d00d102
 - name: github.com/lib/pq
@@ -60,6 +62,8 @@ imports:
   version: a62a804a8a009876ca59105f7899938a1349f4b3
 - name: github.com/rs/xhandler
   version: ed27b6fd65218132ee50cd95f38474a3d8a2cd12
+- name: github.com/rybit/kami
+  version: 4a3865bde74d8c09c7d42a2aa784d42968875bf8
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/Sirupsen/logrus

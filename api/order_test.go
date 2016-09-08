@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -9,9 +10,13 @@ import (
 	"os"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/Sirupsen/logrus"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
+	"github.com/rybit/kami"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/netlify/gocommerce/conf"
@@ -44,22 +49,21 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// -------------------------------------------------------------------------------------------------------------------
+// LIST
+// -------------------------------------------------------------------------------------------------------------------
+
 func TestQueryForOrdersAsTheUser(t *testing.T) {
 	a := assert.New(t)
-	token := token(testUser.ID, testUser.Email, nil)
-	ctx := &RequestContext{}
-	ctx = ctx.WithConfig(config).WithLogger(testLogger).WithToken(token)
 
+	ctx := testContext(token(testUser.ID, testUser.Email, nil))
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 
 	api := NewAPI(config, db, nil)
-	api.OrderList(*ctx, recorder, req)
-	a.Equal(200, recorder.Code)
+	api.OrderList(ctx, recorder, req)
 
-	orders := []models.Order{}
-	err := json.NewDecoder(recorder.Body).Decode(&orders)
-	a.Nil(err)
+	orders := extractOrders(t, 200, recorder)
 	a.Equal(2, len(orders))
 
 	for _, o := range orders {
@@ -76,22 +80,17 @@ func TestQueryForOrdersAsTheUser(t *testing.T) {
 
 func TestQueryForOrdersAsAdmin(t *testing.T) {
 	a := assert.New(t)
-	config.JWT.AdminGroupName = "admin"
-	token := token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"})
-	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
 
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
 
 	api := NewAPI(config, db, nil)
-	api.OrderList(*ctx, recorder, req)
-	a.Equal(200, recorder.Code)
+	api.OrderList(ctx, recorder, req)
+	orders := extractOrders(t, 200, recorder)
 
-	orders := []models.Order{}
-	err := json.NewDecoder(recorder.Body).Decode(&orders)
-	a.Nil(err)
 	a.Equal(2, len(orders))
-
 	for _, o := range orders {
 		switch o.ID {
 		case firstOrder.ID:
@@ -106,36 +105,127 @@ func TestQueryForOrdersAsAdmin(t *testing.T) {
 
 func TestQueryForOrdersAsStranger(t *testing.T) {
 	a := assert.New(t)
-	token := token("stranger", "stranger-danger@wayneindustries.com", nil)
-	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
 
+	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 
 	api := NewAPI(config, db, nil)
-	api.OrderList(*ctx, recorder, req)
+	api.OrderList(ctx, recorder, req)
 	a.Equal(200, recorder.Code)
 	a.Equal("[]\n", recorder.Body.String())
 }
 
-func TestQueryForOrderNotWithAdminRights(t *testing.T) {
+func TestQueryForOrdersNotWithAdminRights(t *testing.T) {
 	a := assert.New(t)
-	token := token("stranger", "stranger-danger@wayneindustries.com", nil)
-	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
+	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
 
 	api := NewAPI(config, db, nil)
-	api.OrderList(*ctx, recorder, req)
+	api.OrderList(ctx, recorder, req)
+	a.Equal(400, recorder.Code)
+	validateError(t, 400, recorder.Body)
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// VIEW
+// -------------------------------------------------------------------------------------------------------------------
+
+func TestQueryForAnOrderAsTheUser(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
+	ctx := testContext(token(testUser.ID, "marp@wayneindustries.com", nil))
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParameter(ctx, "id", firstOrder.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
+
+	api := NewAPI(config, db, nil)
+	api.OrderView(ctx, recorder, req)
+	order := extractOrder(t, 200, recorder)
+	_ = order
+	//validateOrder(t, firstOrder, order)
+}
+
+//func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
+//	config.JWT.AdminGroupName = "admin"
+//	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
+//
+//	recorder := httptest.NewRecorder()
+//	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?id=%s", firstOrder.ID), nil)
+//
+//	api := NewAPI(config, db, nil)
+//	api.OrderView(ctx, recorder, req)
+//	order := extractOrder(t, 200, recorder)
+//	validateOrder(t, firstOrder, order)
+//}
+//
+//func TestQueryForAnOrderAsAStranger(t *testing.T) {
+//	a := assert.New(t)
+//	token := token("stranger", "stranger-danger@wayneindustries.com", nil)
+//	ctx := new(RequestContext).WithConfig(config).WithLogger(testLogger).WithToken(token)
+//
+//	recorder := httptest.NewRecorder()
+//	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?id=%s", firstOrder.ID), nil)
+//
+//	api := NewAPI(config, db, nil)
+//	api.OrderView(ctx, recorder, req)
+//	a.Equal(400, recorder.Code)
+//	validateError(t, 400, recorder.Body)
+//}
+//
+//func TestQueryForAnAnonOrder(t *testing.T) {
+//}
+//
+//func TestQueryForAMissingOrder(t *testing.T) {
+//}
+//
+//func TestQueryForAnOrderMissingTheParam(t *testing.T) {
+//}
+
+// -------------------------------------------------------------------------------------------------------------------
+// HELPERS
+// -------------------------------------------------------------------------------------------------------------------
+
+func extractOrders(t *testing.T, code int, recorder *httptest.ResponseRecorder) []models.Order {
+	assert.Equal(t, code, recorder.Code)
+	orders := []models.Order{}
+	err := json.NewDecoder(recorder.Body).Decode(&orders)
+	assert.Nil(t, err)
+	return orders
+}
+
+func extractOrder(t *testing.T, code int, recorder *httptest.ResponseRecorder) *models.Order {
+	assert.Equal(t, code, recorder.Code)
+	order := new(models.Order)
+	err := json.NewDecoder(recorder.Body).Decode(order)
+	assert.Nil(t, err)
+	return order
+}
+
+func testContext(token *jwt.Token) context.Context {
+	ctx := WithConfig(context.Background(), config)
+	ctx = WithLogger(ctx, testLogger)
+	return WithToken(ctx, token)
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// VALIDATORS
+// -------------------------------------------------------------------------------------------------------------------
+
+func validateError(t *testing.T, code int, body *bytes.Buffer) {
+	a := assert.New(t)
 
 	errRsp := make(map[string]interface{})
-	err := json.NewDecoder(recorder.Body).Decode(&errRsp)
+	err := json.NewDecoder(body).Decode(&errRsp)
 	a.Nil(err)
 
-	code, exists := errRsp["code"]
+	errcode, exists := errRsp["code"]
 	a.True(exists)
-	a.EqualValues(400, code)
+	a.EqualValues(code, errcode)
 
 	_, exists = errRsp["msg"]
 	a.True(exists)

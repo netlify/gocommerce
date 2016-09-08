@@ -9,23 +9,39 @@ import (
 )
 
 const (
-	TokenKey  = "jwt"
-	ConfigKey = "config"
-	LoggerKey = "logger"
+	TokenKey     = "jwt"
+	ConfigKey    = "config"
+	LoggerKey    = "logger"
+	RequestIDKey = "request_id"
 )
 
-// RequestContext is a thin wrapper around the context to get useful features
-type RequestContext struct {
-	context.Context
+func WithLogger(ctx context.Context, l *logrus.Entry) context.Context {
+	return context.WithValue(ctx, LoggerKey, l)
 }
 
-func (rc *RequestContext) WithConfig(config *conf.Configuration) *RequestContext {
-	rc.Context = context.WithValue(rc.Context, ConfigKey, config)
-	return rc
+func WithConfig(ctx context.Context, config *conf.Configuration) context.Context {
+	return context.WithValue(ctx, ConfigKey, config)
 }
 
-func (rc RequestContext) Config() *conf.Configuration {
-	obj := rc.Value(ConfigKey)
+func WithToken(ctx context.Context, token *jwt.Token) context.Context {
+	return context.WithValue(ctx, TokenKey, token)
+}
+
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, RequestIDKey, id)
+}
+
+func requestID(ctx context.Context) string {
+	obj := ctx.Value(RequestIDKey)
+	if obj == nil {
+		return ""
+	}
+
+	return obj.(string)
+}
+
+func Config(ctx context.Context) *conf.Configuration {
+	obj := ctx.Value(ConfigKey)
 	if obj == nil {
 		return nil
 	}
@@ -33,13 +49,8 @@ func (rc RequestContext) Config() *conf.Configuration {
 	return obj.(*conf.Configuration)
 }
 
-func (rc *RequestContext) WithToken(token *jwt.Token) *RequestContext {
-	rc.Context = context.WithValue(rc.Context, TokenKey, token)
-	return rc
-}
-
-func (rc RequestContext) Token() *jwt.Token {
-	obj := rc.Value(TokenKey)
+func Token(ctx context.Context) *jwt.Token {
+	obj := ctx.Value(TokenKey)
 	if obj == nil {
 		return nil
 	}
@@ -47,20 +58,20 @@ func (rc RequestContext) Token() *jwt.Token {
 	return obj.(*jwt.Token)
 }
 
-func (rc RequestContext) Claims() *JWTClaims {
-	token := rc.Token()
+func Claims(ctx context.Context) *JWTClaims {
+	token := Token(ctx)
 	if token == nil {
 		return nil
 	}
 	return token.Claims.(*JWTClaims)
 }
 
-func (rc RequestContext) IsAdmin() bool {
-	claims := rc.Claims()
+func IsAdmin(ctx context.Context) bool {
+	claims := Claims(ctx)
 	if claims == nil {
 		return false
 	}
-	config := rc.Config()
+	config := Config(ctx)
 	if config == nil {
 		return false
 	}
@@ -74,13 +85,8 @@ func (rc RequestContext) IsAdmin() bool {
 	return false
 }
 
-func (rc *RequestContext) WithLogger(l *logrus.Entry) *RequestContext {
-	rc.Context = context.WithValue(rc.Context, LoggerKey, l)
-	return rc
-}
-
-func (rc RequestContext) Logger() *logrus.Entry {
-	obj := rc.Value(LoggerKey)
+func Logger(ctx context.Context) *logrus.Entry {
+	obj := ctx.Value(LoggerKey)
 	if obj == nil {
 		return nil
 	}
