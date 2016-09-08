@@ -39,6 +39,16 @@ type JWTClaims struct {
 	*jwt.StandardClaims
 }
 
+type ResponseProxy struct {
+	ResponseWriter
+	statusCode int
+}
+
+func (rp *ResponseProxy) WriteHeader(status int) {
+	rp.statusCode = status
+	rp.ResponseWriter.WriteHeader(status)
+}
+
 // ListenAndServe starts the REST API
 func (a *API) ListenAndServe(hostAndPort string) error {
 	var err error
@@ -110,8 +120,10 @@ func (a *API) trace(f func(context.Context, http.ResponseWriter, *http.Request))
 			})
 		}
 
+		rp := ResponseProxy{ResponseWriter: w}
+
 		log.Debug("request started")
-		defer log.Debug("request completed")
-		f(ctx, w, r)
+		defer log.WithField("status_code", rp.statusCode).Debugf("request completed: %d", rp.statusCode)
+		f(ctx, rp, r)
 	}
 }
