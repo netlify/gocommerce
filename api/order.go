@@ -11,11 +11,11 @@ import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
 	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
-	"github.com/rybit/kami"
 
 	"golang.org/x/net/context"
 )
@@ -103,10 +103,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	params := r.URL.Query()
-	query := a.db.
-		Preload("LineItems").
-		Preload("ShippingAddress").
-		Preload("BillingAddress")
+	query := orderQuery(a.db)
 	query, err = parseParams(query, params)
 	if err != nil {
 		log.WithError(err).Info("Bad query parameters in request")
@@ -161,27 +158,28 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	log = log.WithField("order_id", id)
 
 	order := &models.Order{}
-	if result := a.db.Preload("LineItems").First(order, "id = ?", id); result.Error != nil {
+	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
 			NotFoundError(w, "Order not found")
 		} else {
-			log.WithError(result.Error).Warn("Error while querying database: %s", result.Error.Error())
+			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
 			InternalServerError(w, "Error during database query")
 		}
 		return
 	}
 
+	fmt.Println("----------- " + order.UserID)
 	if order.UserID == "" || (order.UserID == claims.ID) || IsAdmin(ctx) {
-		log.Debug("Successfully got order %s", order.ID)
+		log.Debugf("Successfully got order %s", order.ID)
 		sendJSON(w, 200, order)
+	} else {
+		log.WithFields(logrus.Fields{
+			"user_id":     claims.ID,
+			"user_groups": claims.Groups,
+		}).Warnf("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
+		UnauthorizedError(w, "You don't have access to this order")
 	}
-
-	log.WithFields(logrus.Fields{
-		"user_id":     claims.ID,
-		"user_groups": claims.Groups,
-	}).Warn("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
-	UnauthorizedError(w, "You don't have access to this order")
 }
 
 // OrderCreate endpoint
@@ -381,4 +379,8 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 	}
 
 	return item.Process(order, meta)
+}
+
+func orderQuery(db *gorm.DB) *gorm.DB {
+	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress")
 }

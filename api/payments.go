@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/guregu/kami"
 	"github.com/netlify/gocommerce/models"
-	"github.com/rybit/kami"
 	"github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
 	"golang.org/x/net/context"

@@ -1,8 +1,8 @@
-hash: dc16240b13f78156fe267df4fbbb4f65682a668c7a320e2aa5c7ee5a4eba3107
-updated: 2016-09-08T09:22:57.788091944-07:00
+hash: 8afad619b17ca9f3bc0862c44f2932e1c92c6df8a08ad06a7a8b87935b0038f3
+updated: 2016-09-08T11:33:13.872969792-07:00
 imports:
 - name: github.com/andybalholm/cascadia
-  version: 3ad29d1ad1c4f2023e355603324348cf1f4b2d48
+  version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e
 - name: github.com/BurntSushi/toml
   version: 99064174e013895bbd9b025c31100bd1d9b590ca
 - name: github.com/dgrijalva/jwt-go
@@ -10,21 +10,21 @@ imports:
 - name: github.com/dimfeld/httppath
   version: c8e499c3ef3c3e272ed8bdcc1ccf39f73c88debc
 - name: github.com/dimfeld/httptreemux
-  version: 612c3d8e47f5a166d9346b694cf2aeb68eff5369
+  version: 44179433cb08588bbb4cb250fb30d1c9fff4305a
 - name: github.com/fsnotify/fsnotify
-  version: a8a77c9133d2d6fd8334f3260d06f60e8d80a5fb
+  version: f12c6236fe7b5cf6bcf30e5935d08cb079d78334
 - name: github.com/go-sql-driver/mysql
   version: a732e14c62dde3285440047bba97581bc472ae18
 - name: github.com/golang/protobuf
-  version: 874264fbbb43f4d91e999fecb4b40143ed611400
+  version: 1f49d83d9aa00e6ce4fc8258c71cc7786aec968a
   subpackages:
   - proto
 - name: github.com/guregu/kami
-  version: 250b4ba03b6732f3805e8355a18345a540a791d2
+  version: 4e406c5fecc9e1e2fdd8f20f80105629a851ce04
   subpackages:
   - treemux
 - name: github.com/hashicorp/hcl
-  version: d8c773c4cba11b11539e3d45f93daeaa5dcf1fa1
+  version: 99df0eb941dd8ddbc83d3f3605a34f6a686ac85e
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -41,19 +41,19 @@ imports:
   subpackages:
   - dialects/sqlite
 - name: github.com/jinzhu/inflection
-  version: 8f4d3a0d04ce0b7c0cf3126fb98524246d00d102
+  version: 74387dc39a75e970e7a3ae6a3386b5bd2e5c5cff
 - name: github.com/lib/pq
   version: 4dd446efc17690bc53e154025146f73203b18309
   subpackages:
   - oid
 - name: github.com/magiconair/properties
-  version: b3f6dd549956e8a61ea4a686a1c02a33d5bdda4b
+  version: 0723e352fa358f9322c938cc2dadda874e9151a9
 - name: github.com/mattes/vat
   version: 805d21ad07390288471b830934b4c08304774dc6
 - name: github.com/mattn/go-sqlite3
   version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
-  version: 21a35fb16463dfb7c8eee579c65d995d95e64d1e
+  version: ca63d7c062ee3c9f34db231e352b60012b4fd0c1
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/PuerkitoBio/goquery
@@ -62,20 +62,18 @@ imports:
   version: a62a804a8a009876ca59105f7899938a1349f4b3
 - name: github.com/rs/xhandler
   version: ed27b6fd65218132ee50cd95f38474a3d8a2cd12
-- name: github.com/rybit/kami
-  version: 4a3865bde74d8c09c7d42a2aa784d42968875bf8
 - name: github.com/satori/go.uuid
   version: 879c5887cd475cd7864858769793b2ceb0d44feb
 - name: github.com/Sirupsen/logrus
   version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
 - name: github.com/spf13/cast
-  version: 27b586b42e29bec072fe7379259cc719e1289da6
+  version: e31f36ffc91a2ba9ddb72a4b6a607ff9b3d3cb63
 - name: github.com/spf13/cobra
   version: f62e98d28ab7ad31d707ba837a966378465c7b57
 - name: github.com/spf13/jwalterweatherman
   version: 33c24e77fb80341fe7130ee7c594256ff08ccc46
 - name: github.com/spf13/pflag
-  version: 1560c1005499d61b80f865c04d39ca7505bf7f0b
+  version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
 - name: github.com/spf13/viper
   version: b53595fb56a492ecef90ee0457595a999eb6ec15
 - name: github.com/stripe/stripe-go
@@ -84,7 +82,7 @@ imports:
   - charge
   - orderitem
 - name: github.com/zenazn/goji
-  version: 64eb34159fe53473206c2b3e70fe396a639452f2
+  version: 4d7077956293261309684d3cf1af673f773c6819
   subpackages:
   - bind
   - graceful
@@ -97,11 +95,11 @@ imports:
   - html
   - html/atom
 - name: golang.org/x/sys
-  version: a646d33e2ee3172a661fc09bca23bb4889a41bc8
+  version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
   subpackages:
   - unix
 - name: google.golang.org/appengine
-  version: 267c27e7492265b84fc6719503b14a1e17975d79
+  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
   subpackages:
   - internal
   - internal/app_identity

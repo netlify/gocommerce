@@ -9,11 +9,11 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/mailer"
 	"github.com/rs/cors"
-	"github.com/rybit/kami"
 	"github.com/satori/go.uuid"
 )
 

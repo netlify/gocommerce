@@ -14,9 +14,9 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/rybit/kami"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/netlify/gocommerce/conf"
@@ -138,7 +138,7 @@ func TestQueryForAnOrderAsTheUser(t *testing.T) {
 	ctx := testContext(token(testUser.ID, "marp@wayneindustries.com", nil))
 
 	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParameter(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
@@ -146,8 +146,7 @@ func TestQueryForAnOrderAsTheUser(t *testing.T) {
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	order := extractOrder(t, 200, recorder)
-	_ = order
-	//validateOrder(t, firstOrder, order)
+	validateOrder(t, firstOrder, order)
 }
 
 //func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
@@ -203,6 +202,9 @@ func extractOrder(t *testing.T, code int, recorder *httptest.ResponseRecorder) *
 	order := new(models.Order)
 	err := json.NewDecoder(recorder.Body).Decode(order)
 	assert.Nil(t, err)
+
+	fmt.Printf("%+v\n", order)
+
 	return order
 }
 
