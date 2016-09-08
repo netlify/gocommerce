@@ -169,7 +169,6 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	fmt.Println("----------- " + order.UserID)
 	if order.UserID == "" || (order.UserID == claims.ID) || IsAdmin(ctx) {
 		log.Debugf("Successfully got order %s", order.ID)
 		sendJSON(w, 200, order)
