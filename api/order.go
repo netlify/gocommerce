@@ -10,7 +10,6 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Sirupsen/logrus"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
@@ -44,17 +43,6 @@ type OrderParams struct {
 	LineItems []*OrderLineItem `json:"line_items"`
 
 	Currency string `json:"currency"`
-}
-
-type verificationError struct {
-	err   error
-	mutex sync.Mutex
-}
-
-func (e *verificationError) setError(err error) {
-	e.mutex.Lock()
-	e.err = err
-	e.mutex.Unlock()
 }
 
 func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
@@ -183,33 +171,50 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 // OrderCreate endpoint
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := Logger(ctx)
+
 	params := &OrderParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
+		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
 		BadRequestError(w, fmt.Sprintf("Could not read Order params: %v", err))
 		return
 	}
 
-	token := getToken(ctx)
+	claims := Claims(ctx)
 
 	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
+	log = log.WithFields(logrus.Fields{
+		"order_id":   order.ID,
+		"session_id": params.SessionID,
+	})
+	ctx = WithLogger(ctx, log)
 
+	log.WithFields(logrus.Fields{
+		"email":    params.Email,
+		"currency": params.Currency,
+	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
 
 	user := &models.User{}
-	if httpError := a.setUserIDFromToken(tx, user, order, token); httpError != nil {
+	if httpError := a.setUserIDFromToken(tx, user, order, claims); httpError != nil {
+		tx.Rollback()
 		sendJSON(w, httpError.Code, err)
 		return
 	}
+	log.WithField("effective_user_id", user.ID).Debug("Successfully set the user id")
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+		tx.Rollback()
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
+	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	shippingID, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
+		tx.Rollback()
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
@@ -256,16 +261,16 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	tx.Create(order)
 	tx.Commit()
 
+	log.Infof("Successfully created order %s", order.ID)
 	sendJSON(w, 200, order)
 }
 
-func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
-	if token != nil {
-		claims := token.Claims.(*JWTClaims)
+func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, claims *JWTClaims) *HTTPError {
+	if claims != nil {
 		if claims.ID == "" {
-			tx.Rollback()
 			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", claims.ID)}
 		}
+
 		order.UserID = claims.ID
 		if result := tx.First(user, "id = ?", claims.ID); result.Error != nil {
 			if result.RecordNotFound() {
@@ -277,49 +282,71 @@ func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.O
 				}
 				tx.Create(user)
 			} else {
-				tx.Rollback()
 				return &HTTPError{Code: 500, Message: fmt.Sprintf("Token had an invalid ID: %v", result.Error)}
 			}
 		}
 	}
+
 	return nil
 }
 
 func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*OrderLineItem) *HTTPError {
-	sem := make(chan int, MaxConcurrentLookups)
+	siteURL := Config(ctx).SiteURL
+	log := Logger(ctx).WithField("site_url", siteURL)
+
 	var wg sync.WaitGroup
-	sharedErr := verificationError{}
+	sem := make(chan int, MaxConcurrentLookups)
+	sharedErr := sharedError{}
+
 	for _, item := range items {
-		lineItem := &models.LineItem{SKU: item.SKU, Quantity: item.Quantity, Path: item.Path, OrderID: order.ID}
+		lineItem := &models.LineItem{
+			SKU:      item.SKU,
+			Quantity: item.Quantity,
+			Path:     item.Path,
+			OrderID:  order.ID,
+		}
 		order.LineItems = append(order.LineItems, lineItem)
+
 		sem <- 1
 		wg.Add(1)
 		go func(item *models.LineItem) {
+			itemLog := log.WithField("item_id", item.ID)
+			itemLog.WithFields(logrus.Fields{
+				"price":    item.Price,
+				"sku":      item.SKU,
+				"path":     item.Path,
+				"quantity": item.Quantity,
+			}).Debug("Starting to process item")
 			defer func() {
+				itemLog.Debug("Completed processing item")
 				wg.Done()
 				<-sem
 			}()
+
 			// Stop doing any work if there's already an error
-			if sharedErr.err != nil {
+			if sharedErr.hasError() {
+				itemLog.Debug("Skipping item because of previous error")
 				return
 			}
 
-			if err := a.processLineItem(ctx, order, item); err != nil {
+			if err := a.processLineItem(order, item, siteURL, itemLog); err != nil {
+				itemLog.WithError(err).Debug("Error while processing item")
 				sharedErr.setError(err)
 			}
 		}(lineItem)
 	}
-	wg.Wait()
 
-	if sharedErr.err != nil {
-		tx.Rollback()
+	log.Debugf("Waiting to process %d line items", len(items))
+	wg.Wait()
+	log.Debug("Finished processing line items")
+
+	if sharedErr.hasError() {
 		return &HTTPError{Code: 500, Message: fmt.Sprintf("Error processing line item: %v", sharedErr.err)}
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + item.Price*item.Quantity
 		if err := tx.Create(&item).Error; err != nil {
-			tx.Rollback()
 			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating line item: %v", err)}
 		}
 	}
@@ -328,42 +355,46 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 }
 
 func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (string, *HTTPError) {
+	if address == nil {
+		return "", nil
+	}
+
 	if id != "" {
 		if result := tx.First(address, "id = ?", id); result.Error != nil {
-			tx.Rollback()
+			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
+		}
+		if order.UserID != address.UserID {
 			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
 		}
 		if address.UserID == "" {
 			address.UserID = order.UserID
 			tx.Save(address)
-		} else if order.UserID != address.UserID {
-			tx.Rollback()
-			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
 		}
 	} else {
-		if address == nil {
-			return "", nil
-		} else if address.Valid() {
-			address.ID = uuid.NewRandom().String()
-			tx.Create(address)
-		} else {
-			tx.Rollback()
+		if !address.Valid() {
 			return "", &HTTPError{Code: 400, Message: "Failed to validate address"}
 		}
+
+		// is a valid id that doesn't already belong to a user
+		address.ID = uuid.NewRandom().String()
+		tx.Create(address)
 	}
+
 	return address.ID, nil
 }
 
-func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem) error {
-	config := getConfig(ctx)
-	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
+func (a *API) processLineItem(order *models.Order, item *models.LineItem, siteURL string, log *logrus.Entry) error {
+	endpoint := siteURL + item.Path
+	resp, err := a.httpClient.Get(endpoint)
 	if err != nil {
+		log.WithError(err).Warnf("Failed make the request for the item at %s", endpoint)
 		return err
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromResponse(resp)
 	if err != nil {
+		log.WithError(err).Warnf("Failed to parse the response into a document")
 		return err
 	}
 
@@ -371,9 +402,11 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 	if metaTag.Length() == 0 {
 		return fmt.Errorf("No script tag with id gocommerce-product tag found for '%v'", item.Title)
 	}
+
 	meta := &models.LineItemMetadata{}
 	err = json.Unmarshal([]byte(metaTag.Text()), meta)
 	if err != nil {
+		log.WithError(err).Warn("Failed to unmarshal the item's metadata")
 		return err
 	}
 

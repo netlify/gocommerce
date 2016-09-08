@@ -40,7 +40,7 @@ type JWTClaims struct {
 }
 
 type ResponseProxy struct {
-	ResponseWriter
+	http.ResponseWriter
 	statusCode int
 }
 
