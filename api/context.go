@@ -88,7 +88,7 @@ func IsAdmin(ctx context.Context) bool {
 func Logger(ctx context.Context) *logrus.Entry {
 	obj := ctx.Value(LoggerKey)
 	if obj == nil {
-		return nil
+		return logrus.NewEntry(logrus.StandardLogger())
 	}
 	return obj.(*logrus.Entry)
 }

@@ -27,6 +27,9 @@ var testLogger = logrus.NewEntry(logrus.StandardLogger())
 var config = &conf.Configuration{}
 var db *gorm.DB
 
+var urlWithUserID string
+var urlForFirstOrder string
+
 func TestMain(m *testing.M) {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
@@ -45,6 +48,8 @@ func TestMain(m *testing.M) {
 	defer db.Close()
 
 	loadTestData(db)
+	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
+	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", testUser.ID)
 
 	os.Exit(m.Run())
 }
@@ -70,8 +75,12 @@ func TestQueryForAllOrdersAsTheUser(t *testing.T) {
 		switch o.ID {
 		case firstOrder.ID:
 			validateOrder(t, firstOrder, &o)
+			validateAddress(t, firstOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, firstOrder.ShippingAddress, o.ShippingAddress)
 		case secondOrder.ID:
 			validateOrder(t, secondOrder, &o)
+			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
 			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
@@ -84,7 +93,7 @@ func TestQueryForAllOrdersAsAdmin(t *testing.T) {
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
+	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
@@ -95,8 +104,12 @@ func TestQueryForAllOrdersAsAdmin(t *testing.T) {
 		switch o.ID {
 		case firstOrder.ID:
 			validateOrder(t, firstOrder, &o)
+			validateAddress(t, firstOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, firstOrder.ShippingAddress, o.ShippingAddress)
 		case secondOrder.ID:
 			validateOrder(t, secondOrder, &o)
+			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
 			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
@@ -121,7 +134,7 @@ func TestQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
+	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
@@ -134,7 +147,7 @@ func TestQueryForAllOrdersWithNoToken(t *testing.T) {
 	ctx := testContext(nil)
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real?user_id=%s", testUser.ID), nil)
+	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
 	api := NewAPI(config, nil, nil)
 	api.OrderList(ctx, recorder, req)
@@ -160,6 +173,8 @@ func TestQueryForAnOrderAsTheUser(t *testing.T) {
 	api.OrderView(ctx, recorder, req)
 	order := extractOrder(t, 200, recorder)
 	validateOrder(t, firstOrder, order)
+	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
 }
 
 func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
@@ -170,12 +185,14 @@ func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real/%s", firstOrder.ID), nil)
+	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
 
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	order := extractOrder(t, 200, recorder)
 	validateOrder(t, firstOrder, order)
+	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
 }
 
 func TestQueryForAnOrderAsAStranger(t *testing.T) {
@@ -186,7 +203,7 @@ func TestQueryForAnOrderAsAStranger(t *testing.T) {
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://not-real/%s", firstOrder.ID), nil)
+	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
 
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
@@ -228,6 +245,307 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 }
 
 // -------------------------------------------------------------------------------------------------------------------
+// CREATE
+// -------------------------------------------------------------------------------------------------------------------
+// TODO vvvv ~ need to make it verifiable
+//func TestCreateAnOrderAsAnExistingUser(t *testing.T) {
+//	a := assert.New(t)
+//	orderRequest := &OrderParams{
+//		SessionID: "test-session",
+//		LineItems: []*OrderLineItem{&OrderLineItem{
+//			SKU:      "nananana",
+//			Path:     "/fashion/utility-belt",
+//			Quantity: 1,
+//		}},
+//		BillingAddress: &testAddress,
+//		ShippingAddress: &models.Address{
+//			LastName: "robin",
+//			Address1: "123456 circus lane",
+//			Country:  "dcland",
+//			City:     "gotham",
+//			Zip:      "234789",
+//		},
+//	}
+//
+//	bs, err := json.Marshal(orderRequest)
+//	if !assert.NoError(t, err) {
+//		assert.FailNow(t, "setup failure")
+//	}
+//
+//	ctx := testContext(token(testUser.ID, testUser.Email, nil))
+//	recorder := httptest.NewRecorder()
+//	req, err := http.NewRequest("PUT", "https://not-real/orders", bytes.NewReader(bs))
+//
+//	api := NewAPI(config, db, nil)
+//	api.OrderCreate(ctx, recorder, req)
+//	a.Equal(200, recorder.Code)
+//
+//	//ret := new(models.Order)
+//	ret := make(map[string]interface{})
+//	err = json.Unmarshal(recorder.Body.Bytes(), ret)
+//	a.NoError(err)
+//
+//	fmt.Printf("%+v\n", ret)
+//}
+
+// --------------------------------------------------------------------------------------------------------------------
+// Create ~ email logic
+// --------------------------------------------------------------------------------------------------------------------
+func TestSetUserIDLogic_AnonymousUser(t *testing.T) {
+	a := assert.New(t)
+	simpleOrder := models.NewOrder("session", "params@email.com", "usd")
+	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
+	a.Nil(err)
+	a.Equal("params@email.com", simpleOrder.Email)
+}
+
+func TestSetUserIDLogic_AnonymousUserWithNoEmail(t *testing.T) {
+	a := assert.New(t)
+	simpleOrder := models.NewOrder("session", "", "usd")
+	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
+	if !a.Error(err) {
+		a.Equal(400, err.Code)
+	}
+}
+
+func TestSetUserIDLogic_NewUserNoEmailOnRequest(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "", "usd"),
+		token("alfred", "alfred@wayne.com", nil).Claims.(*JWTClaims),
+		"alfred@wayne.com",
+		"alfred@wayne.com",
+	)
+}
+
+func TestSetUserIDLogic_NewUserNoEmailOnClaim(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		token("alfred", "", nil).Claims.(*JWTClaims),
+		"",
+		"joker@wayne.com",
+	)
+}
+
+func TestSetUserIDLogic_NewUserAllTheEmails(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		token("alfred", "alfred@wayne.com", nil).Claims.(*JWTClaims),
+		"alfred@wayne.com",
+		"joker@wayne.com",
+	)
+}
+
+func TestSetUserIDLogic_NewUserNoEmails(t *testing.T) {
+	a := assert.New(t)
+	simpleOrder := models.NewOrder("session", "", "usd")
+	claims := token("alfred", "", nil).Claims.(*JWTClaims)
+	err := setOrderEmail(db, simpleOrder, claims, testLogger)
+	if a.Error(err) {
+		a.Equal(400, err.Code)
+	}
+}
+
+func TestSetUserIDLogic_KnownUserClaimsOnRequest(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		token(testUser.ID, "", nil).Claims.(*JWTClaims),
+		"joker@wayne.com",
+	)
+}
+
+func TestSetUserIDLogic_KnownUserClaimsOnClaim(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		models.NewOrder("session", "", "usd"),
+		token(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
+		testUser.Email,
+	)
+}
+
+func TestSetUserIDLogic_KnownUserAllTheEmail(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		token(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
+		"joker@wayne.com",
+	)
+}
+
+func TestSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		models.NewOrder("session", "", "usd"),
+		token(testUser.ID, "", nil).Claims.(*JWTClaims),
+		testUser.Email,
+	)
+}
+
+// --------------------------------------------------------------------------------------------------------------------
+// UPDATE
+// --------------------------------------------------------------------------------------------------------------------
+func TestUpdateFields(t *testing.T) {
+	defer db.Save(firstOrder)
+	a := assert.New(t)
+
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		Email:    "mrfreeze@dc.com",
+		Currency: "monopoly-dollars",
+	})
+	rspOrder := extractOrder(t, 200, recorder)
+
+	saved := new(models.Order)
+	rsp := db.First(saved, "id = ?", firstOrder.ID)
+	a.False(rsp.RecordNotFound())
+
+	a.Equal("mrfreeze@dc.com", rspOrder.Email)
+	a.Equal("monopoly-dollars", saved.Currency)
+
+	// did it get persisted to the db
+	a.Equal("mrfreeze@dc.com", saved.Email)
+	a.Equal("monopoly-dollars", saved.Currency)
+	validateOrder(t, saved, rspOrder)
+
+	// should be the only field that has changed ~ check it
+	saved.Email = firstOrder.Email
+	saved.Currency = firstOrder.Currency
+	validateOrder(t, firstOrder, saved)
+}
+
+func TestUpdateAddress_ExistingAddress(t *testing.T) {
+	defer db.Save(firstOrder)
+	a := assert.New(t)
+
+	newAddr := getTestAddress()
+	newAddr.ID = "new-addr"
+	newAddr.UserID = firstOrder.UserID
+	rsp := db.Create(newAddr)
+	defer db.Unscoped().Delete(newAddr)
+
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		BillingAddressID: newAddr.ID,
+	})
+	rspOrder := extractOrder(t, 200, recorder)
+
+	saved := new(models.Order)
+	rsp = db.First(saved, "id = ?", firstOrder.ID)
+	a.False(rsp.RecordNotFound())
+
+	// now we load the addresses
+	a.Equal(saved.BillingAddressID, rspOrder.BillingAddressID)
+
+	savedAddr := &models.Address{ID: saved.BillingAddressID}
+	rsp = db.First(savedAddr)
+	a.False(rsp.RecordNotFound())
+	defer db.Unscoped().Delete(savedAddr)
+
+	validateAddress(t, *newAddr, *savedAddr)
+}
+
+func TestUpdateAddress_NewAddress(t *testing.T) {
+	defer db.Save(firstOrder)
+	a := assert.New(t)
+
+	paramsAddress := getTestAddress()
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		// should create a new address associated with the order's user
+		ShippingAddress: paramsAddress,
+	})
+	rspOrder := extractOrder(t, 200, recorder)
+
+	saved := new(models.Order)
+	rsp := db.First(saved, "id = ?", firstOrder.ID)
+	a.False(rsp.RecordNotFound())
+
+	// now we load the addresses
+	a.Equal(saved.ShippingAddressID, rspOrder.ShippingAddressID)
+
+	savedAddr := &models.Address{ID: saved.ShippingAddressID}
+	rsp = db.First(savedAddr)
+	a.False(rsp.RecordNotFound())
+	defer db.Unscoped().Delete(savedAddr)
+
+	validateAddress(t, *paramsAddress, *savedAddr)
+}
+
+func TestUpdatePaymentInfoAfterPaid(t *testing.T) {
+	defer db.Save(firstOrder)
+	db.Model(firstOrder).Update("payment_state", "paid")
+
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		Currency: "monopoly",
+	})
+	validateError(t, 400, recorder.Body)
+}
+
+func TestUpdateBillingAddressAfterPaid(t *testing.T) {
+	defer db.Model(firstOrder).Update("payment_state", "pending")
+	db.Model(firstOrder).Update("payment_state", "paid")
+
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		BillingAddressID: testAddress.ID,
+	})
+	validateError(t, 400, recorder.Body)
+}
+
+func TestUpdateShippingAfterShipped(t *testing.T) {
+	defer db.Model(firstOrder).Update("fulfillment_state", "pending")
+	db.Model(firstOrder).Update("fulfillment_state", "paid")
+
+	recorder := runUpdate(t, firstOrder, &OrderParams{
+		ShippingAddressID: testAddress.ID,
+	})
+	validateError(t, 400, recorder.Body)
+}
+
+func TestUpdateAsNonAdmin(t *testing.T) {
+	ctx := testContext(token("villian", "villian@wayneindustries.com", nil))
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+
+	params := &OrderParams{
+		Email:    "mrfreeze@dc.com",
+		Currency: "monopoly-dollars",
+	}
+
+	updateBody, err := json.Marshal(params)
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Failed to setup test "+err.Error())
+	}
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewReader(updateBody))
+
+	api := NewAPI(config, db, nil)
+	api.OrderUpdate(ctx, recorder, req)
+	validateError(t, 401, recorder.Body)
+}
+
+func TestUpdateWithNoCreds(t *testing.T) {
+	ctx := testContext(nil)
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+
+	params := &OrderParams{
+		Email:    "mrfreeze@dc.com",
+		Currency: "monopoly-dollars",
+	}
+
+	updateBody, err := json.Marshal(params)
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Failed to setup test "+err.Error())
+	}
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlForFirstOrder, bytes.NewReader(updateBody))
+
+	api := NewAPI(config, db, nil)
+	api.OrderUpdate(ctx, recorder, req)
+	validateError(t, 401, recorder.Body)
+}
+
+// -------------------------------------------------------------------------------------------------------------------
 // HELPERS
 // -------------------------------------------------------------------------------------------------------------------
 
@@ -256,6 +574,24 @@ func testContext(token *jwt.Token) context.Context {
 // -------------------------------------------------------------------------------------------------------------------
 // VALIDATORS
 // -------------------------------------------------------------------------------------------------------------------
+
+func runUpdate(t *testing.T, order *models.Order, params *OrderParams) *httptest.ResponseRecorder {
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
+	ctx = kami.SetParam(ctx, "id", order.ID)
+
+	updateBody, err := json.Marshal(params)
+	if !assert.NoError(t, err) {
+		assert.FailNow(t, "Failed to setup test "+err.Error())
+	}
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", fmt.Sprintf("https://not-real/%s", order.ID), bytes.NewReader(updateBody))
+
+	api := NewAPI(config, db, nil)
+	api.OrderUpdate(ctx, recorder, req)
+	return recorder
+}
 
 func validateError(t *testing.T, code int, body *bytes.Buffer) {
 	a := assert.New(t)
@@ -306,8 +642,6 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 		}
 		a.True(found, fmt.Sprintf("Failed to find line item: %d", exp.ID))
 	}
-	validateAddress(t, expected.BillingAddress, actual.BillingAddress)
-	validateAddress(t, expected.ShippingAddress, actual.ShippingAddress)
 }
 
 func validateAddress(t *testing.T, expected models.Address, actual models.Address) {
@@ -335,4 +669,46 @@ func validateLineItem(t *testing.T, expected *models.LineItem, actual *models.Li
 	a.Equal(expected.Path, actual.Path)
 	a.Equal(expected.Price, actual.Price)
 	a.Equal(expected.Quantity, actual.Quantity)
+}
+
+func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedUserEmail, expectedOrderEmail string) {
+	a := assert.New(t)
+	result := db.First(new(models.User), "id = ?", claims.ID)
+	if !result.RecordNotFound() {
+		a.FailNow("Unclean test env -- user exists with ID " + claims.ID)
+	}
+
+	err := setOrderEmail(db, order, claims, testLogger)
+	if a.NoError(err) {
+		user := new(models.User)
+		result = db.First(user, "id = ?", claims.ID)
+		a.False(result.RecordNotFound())
+		a.Equal(claims.ID, user.ID)
+		a.Equal(claims.ID, order.UserID)
+		a.Equal(expectedOrderEmail, order.Email)
+		a.Equal(expectedUserEmail, user.Email)
+
+		db.Unscoped().Delete(user)
+		t.Logf("Deleted user %s", claims.ID)
+	}
+}
+
+func validateExistingUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedOrderEmail string) {
+	a := assert.New(t)
+	err := setOrderEmail(db, order, claims, testLogger)
+	if a.NoError(err) {
+		a.Equal(claims.ID, order.UserID)
+		a.Equal(expectedOrderEmail, order.Email)
+	}
+}
+
+func getTestAddress() *models.Address {
+	return &models.Address{
+		LastName:  "parker",
+		FirstName: "Peter",
+		Address1:  "123 spidey lane",
+		Country:   "marvel-land",
+		City:      "new york",
+		Zip:       "10007",
+	}
 }

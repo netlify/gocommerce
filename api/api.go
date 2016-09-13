@@ -44,9 +44,13 @@ type ResponseProxy struct {
 	statusCode int
 }
 
-func (rp *ResponseProxy) WriteHeader(status int) {
-	rp.statusCode = status
+func (rp ResponseProxy) WriteHeader(status int) {
+	rp.setStatusCode(status)
 	rp.ResponseWriter.WriteHeader(status)
+}
+
+func (rp *ResponseProxy) setStatusCode(code int) {
+	rp.statusCode = code
 }
 
 // ListenAndServe starts the REST API
@@ -81,8 +85,9 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	mux.Get("/", api.Index)
 	mux.Get("/orders", api.trace(api.OrderList))
-	mux.Post("/orders", api.OrderCreate)
+	mux.Post("/orders", api.trace(api.OrderCreate))
 	mux.Get("/orders/:id", api.trace(api.OrderView))
+	mux.Post("/orders/:id", api.trace(api.OrderUpdate))
 	mux.Get("/orders/:order_id/payments", api.PaymentList)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)

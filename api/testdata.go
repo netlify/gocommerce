@@ -6,61 +6,73 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-var testUser = models.User{
-	ID:    "i-am-batman",
-	Email: "bruce@wayneindustries.com",
-}
+var testUser models.User
+var testAddress models.Address
 
-var testAddress = models.Address{
-	ID:       "first-address",
-	LastName: "wayne",
-	Address1: "123 cave way",
-	Country:  "dcland",
-	City:     "gotham",
-	Zip:      "324234",
-	User:     &testUser,
-}
+var firstOrder *models.Order
+var firstTransaction *models.Transaction
+var firstLineItem models.LineItem
 
-var firstOrder = models.NewOrder("session1", testUser.Email, "usd")
-var firstTransaction = models.NewTransaction(firstOrder)
-var firstLineItem = models.LineItem{
-	ID:          11,
-	OrderID:     firstOrder.ID,
-	Title:       "batwing",
-	SKU:         "123-i-can-fly-456",
-	Type:        "plane",
-	Description: "it's the batwing.",
-	Price:       12,
-	Quantity:    2,
-	Path:        "/i/believe/i/can/fly",
-}
-
-var secondOrder = models.NewOrder("session2", testUser.Email, "usd")
-var secondTransaction = models.NewTransaction(secondOrder)
-var secondLineItem1 = models.LineItem{
-	ID:          21,
-	OrderID:     secondOrder.ID,
-	Title:       "tumbler",
-	SKU:         "456-i-rollover-all-things",
-	Type:        "tank",
-	Description: "OMG yes",
-	Price:       5,
-	Quantity:    2,
-	Path:        "/i/crush/villians/dreams",
-}
-var secondLineItem2 = models.LineItem{
-	ID:          22,
-	OrderID:     secondOrder.ID,
-	Title:       "utility belt",
-	SKU:         "234-fancy-belts",
-	Type:        "clothes",
-	Description: "stlyish but still useful",
-	Price:       45,
-	Quantity:    1,
-	Path:        "/i/hold/the/universe/on/my/waist",
-}
+var secondOrder *models.Order
+var secondTransaction *models.Transaction
+var secondLineItem1 models.LineItem
+var secondLineItem2 models.LineItem
 
 func loadTestData(db *gorm.DB) {
+	testUser = models.User{
+		ID:    "i-am-batman",
+		Email: "bruce@wayneindustries.com",
+	}
+
+	testAddress = models.Address{
+		ID:       "first-address",
+		LastName: "wayne",
+		Address1: "123 cave way",
+		Country:  "dcland",
+		City:     "gotham",
+		Zip:      "324234",
+		User:     &testUser,
+	}
+
+	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
+	firstTransaction = models.NewTransaction(firstOrder)
+	firstLineItem = models.LineItem{
+		ID:          11,
+		OrderID:     firstOrder.ID,
+		Title:       "batwing",
+		SKU:         "123-i-can-fly-456",
+		Type:        "plane",
+		Description: "it's the batwing.",
+		Price:       12,
+		Quantity:    2,
+		Path:        "/i/believe/i/can/fly",
+	}
+
+	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
+	secondTransaction = models.NewTransaction(secondOrder)
+	secondLineItem1 = models.LineItem{
+		ID:          21,
+		OrderID:     secondOrder.ID,
+		Title:       "tumbler",
+		SKU:         "456-i-rollover-all-things",
+		Type:        "tank",
+		Description: "OMG yes",
+		Price:       5,
+		Quantity:    2,
+		Path:        "/i/crush/villians/dreams",
+	}
+	secondLineItem2 = models.LineItem{
+		ID:          22,
+		OrderID:     secondOrder.ID,
+		Title:       "utility belt",
+		SKU:         "234-fancy-belts",
+		Type:        "clothes",
+		Description: "stlyish but still useful",
+		Price:       45,
+		Quantity:    1,
+		Path:        "/i/hold/the/universe/on/my/waist",
+	}
+
 	db.Create(&testUser)
 	db.Create(&testAddress)
 

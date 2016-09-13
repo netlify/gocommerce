@@ -19,12 +19,14 @@ import (
 	"golang.org/x/net/context"
 )
 
+// OrderLineItem describe a single item that is being ordered
 type OrderLineItem struct {
 	SKU      string `json:sku`
 	Path     string `json:"path"`
 	Quantity uint64 `json:"quantity"`
 }
 
+// OrderParams describe the order that is being placed
 type OrderParams struct {
 	SessionID string `json:"session_id"`
 
@@ -43,37 +45,6 @@ type OrderParams struct {
 	LineItems []*OrderLineItem `json:"line_items"`
 
 	Currency string `json:"currency"`
-}
-
-func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	if values, exists := params["from"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
-		if err != nil {
-			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
-		}
-		query = query.Where("created_at >= ?", date)
-	}
-
-	if values, exists := params["to"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
-		if err != nil {
-			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
-		}
-		query = query.Where("created_at <= ?", date)
-	}
-
-	if values, exists := params["sort"]; exists {
-		switch values[0] {
-		case "desc":
-			query = query.Order("created_at DESC")
-		case "asc":
-			query = query.Order("created_at ASC")
-		default:
-			return nil, fmt.Errorf("bad value for 'sort' parameter: only 'asc' or 'desc' are accepted")
-		}
-	}
-
-	return query, nil
 }
 
 // OrderList can query based on
@@ -169,7 +140,180 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// OrderCreate endpoint
+type closer struct {
+	w         http.ResponseWriter
+	httpError *HTTPError
+	tx        *gorm.DB
+}
+
+func (c closer) close() {
+	if c.httpError != nil {
+		sendJSON(c.w, c.httpError.Code, c.httpError)
+		if c.tx != nil {
+			fmt.Println("OMG ~ error and rollback!")
+			c.tx.Rollback()
+		}
+	}
+}
+
+// OrderUpdate will allow an ADMIN only to update the details of a record
+// it is also important to note that it will not let modification of an order if the
+// order is no longer pending.
+// Addresses can be made by posting a new one directly, OR by referencing one by ID. If
+// both are provided, the one that is made by ID will win out and the other will be ignored.
+// There are also blocks to changing certain fields after the state has been locked
+func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	orderID := kami.Param(ctx, "id")
+	log := Logger(ctx).WithField("order_id", orderID)
+	cl := closer{w: w}
+	defer cl.close()
+
+	if !IsAdmin(ctx) {
+		log.Warn("Illegal access attempted")
+		cl.httpError = UnauthorizedError(w, "Admin privileges are required")
+		return
+	}
+
+	orderParams := new(OrderParams)
+	err := json.NewDecoder(r.Body).Decode(orderParams)
+	if err != nil {
+		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
+		cl.httpError = BadRequestError(w, fmt.Sprintf("Could not read Order Parameters: %v", err))
+		return
+	}
+
+	// verify that the order exists
+	existingOrder := new(models.Order)
+
+	rsp := a.db.First(existingOrder, "id = ?", orderID)
+	if rsp.RecordNotFound() {
+		log.Warn("Update attempted to order that doesn't exist")
+		cl.httpError = NotFoundError(w, fmt.Sprintf("Failed to find order with id '%s'", orderID))
+		return
+	}
+	if rsp.Error != nil {
+		log.WithError(rsp.Error).Warnf("Failed to query for id '%s'", orderID)
+		cl.httpError = InternalServerError(w, "Error while querying for order")
+		return
+	}
+
+	if existingOrder.State != models.PendingState {
+		log.Warn("Tried to update order that is no longer pending")
+		cl.httpError = BadRequestError(w, "Order is no longer pending - can't update details")
+		return
+	}
+
+	alreadyPaid := existingOrder.PaymentState == models.PaidState
+	alreadyShipped := existingOrder.FulfillmentState == models.PaidState
+
+	//
+	// handle the simple fields
+	//
+	if orderParams.SessionID != "" {
+		log.Debugf("Updating session id from '%s' to '%s'", existingOrder.SessionID, orderParams.SessionID)
+		existingOrder.SessionID = orderParams.SessionID
+	}
+	if orderParams.Email != "" {
+		log.Debugf("Updating email from '%s' to '%s'", existingOrder.Email, orderParams.Email)
+		existingOrder.Email = orderParams.Email
+	}
+
+	if orderParams.Currency != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the currency after the order has been paid")
+			cl.httpError = BadRequestError(w, "Can't update the currency after payment has been processed")
+			return
+		}
+		log.Debugf("Updating currency from '%v' to '%v'", existingOrder.Currency, orderParams.Currency)
+		existingOrder.Currency = orderParams.Currency
+
+	}
+	if orderParams.VATNumber != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the VAT number after the order has been paid")
+			cl.httpError = BadRequestError(w, "Can't update the VAT number after payment has been processed")
+			return
+		}
+
+		log.Debugf("Updating vat number from '%v' to '%v'", existingOrder.VATNumber, orderParams.VATNumber)
+		existingOrder.VATNumber = orderParams.VATNumber
+	}
+
+	tx := a.db.Begin()
+	cl.tx = tx
+
+	//
+	// handle the addresses
+	//
+	if orderParams.BillingAddress != nil || orderParams.BillingAddressID != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the billing address after payment")
+			cl.httpError = BadRequestError(w, "Can't update the billing address of an order that has already been paid")
+			return
+		}
+		log.Debugf("Updating order's billing address")
+
+		addrID, httpErr := a.processAddress(tx, existingOrder, orderParams.BillingAddress, orderParams.BillingAddressID)
+		if httpErr != nil {
+			log.WithError(httpErr).Warn("Failed to update the billing address")
+			cl.httpError = httpErr
+			return
+		}
+
+		existingOrder.BillingAddressID = addrID
+		log.WithField("billing_address_id", addrID).Debugf("Updated the billing address to address %s", addrID)
+	}
+
+	if orderParams.ShippingAddress != nil || orderParams.ShippingAddressID != "" {
+		if alreadyShipped {
+			log.Warn("Tried to update the shipping address after it has shipped")
+			cl.httpError = BadRequestError(w, "Can't update the shipping address of an order that has been shipped")
+			return
+		}
+
+		log.Debugf("Updating order's shipping address")
+
+		addrID, httpErr := a.processAddress(tx, existingOrder, orderParams.ShippingAddress, orderParams.ShippingAddressID)
+		if httpErr != nil {
+			log.WithError(httpErr).Warn("Failed to update the shipping address")
+			cl.httpError = httpErr
+			return
+		}
+
+		existingOrder.ShippingAddressID = addrID
+		log.WithField("shipping_address_id", addrID).Debugf("Updated the shipping address to address %s", addrID)
+	}
+
+	if orderParams.Data != nil {
+		// TODO existingOrder.Data = orderParams.Data
+	}
+
+	//
+	// handle the line items
+	//
+	updatedItems := make(map[string]*OrderLineItem)
+	for _, item := range orderParams.LineItems {
+		updatedItems[item.SKU] = item
+	}
+
+	for _, item := range existingOrder.LineItems {
+		if update, exists := updatedItems[item.SKU]; exists {
+			item.Quantity = update.Quantity
+			if update.Path != "" {
+				item.Path = update.Path
+			}
+		}
+	}
+
+	log.Info("Saving order updates")
+	tx.Save(existingOrder)
+	tx.Commit()
+
+	sendJSON(w, 200, existingOrder)
+}
+
+// OrderCreate endpoint for creating an order. It does NOT require a token because
+// it is possible to create an anonymous order. There will be no user for that order.
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := Logger(ctx)
 
@@ -197,13 +341,16 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
 
-	user := &models.User{}
-	if httpError := a.setUserIDFromToken(tx, user, order, claims); httpError != nil {
+	order.Email = params.Email
+	httpError := setOrderEmail(tx, order, claims, log)
+	if httpError != nil {
 		tx.Rollback()
+		log.WithError(err).Info("Failed to set the order email from the token")
 		sendJSON(w, httpError.Code, err)
 		return
 	}
-	log.WithField("effective_user_id", user.ID).Debug("Successfully set the user id")
+
+	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
 		tx.Rollback()
@@ -262,31 +409,47 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
-	sendJSON(w, 200, order)
+	sendJSON(w, 201, order)
 }
 
-func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, claims *JWTClaims) *HTTPError {
-	if claims != nil {
+// An order's email is determined by a few things. The rules guiding it are:
+// 1 - if no claims are provided then the one in the params is used (for anon orders)
+// 2 - if claims are provided they must be a valid user id
+// 3 - if that user doesn't exist then a user will be created with the id/email specified.
+//     if the user doesn't have an email, the one from the order is used
+// 4 - if the order doesn't have an email, but the user does, we will use that one
+//
+func setOrderEmail(tx *gorm.DB, order *models.Order, claims *JWTClaims, log *logrus.Entry) *HTTPError {
+	if claims == nil {
+		log.Debug("No claims provided, proceeding as an anon request")
+	} else {
 		if claims.ID == "" {
-			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", claims.ID)}
+			return httpError(400, "Token had an invalid ID: %s", claims.ID)
 		}
 
+		log = log.WithField("user_id", claims.ID)
 		order.UserID = claims.ID
-		if result := tx.First(user, "id = ?", claims.ID); result.Error != nil {
-			if result.RecordNotFound() {
-				user.ID = claims.ID
-				if claims.Email != "" {
-					user.Email = claims.Email
-				} else {
-					order.Email = user.Email
-				}
-				tx.Create(user)
-			} else {
-				return &HTTPError{Code: 500, Message: fmt.Sprintf("Token had an invalid ID: %v", result.Error)}
-			}
+
+		user := new(models.User)
+		result := tx.First(user, "id = ?", claims.ID)
+		if result.RecordNotFound() {
+			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.ID)
+			user.ID = claims.ID
+			user.Email = claims.Email
+			tx.Create(user)
+		} else if result.Error != nil {
+			log.WithError(result.Error).Warnf("Unexpected error from the db while querying for user id %d", user.ID)
+			return httpError(500, "Token had an invalid ID: %v", result.Error)
+		}
+
+		if order.Email == "" {
+			order.Email = user.Email
 		}
 	}
 
+	if order.Email == "" {
+		return httpError(400, "Either the order parameters or the user must provide an email")
+	}
 	return nil
 }
 
@@ -341,13 +504,13 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	log.Debug("Finished processing line items")
 
 	if sharedErr.hasError() {
-		return &HTTPError{Code: 500, Message: fmt.Sprintf("Error processing line item: %v", sharedErr.err)}
+		return httpError(500, "Error processing line item: %v", sharedErr.err)
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + item.Price*item.Quantity
 		if err := tx.Create(&item).Error; err != nil {
-			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating line item: %v", err)}
+			return httpError(500, "Error creating line item: %v", err)
 		}
 	}
 
@@ -355,30 +518,36 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 }
 
 func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (string, *HTTPError) {
-	if address == nil {
+	if address == nil && id == "" {
 		return "", nil
 	}
 
 	if id != "" {
-		if result := tx.First(address, "id = ?", id); result.Error != nil {
-			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
-		}
-		if order.UserID != address.UserID {
-			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
-		}
-		if address.UserID == "" {
-			address.UserID = order.UserID
-			tx.Save(address)
-		}
-	} else {
-		if !address.Valid() {
-			return "", &HTTPError{Code: 400, Message: "Failed to validate address"}
+		loadedAddress := new(models.Address)
+		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
+			return "", httpError(400, "Bad address id: %v, %v", id, result.Error)
 		}
 
-		// is a valid id that doesn't already belong to a user
-		address.ID = uuid.NewRandom().String()
-		tx.Create(address)
+		if order.UserID != loadedAddress.UserID {
+			return "", httpError(400, "Can't update the order to an address that doesn't belong to the user")
+		}
+
+		if loadedAddress.UserID == "" {
+			loadedAddress.UserID = order.UserID
+			tx.Save(loadedAddress)
+		}
+
+		return loadedAddress.ID, nil
 	}
+
+	// it is a new address we're  making
+	if !address.Valid() {
+		return "", httpError(400, "Failed to validate address")
+	}
+
+	// is a valid id that doesn't already belong to a user
+	address.ID = uuid.NewRandom().String()
+	tx.Create(address)
 
 	return address.ID, nil
 }
@@ -415,4 +584,39 @@ func (a *API) processLineItem(order *models.Order, item *models.LineItem, siteUR
 
 func orderQuery(db *gorm.DB) *gorm.DB {
 	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress")
+}
+
+func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	if values, exists := params["from"]; exists {
+		date, err := time.Parse(time.RFC3339, values[0])
+		if err != nil {
+			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
+		}
+		query = query.Where("created_at >= ?", date)
+	}
+
+	if values, exists := params["to"]; exists {
+		date, err := time.Parse(time.RFC3339, values[0])
+		if err != nil {
+			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
+		}
+		query = query.Where("created_at <= ?", date)
+	}
+
+	if values, exists := params["sort"]; exists {
+		switch values[0] {
+		case "desc":
+			query = query.Order("created_at DESC")
+		case "asc":
+			query = query.Order("created_at ASC")
+		default:
+			return nil, fmt.Errorf("bad value for 'sort' parameter: only 'asc' or 'desc' are accepted")
+		}
+	}
+
+	return query, nil
+}
+
+func (a *API) checkExistence(inter interface{}) bool {
+	return !a.db.First(inter).RecordNotFound()
 }
