@@ -34,6 +34,10 @@ func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
 	encoder.Encode(obj)
 }
 
+func sendError(w http.ResponseWriter, err *HTTPError) {
+	sendJSON(w, err.Code, err)
+}
+
 func getToken(ctx context.Context) *jwt.Token {
 	obj := ctx.Value("jwt")
 	if obj == nil {

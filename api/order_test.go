@@ -4,55 +4,18 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"golang.org/x/net/context"
-
 	"github.com/Sirupsen/logrus"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
-	"github.com/jinzhu/gorm"
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
+	tu "github.com/netlify/gocommerce/testutils"
 )
-
-var testLogger = logrus.NewEntry(logrus.StandardLogger())
-var config = &conf.Configuration{}
-var db *gorm.DB
-
-var urlWithUserID string
-var urlForFirstOrder string
-
-func TestMain(m *testing.M) {
-	f, err := ioutil.TempFile("", "test-db")
-	if err != nil {
-		panic(err)
-	}
-	defer os.Remove(f.Name())
-
-	config.DB.Driver = "sqlite3"
-	config.DB.ConnURL = f.Name()
-
-	// setup test db
-	db, err = models.Connect(config)
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	loadTestData(db)
-	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
-	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", testUser.ID)
-
-	os.Exit(m.Run())
-}
 
 // -------------------------------------------------------------------------------------------------------------------
 // LIST
@@ -61,7 +24,7 @@ func TestMain(m *testing.M) {
 func TestQueryForAllOrdersAsTheUser(t *testing.T) {
 	assert := assert.New(t)
 
-	ctx := testContext(token(testUser.ID, testUser.Email, nil))
+	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil))
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 
@@ -73,14 +36,14 @@ func TestQueryForAllOrdersAsTheUser(t *testing.T) {
 
 	for _, o := range orders {
 		switch o.ID {
-		case firstOrder.ID:
-			validateOrder(t, firstOrder, &o)
-			validateAddress(t, firstOrder.BillingAddress, o.BillingAddress)
-			validateAddress(t, firstOrder.ShippingAddress, o.ShippingAddress)
-		case secondOrder.ID:
-			validateOrder(t, secondOrder, &o)
-			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
-			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
+		case tu.FirstOrder.ID:
+			validateOrder(t, tu.FirstOrder, &o)
+			validateAddress(t, tu.FirstOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, tu.FirstOrder.ShippingAddress, o.ShippingAddress)
+		case tu.SecondOrder.ID:
+			validateOrder(t, tu.SecondOrder, &o)
+			validateAddress(t, tu.SecondOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, tu.SecondOrder.ShippingAddress, o.ShippingAddress)
 		default:
 			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
@@ -102,14 +65,14 @@ func TestQueryForAllOrdersAsAdmin(t *testing.T) {
 	assert.Equal(2, len(orders))
 	for _, o := range orders {
 		switch o.ID {
-		case firstOrder.ID:
-			validateOrder(t, firstOrder, &o)
-			validateAddress(t, firstOrder.BillingAddress, o.BillingAddress)
-			validateAddress(t, firstOrder.ShippingAddress, o.ShippingAddress)
-		case secondOrder.ID:
-			validateOrder(t, secondOrder, &o)
-			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
-			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
+		case tu.FirstOrder.ID:
+			validateOrder(t, tu.FirstOrder, &o)
+			validateAddress(t, tu.FirstOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, tu.FirstOrder.ShippingAddress, o.ShippingAddress)
+		case tu.SecondOrder.ID:
+			validateOrder(t, tu.SecondOrder, &o)
+			validateAddress(t, tu.SecondOrder.BillingAddress, o.BillingAddress)
+			validateAddress(t, tu.SecondOrder.ShippingAddress, o.ShippingAddress)
 		default:
 			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
@@ -161,20 +124,20 @@ func TestQueryForAllOrdersWithNoToken(t *testing.T) {
 
 func TestQueryForAnOrderAsTheUser(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	ctx := testContext(token(testUser.ID, "marp@wayneindustries.com", nil))
+	ctx := testContext(token(tu.TestUser.ID, "marp@wayneindustries.com", nil))
 
 	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", tu.FirstOrder.ID)
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
+	req, _ := http.NewRequest("GET", "https://not-real/"+tu.FirstOrder.ID, nil)
 
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	order := extractOrder(t, 200, recorder)
-	validateOrder(t, firstOrder, order)
-	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
-	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
+	validateOrder(t, tu.FirstOrder, order)
+	validateAddress(t, tu.FirstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, tu.FirstOrder.ShippingAddress, order.ShippingAddress)
 }
 
 func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
@@ -182,7 +145,7 @@ func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
 	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
 
 	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", tu.FirstOrder.ID)
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
@@ -190,9 +153,9 @@ func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	order := extractOrder(t, 200, recorder)
-	validateOrder(t, firstOrder, order)
-	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
-	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
+	validateOrder(t, tu.FirstOrder, order)
+	validateAddress(t, tu.FirstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, tu.FirstOrder.ShippingAddress, order.ShippingAddress)
 }
 
 func TestQueryForAnOrderAsAStranger(t *testing.T) {
@@ -200,7 +163,7 @@ func TestQueryForAnOrderAsAStranger(t *testing.T) {
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", tu.FirstOrder.ID)
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
@@ -272,7 +235,7 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 //		assert.FailNow(t, "setup failure")
 //	}
 //
-//	ctx := testContext(token(testUser.ID, testUser.Email, nil))
+//	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil))
 //	recorder := httptest.NewRecorder()
 //	req, err := http.NewRequest("PUT", "https://not-real/orders", bytes.NewReader(bs))
 //
@@ -352,7 +315,7 @@ func TestSetUserIDLogic_KnownUserClaimsOnRequest(t *testing.T) {
 	validateExistingUserEmail(
 		t,
 		models.NewOrder("session", "joker@wayne.com", "usd"),
-		token(testUser.ID, "", nil).Claims.(*JWTClaims),
+		token(tu.TestUser.ID, "", nil).Claims.(*JWTClaims),
 		"joker@wayne.com",
 	)
 }
@@ -361,8 +324,8 @@ func TestSetUserIDLogic_KnownUserClaimsOnClaim(t *testing.T) {
 	validateExistingUserEmail(
 		t,
 		models.NewOrder("session", "", "usd"),
-		token(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
-		testUser.Email,
+		token(tu.TestUser.ID, tu.TestUser.Email, nil).Claims.(*JWTClaims),
+		tu.TestUser.Email,
 	)
 }
 
@@ -370,7 +333,7 @@ func TestSetUserIDLogic_KnownUserAllTheEmail(t *testing.T) {
 	validateExistingUserEmail(
 		t,
 		models.NewOrder("session", "joker@wayne.com", "usd"),
-		token(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
+		token(tu.TestUser.ID, tu.TestUser.Email, nil).Claims.(*JWTClaims),
 		"joker@wayne.com",
 	)
 }
@@ -379,8 +342,8 @@ func TestSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
 	validateExistingUserEmail(
 		t,
 		models.NewOrder("session", "", "usd"),
-		token(testUser.ID, "", nil).Claims.(*JWTClaims),
-		testUser.Email,
+		token(tu.TestUser.ID, "", nil).Claims.(*JWTClaims),
+		tu.TestUser.Email,
 	)
 }
 
@@ -388,17 +351,17 @@ func TestSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
 // UPDATE
 // --------------------------------------------------------------------------------------------------------------------
 func TestUpdateFields(t *testing.T) {
-	defer db.Save(firstOrder)
+	defer db.Save(tu.FirstOrder)
 	assert := assert.New(t)
 
-	recorder := runUpdate(t, firstOrder, &OrderParams{
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		Email:    "mrfreeze@dc.com",
 		Currency: "monopoly-dollars",
 	})
 	rspOrder := extractOrder(t, 200, recorder)
 
 	saved := new(models.Order)
-	rsp := db.First(saved, "id = ?", firstOrder.ID)
+	rsp := db.First(saved, "id = ?", tu.FirstOrder.ID)
 	assert.False(rsp.RecordNotFound())
 
 	assert.Equal("mrfreeze@dc.com", rspOrder.Email)
@@ -410,29 +373,29 @@ func TestUpdateFields(t *testing.T) {
 	validateOrder(t, saved, rspOrder)
 
 	// should be the only field that has changed ~ check it
-	saved.Email = firstOrder.Email
-	saved.Currency = firstOrder.Currency
-	validateOrder(t, firstOrder, saved)
+	saved.Email = tu.FirstOrder.Email
+	saved.Currency = tu.FirstOrder.Currency
+	validateOrder(t, tu.FirstOrder, saved)
 }
 
 func TestUpdateAddress_ExistingAddress(t *testing.T) {
 	logrus.SetLevel(logrus.DebugLevel)
-	defer db.Save(firstOrder)
+	defer db.Save(tu.FirstOrder)
 	assert := assert.New(t)
 
-	newAddr := getTestAddress()
+	newAddr := tu.GetTestAddress()
 	newAddr.ID = "new-addr"
-	newAddr.UserID = firstOrder.UserID
+	newAddr.UserID = tu.FirstOrder.UserID
 	rsp := db.Create(newAddr)
 	defer db.Unscoped().Delete(newAddr)
 
-	recorder := runUpdate(t, firstOrder, &OrderParams{
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		BillingAddressID: newAddr.ID,
 	})
 	rspOrder := extractOrder(t, 200, recorder)
 
 	saved := new(models.Order)
-	rsp = db.First(saved, "id = ?", firstOrder.ID)
+	rsp = db.First(saved, "id = ?", tu.FirstOrder.ID)
 	assert.False(rsp.RecordNotFound())
 
 	// now we load the addresses
@@ -447,18 +410,18 @@ func TestUpdateAddress_ExistingAddress(t *testing.T) {
 }
 
 func TestUpdateAddress_NewAddress(t *testing.T) {
-	defer db.Save(firstOrder)
+	defer db.Save(tu.FirstOrder)
 	assert := assert.New(t)
 
-	paramsAddress := getTestAddress()
-	recorder := runUpdate(t, firstOrder, &OrderParams{
+	paramsAddress := tu.GetTestAddress()
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		// should create a new address associated with the order's user
 		ShippingAddress: paramsAddress,
 	})
 	rspOrder := extractOrder(t, 200, recorder)
 
 	saved := new(models.Order)
-	rsp := db.First(saved, "id = ?", firstOrder.ID)
+	rsp := db.First(saved, "id = ?", tu.FirstOrder.ID)
 	assert.False(rsp.RecordNotFound())
 
 	// now we load the addresses
@@ -473,38 +436,38 @@ func TestUpdateAddress_NewAddress(t *testing.T) {
 }
 
 func TestUpdatePaymentInfoAfterPaid(t *testing.T) {
-	defer db.Save(firstOrder)
-	db.Model(firstOrder).Update("payment_state", "paid")
+	defer db.Save(tu.FirstOrder)
+	db.Model(tu.FirstOrder).Update("payment_state", "paid")
 
-	recorder := runUpdate(t, firstOrder, &OrderParams{
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		Currency: "monopoly",
 	})
 	validateError(t, 400, recorder.Body)
 }
 
 func TestUpdateBillingAddressAfterPaid(t *testing.T) {
-	defer db.Model(firstOrder).Update("payment_state", "pending")
-	db.Model(firstOrder).Update("payment_state", "paid")
+	defer db.Model(tu.FirstOrder).Update("payment_state", "pending")
+	db.Model(tu.FirstOrder).Update("payment_state", "paid")
 
-	recorder := runUpdate(t, firstOrder, &OrderParams{
-		BillingAddressID: testAddress.ID,
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
+		BillingAddressID: tu.TestAddress.ID,
 	})
 	validateError(t, 400, recorder.Body)
 }
 
 func TestUpdateShippingAfterShipped(t *testing.T) {
-	defer db.Model(firstOrder).Update("fulfillment_state", "pending")
-	db.Model(firstOrder).Update("fulfillment_state", "paid")
+	defer db.Model(tu.FirstOrder).Update("fulfillment_state", "pending")
+	db.Model(tu.FirstOrder).Update("fulfillment_state", "paid")
 
-	recorder := runUpdate(t, firstOrder, &OrderParams{
-		ShippingAddressID: testAddress.ID,
+	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
+		ShippingAddressID: tu.TestAddress.ID,
 	})
 	validateError(t, 400, recorder.Body)
 }
 
 func TestUpdateAsNonAdmin(t *testing.T) {
 	ctx := testContext(token("villian", "villian@wayneindustries.com", nil))
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", tu.FirstOrder.ID)
 
 	params := &OrderParams{
 		Email:    "mrfreeze@dc.com",
@@ -526,7 +489,7 @@ func TestUpdateAsNonAdmin(t *testing.T) {
 
 func TestUpdateWithNoCreds(t *testing.T) {
 	ctx := testContext(nil)
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx = kami.SetParam(ctx, "id", tu.FirstOrder.ID)
 
 	params := &OrderParams{
 		Email:    "mrfreeze@dc.com",
@@ -548,7 +511,7 @@ func TestUpdateWithNoCreds(t *testing.T) {
 
 func TestUpdateWithNewData(t *testing.T) {
 	assert := assert.New(t)
-	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.Data{})
+	defer db.Where("order_id = ?", tu.FirstOrder.ID).Delete(&models.Data{})
 
 	op := &OrderParams{
 		Data: map[string]interface{}{
@@ -558,14 +521,14 @@ func TestUpdateWithNewData(t *testing.T) {
 			"exists":      true,
 		},
 	}
-	recorder := runUpdate(t, firstOrder, op)
+	recorder := runUpdate(t, tu.FirstOrder, op)
 	returnedOrder := extractOrder(t, 200, recorder)
 
 	// TODO test that the returned order contains the data we expect
 	_ = returnedOrder
 
 	datas := []models.Data{}
-	db.Where("order_id = ?", firstOrder.ID).Find(&datas)
+	db.Where("order_id = ?", tu.FirstOrder.ID).Find(&datas)
 	assert.Len(datas, 4)
 	for _, datum := range datas {
 		switch datum.Key {
@@ -586,14 +549,14 @@ func TestUpdateWithNewData(t *testing.T) {
 }
 
 func TestUpdateWithBadData(t *testing.T) {
-	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.Data{})
+	defer db.Where("order_id = ?", tu.FirstOrder.ID).Delete(&models.Data{})
 
 	op := &OrderParams{
 		Data: map[string]interface{}{
 			"array": []int{4},
 		},
 	}
-	recorder := runUpdate(t, firstOrder, op)
+	recorder := runUpdate(t, tu.FirstOrder, op)
 	validateError(t, 400, recorder.Body)
 }
 
@@ -617,12 +580,6 @@ func extractOrder(t *testing.T, code int, recorder *httptest.ResponseRecorder) *
 	return order
 }
 
-func testContext(token *jwt.Token) context.Context {
-	ctx := WithConfig(context.Background(), config)
-	ctx = WithLogger(ctx, testLogger)
-	return WithToken(ctx, token)
-}
-
 // -------------------------------------------------------------------------------------------------------------------
 // VALIDATORS
 // -------------------------------------------------------------------------------------------------------------------
@@ -643,21 +600,6 @@ func runUpdate(t *testing.T, order *models.Order, params *OrderParams) *httptest
 	api := NewAPI(config, db, nil)
 	api.OrderUpdate(ctx, recorder, req)
 	return recorder
-}
-
-func validateError(t *testing.T, code int, body *bytes.Buffer) {
-	assert := assert.New(t)
-
-	errRsp := make(map[string]interface{})
-	err := json.NewDecoder(body).Decode(&errRsp)
-	assert.Nil(err)
-
-	errcode, exists := errRsp["code"]
-	assert.True(exists)
-	assert.EqualValues(code, errcode)
-
-	_, exists = errRsp["msg"]
-	assert.True(exists)
 }
 
 func validateOrder(t *testing.T, expected, actual *models.Order) {
@@ -751,16 +693,5 @@ func validateExistingUserEmail(t *testing.T, order *models.Order, claims *JWTCla
 	if assert.NoError(err) {
 		assert.Equal(claims.ID, order.UserID)
 		assert.Equal(expectedOrderEmail, order.Email)
-	}
-}
-
-func getTestAddress() *models.Address {
-	return &models.Address{
-		LastName:  "parker",
-		FirstName: "Peter",
-		Address1:  "123 spidey lane",
-		Country:   "marvel-land",
-		City:      "new york",
-		Zip:       "10007",
 	}
 }
