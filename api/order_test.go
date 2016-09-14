@@ -59,7 +59,7 @@ func TestMain(m *testing.M) {
 // -------------------------------------------------------------------------------------------------------------------
 
 func TestQueryForAllOrdersAsTheUser(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	ctx := testContext(token(testUser.ID, testUser.Email, nil))
 	recorder := httptest.NewRecorder()
@@ -69,7 +69,7 @@ func TestQueryForAllOrdersAsTheUser(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 
 	orders := extractOrders(t, 200, recorder)
-	a.Equal(2, len(orders))
+	assert.Equal(2, len(orders))
 
 	for _, o := range orders {
 		switch o.ID {
@@ -82,13 +82,13 @@ func TestQueryForAllOrdersAsTheUser(t *testing.T) {
 			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
 			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
-			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
+			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
 	}
 }
 
 func TestQueryForAllOrdersAsAdmin(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(token("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}))
@@ -99,7 +99,7 @@ func TestQueryForAllOrdersAsAdmin(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 	orders := extractOrders(t, 200, recorder)
 
-	a.Equal(2, len(orders))
+	assert.Equal(2, len(orders))
 	for _, o := range orders {
 		switch o.ID {
 		case firstOrder.ID:
@@ -111,13 +111,13 @@ func TestQueryForAllOrdersAsAdmin(t *testing.T) {
 			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
 			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
-			a.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
+			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
 		}
 	}
 }
 
 func TestQueryForAllOrdersAsStranger(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 	recorder := httptest.NewRecorder()
@@ -125,12 +125,12 @@ func TestQueryForAllOrdersAsStranger(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
-	a.Equal(200, recorder.Code)
-	a.Equal("[]\n", recorder.Body.String())
+	assert.Equal(200, recorder.Code)
+	assert.Equal("[]\n", recorder.Body.String())
 }
 
 func TestQueryForAllOrdersNotWithAdminRights(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	recorder := httptest.NewRecorder()
@@ -138,12 +138,12 @@ func TestQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
-	a.Equal(400, recorder.Code)
+	assert.Equal(400, recorder.Code)
 	validateError(t, 400, recorder.Body)
 }
 
 func TestQueryForAllOrdersWithNoToken(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	ctx := testContext(nil)
 
 	recorder := httptest.NewRecorder()
@@ -151,7 +151,7 @@ func TestQueryForAllOrdersWithNoToken(t *testing.T) {
 
 	api := NewAPI(config, nil, nil)
 	api.OrderList(ctx, recorder, req)
-	a.Equal(401, recorder.Code)
+	assert.Equal(401, recorder.Code)
 	validateError(t, 401, recorder.Body)
 }
 
@@ -196,7 +196,7 @@ func TestQueryForAnOrderAsAnAdmin(t *testing.T) {
 }
 
 func TestQueryForAnOrderAsAStranger(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	// have to add it to the context ~ it isn't from the params
@@ -207,12 +207,12 @@ func TestQueryForAnOrderAsAStranger(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
-	a.Equal(401, recorder.Code)
+	assert.Equal(401, recorder.Code)
 	validateError(t, 401, recorder.Body)
 }
 
 func TestQueryForAMissingOrder(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	ctx := testContext(token("stranger", "stranger-danger@wayneindustries.com", nil))
 
 	// have to add it to the context ~ it isn't from the params
@@ -223,12 +223,12 @@ func TestQueryForAMissingOrder(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
-	a.Equal(404, recorder.Code)
+	assert.Equal(404, recorder.Code)
 	validateError(t, 404, recorder.Body)
 }
 
 func TestQueryForAnOrderWithNoToken(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	ctx := testContext(nil)
 
 	// have to add it to the context ~ it isn't from the params
@@ -240,7 +240,7 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 	// use nil for DB b/c it should *NEVER* be called
 	api := NewAPI(config, nil, nil)
 	api.OrderView(ctx, recorder, req)
-	a.Equal(401, recorder.Code)
+	assert.Equal(401, recorder.Code)
 	validateError(t, 401, recorder.Body)
 }
 
@@ -249,7 +249,7 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 // -------------------------------------------------------------------------------------------------------------------
 // TODO vvvv ~ need to make it verifiable
 //func TestCreateAnOrderAsAnExistingUser(t *testing.T) {
-//	a := assert.New(t)
+//	assert := assert.New(t)
 //	orderRequest := &OrderParams{
 //		SessionID: "test-session",
 //		LineItems: []*OrderLineItem{&OrderLineItem{
@@ -278,12 +278,12 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 //
 //	api := NewAPI(config, db, nil)
 //	api.OrderCreate(ctx, recorder, req)
-//	a.Equal(200, recorder.Code)
+//	assert.Equal(200, recorder.Code)
 //
 //	//ret := new(models.Order)
 //	ret := make(map[string]interface{})
 //	err = json.Unmarshal(recorder.Body.Bytes(), ret)
-//	a.NoError(err)
+//	assert.NoError(err)
 //
 //	fmt.Printf("%+v\n", ret)
 //}
@@ -292,19 +292,19 @@ func TestQueryForAnOrderWithNoToken(t *testing.T) {
 // Create ~ email logic
 // --------------------------------------------------------------------------------------------------------------------
 func TestSetUserIDLogic_AnonymousUser(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	simpleOrder := models.NewOrder("session", "params@email.com", "usd")
 	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
-	a.Nil(err)
-	a.Equal("params@email.com", simpleOrder.Email)
+	assert.Nil(err)
+	assert.Equal("params@email.com", simpleOrder.Email)
 }
 
 func TestSetUserIDLogic_AnonymousUserWithNoEmail(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	simpleOrder := models.NewOrder("session", "", "usd")
 	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
-	if !a.Error(err) {
-		a.Equal(400, err.Code)
+	if !assert.Error(err) {
+		assert.Equal(400, err.Code)
 	}
 }
 
@@ -339,12 +339,12 @@ func TestSetUserIDLogic_NewUserAllTheEmails(t *testing.T) {
 }
 
 func TestSetUserIDLogic_NewUserNoEmails(t *testing.T) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	simpleOrder := models.NewOrder("session", "", "usd")
 	claims := token("alfred", "", nil).Claims.(*JWTClaims)
 	err := setOrderEmail(db, simpleOrder, claims, testLogger)
-	if a.Error(err) {
-		a.Equal(400, err.Code)
+	if assert.Error(err) {
+		assert.Equal(400, err.Code)
 	}
 }
 
@@ -389,7 +389,7 @@ func TestSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
 // --------------------------------------------------------------------------------------------------------------------
 func TestUpdateFields(t *testing.T) {
 	defer db.Save(firstOrder)
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	recorder := runUpdate(t, firstOrder, &OrderParams{
 		Email:    "mrfreeze@dc.com",
@@ -399,14 +399,14 @@ func TestUpdateFields(t *testing.T) {
 
 	saved := new(models.Order)
 	rsp := db.First(saved, "id = ?", firstOrder.ID)
-	a.False(rsp.RecordNotFound())
+	assert.False(rsp.RecordNotFound())
 
-	a.Equal("mrfreeze@dc.com", rspOrder.Email)
-	a.Equal("monopoly-dollars", saved.Currency)
+	assert.Equal("mrfreeze@dc.com", rspOrder.Email)
+	assert.Equal("monopoly-dollars", saved.Currency)
 
 	// did it get persisted to the db
-	a.Equal("mrfreeze@dc.com", saved.Email)
-	a.Equal("monopoly-dollars", saved.Currency)
+	assert.Equal("mrfreeze@dc.com", saved.Email)
+	assert.Equal("monopoly-dollars", saved.Currency)
 	validateOrder(t, saved, rspOrder)
 
 	// should be the only field that has changed ~ check it
@@ -416,8 +416,9 @@ func TestUpdateFields(t *testing.T) {
 }
 
 func TestUpdateAddress_ExistingAddress(t *testing.T) {
+	logrus.SetLevel(logrus.DebugLevel)
 	defer db.Save(firstOrder)
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	newAddr := getTestAddress()
 	newAddr.ID = "new-addr"
@@ -432,14 +433,14 @@ func TestUpdateAddress_ExistingAddress(t *testing.T) {
 
 	saved := new(models.Order)
 	rsp = db.First(saved, "id = ?", firstOrder.ID)
-	a.False(rsp.RecordNotFound())
+	assert.False(rsp.RecordNotFound())
 
 	// now we load the addresses
-	a.Equal(saved.BillingAddressID, rspOrder.BillingAddressID)
+	assert.Equal(saved.BillingAddressID, rspOrder.BillingAddressID)
 
 	savedAddr := &models.Address{ID: saved.BillingAddressID}
 	rsp = db.First(savedAddr)
-	a.False(rsp.RecordNotFound())
+	assert.False(rsp.RecordNotFound())
 	defer db.Unscoped().Delete(savedAddr)
 
 	validateAddress(t, *newAddr, *savedAddr)
@@ -447,7 +448,7 @@ func TestUpdateAddress_ExistingAddress(t *testing.T) {
 
 func TestUpdateAddress_NewAddress(t *testing.T) {
 	defer db.Save(firstOrder)
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	paramsAddress := getTestAddress()
 	recorder := runUpdate(t, firstOrder, &OrderParams{
@@ -458,14 +459,14 @@ func TestUpdateAddress_NewAddress(t *testing.T) {
 
 	saved := new(models.Order)
 	rsp := db.First(saved, "id = ?", firstOrder.ID)
-	a.False(rsp.RecordNotFound())
+	assert.False(rsp.RecordNotFound())
 
 	// now we load the addresses
-	a.Equal(saved.ShippingAddressID, rspOrder.ShippingAddressID)
+	assert.Equal(saved.ShippingAddressID, rspOrder.ShippingAddressID)
 
 	savedAddr := &models.Address{ID: saved.ShippingAddressID}
 	rsp = db.First(savedAddr)
-	a.False(rsp.RecordNotFound())
+	assert.False(rsp.RecordNotFound())
 	defer db.Unscoped().Delete(savedAddr)
 
 	validateAddress(t, *paramsAddress, *savedAddr)
@@ -545,6 +546,57 @@ func TestUpdateWithNoCreds(t *testing.T) {
 	validateError(t, 401, recorder.Body)
 }
 
+func TestUpdateWithNewData(t *testing.T) {
+	assert := assert.New(t)
+	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.Data{})
+
+	op := &OrderParams{
+		Data: map[string]interface{}{
+			"thing":       1,
+			"red":         "fish",
+			"other thing": 3.4,
+			"exists":      true,
+		},
+	}
+	recorder := runUpdate(t, firstOrder, op)
+	returnedOrder := extractOrder(t, 200, recorder)
+
+	// TODO test that the returned order contains the data we expect
+	_ = returnedOrder
+
+	datas := []models.Data{}
+	db.Where("order_id = ?", firstOrder.ID).Find(&datas)
+	assert.Len(datas, 4)
+	for _, datum := range datas {
+		switch datum.Key {
+		case "thing":
+			assert.Equal(models.NumberType, datum.Type)
+			assert.EqualValues(1, datum.NumericValue)
+		case "red":
+			assert.Equal(models.StringType, datum.Type)
+			assert.Equal("fish", datum.StringValue)
+		case "other thing":
+			assert.Equal(models.NumberType, datum.Type)
+			assert.EqualValues(3.4, datum.NumericValue)
+		case "exists":
+			assert.Equal(models.BoolType, datum.Type)
+			assert.Equal(true, datum.BoolValue)
+		}
+	}
+}
+
+func TestUpdateWithBadData(t *testing.T) {
+	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.Data{})
+
+	op := &OrderParams{
+		Data: map[string]interface{}{
+			"array": []int{4},
+		},
+	}
+	recorder := runUpdate(t, firstOrder, op)
+	validateError(t, 400, recorder.Body)
+}
+
 // -------------------------------------------------------------------------------------------------------------------
 // HELPERS
 // -------------------------------------------------------------------------------------------------------------------
@@ -594,99 +646,99 @@ func runUpdate(t *testing.T, order *models.Order, params *OrderParams) *httptest
 }
 
 func validateError(t *testing.T, code int, body *bytes.Buffer) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	errRsp := make(map[string]interface{})
 	err := json.NewDecoder(body).Decode(&errRsp)
-	a.Nil(err)
+	assert.Nil(err)
 
 	errcode, exists := errRsp["code"]
-	a.True(exists)
-	a.EqualValues(code, errcode)
+	assert.True(exists)
+	assert.EqualValues(code, errcode)
 
 	_, exists = errRsp["msg"]
-	a.True(exists)
+	assert.True(exists)
 }
 
 func validateOrder(t *testing.T, expected, actual *models.Order) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
 	// all the stock fields
-	a.Equal(expected.ID, actual.ID)
-	a.Equal(expected.UserID, actual.UserID)
-	a.Equal(expected.Email, actual.Email)
-	a.Equal(expected.Currency, actual.Currency)
-	a.Equal(expected.Taxes, actual.Taxes)
-	a.Equal(expected.Shipping, actual.Shipping)
-	a.Equal(expected.SubTotal, actual.SubTotal)
-	a.Equal(expected.Total, actual.Total)
-	a.Equal(expected.PaymentState, actual.PaymentState)
-	a.Equal(expected.FulfillmentState, actual.FulfillmentState)
-	a.Equal(expected.State, actual.State)
-	a.Equal(expected.ShippingAddressID, actual.ShippingAddressID)
-	a.Equal(expected.BillingAddressID, actual.BillingAddressID)
-	a.Equal(expected.CreatedAt.Unix(), actual.CreatedAt.Unix())
-	a.Equal(expected.UpdatedAt.Unix(), actual.UpdatedAt.Unix())
-	a.Equal(expected.VATNumber, actual.VATNumber)
+	assert.Equal(expected.ID, actual.ID)
+	assert.Equal(expected.UserID, actual.UserID)
+	assert.Equal(expected.Email, actual.Email)
+	assert.Equal(expected.Currency, actual.Currency)
+	assert.Equal(expected.Taxes, actual.Taxes)
+	assert.Equal(expected.Shipping, actual.Shipping)
+	assert.Equal(expected.SubTotal, actual.SubTotal)
+	assert.Equal(expected.Total, actual.Total)
+	assert.Equal(expected.PaymentState, actual.PaymentState)
+	assert.Equal(expected.FulfillmentState, actual.FulfillmentState)
+	assert.Equal(expected.State, actual.State)
+	assert.Equal(expected.ShippingAddressID, actual.ShippingAddressID)
+	assert.Equal(expected.BillingAddressID, actual.BillingAddressID)
+	assert.Equal(expected.CreatedAt.Unix(), actual.CreatedAt.Unix())
+	assert.Equal(expected.UpdatedAt.Unix(), actual.UpdatedAt.Unix())
+	assert.Equal(expected.VATNumber, actual.VATNumber)
 
 	// we don't return the actual user
-	a.Nil(actual.User)
+	assert.Nil(actual.User)
 
 	for _, exp := range expected.LineItems {
 		found := false
 		for _, act := range expected.LineItems {
 			if act.ID == exp.ID {
 				found = true
-				a.Equal(exp, act)
+				assert.Equal(exp, act)
 			}
 		}
-		a.True(found, fmt.Sprintf("Failed to find line item: %d", exp.ID))
+		assert.True(found, fmt.Sprintf("Failed to find line item: %d", exp.ID))
 	}
 }
 
 func validateAddress(t *testing.T, expected models.Address, actual models.Address) {
-	a := assert.New(t)
-	a.Equal(expected.FirstName, actual.FirstName)
-	a.Equal(expected.LastName, actual.LastName)
-	a.Equal(expected.Company, actual.Company)
-	a.Equal(expected.Address1, actual.Address1)
-	a.Equal(expected.Address2, actual.Address2)
-	a.Equal(expected.City, actual.City)
-	a.Equal(expected.Country, actual.Country)
-	a.Equal(expected.State, actual.State)
-	a.Equal(expected.Zip, actual.Zip)
+	assert := assert.New(t)
+	assert.Equal(expected.FirstName, actual.FirstName)
+	assert.Equal(expected.LastName, actual.LastName)
+	assert.Equal(expected.Company, actual.Company)
+	assert.Equal(expected.Address1, actual.Address1)
+	assert.Equal(expected.Address2, actual.Address2)
+	assert.Equal(expected.City, actual.City)
+	assert.Equal(expected.Country, actual.Country)
+	assert.Equal(expected.State, actual.State)
+	assert.Equal(expected.Zip, actual.Zip)
 }
 
 func validateLineItem(t *testing.T, expected *models.LineItem, actual *models.LineItem) {
-	a := assert.New(t)
+	assert := assert.New(t)
 
-	a.Equal(expected.ID, actual.ID)
-	a.Equal(expected.Title, actual.Title)
-	a.Equal(expected.SKU, actual.SKU)
-	a.Equal(expected.Type, actual.Type)
-	a.Equal(expected.Description, actual.Description)
-	a.Equal(expected.VAT, actual.VAT)
-	a.Equal(expected.Path, actual.Path)
-	a.Equal(expected.Price, actual.Price)
-	a.Equal(expected.Quantity, actual.Quantity)
+	assert.Equal(expected.ID, actual.ID)
+	assert.Equal(expected.Title, actual.Title)
+	assert.Equal(expected.SKU, actual.SKU)
+	assert.Equal(expected.Type, actual.Type)
+	assert.Equal(expected.Description, actual.Description)
+	assert.Equal(expected.VAT, actual.VAT)
+	assert.Equal(expected.Path, actual.Path)
+	assert.Equal(expected.Price, actual.Price)
+	assert.Equal(expected.Quantity, actual.Quantity)
 }
 
 func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedUserEmail, expectedOrderEmail string) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	result := db.First(new(models.User), "id = ?", claims.ID)
 	if !result.RecordNotFound() {
-		a.FailNow("Unclean test env -- user exists with ID " + claims.ID)
+		assert.FailNow("Unclean test env -- user exists with ID " + claims.ID)
 	}
 
 	err := setOrderEmail(db, order, claims, testLogger)
-	if a.NoError(err) {
+	if assert.NoError(err) {
 		user := new(models.User)
 		result = db.First(user, "id = ?", claims.ID)
-		a.False(result.RecordNotFound())
-		a.Equal(claims.ID, user.ID)
-		a.Equal(claims.ID, order.UserID)
-		a.Equal(expectedOrderEmail, order.Email)
-		a.Equal(expectedUserEmail, user.Email)
+		assert.False(result.RecordNotFound())
+		assert.Equal(claims.ID, user.ID)
+		assert.Equal(claims.ID, order.UserID)
+		assert.Equal(expectedOrderEmail, order.Email)
+		assert.Equal(expectedUserEmail, user.Email)
 
 		db.Unscoped().Delete(user)
 		t.Logf("Deleted user %s", claims.ID)
@@ -694,11 +746,11 @@ func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, 
 }
 
 func validateExistingUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedOrderEmail string) {
-	a := assert.New(t)
+	assert := assert.New(t)
 	err := setOrderEmail(db, order, claims, testLogger)
-	if a.NoError(err) {
-		a.Equal(claims.ID, order.UserID)
-		a.Equal(expectedOrderEmail, order.Email)
+	if assert.NoError(err) {
+		assert.Equal(claims.ID, order.UserID)
+		assert.Equal(expectedOrderEmail, order.Email)
 	}
 }
 

@@ -150,7 +150,6 @@ func (c closer) close() {
 	if c.httpError != nil {
 		sendJSON(c.w, c.httpError.Code, c.httpError)
 		if c.tx != nil {
-			fmt.Println("OMG ~ error and rollback!")
 			c.tx.Rollback()
 		}
 	}
@@ -185,7 +184,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	// verify that the order exists
 	existingOrder := new(models.Order)
 
-	rsp := a.db.First(existingOrder, "id = ?", orderID)
+	rsp := orderQuery(a.db).First(existingOrder, "id = ?", orderID)
 	if rsp.RecordNotFound() {
 		log.Warn("Update attempted to order that doesn't exist")
 		cl.httpError = NotFoundError(w, fmt.Sprintf("Failed to find order with id '%s'", orderID))
@@ -253,15 +252,18 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 		log.Debugf("Updating order's billing address")
 
-		addrID, httpErr := a.processAddress(tx, existingOrder, orderParams.BillingAddress, orderParams.BillingAddressID)
+		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.BillingAddress, orderParams.BillingAddressID)
 		if httpErr != nil {
 			log.WithError(httpErr).Warn("Failed to update the billing address")
 			cl.httpError = httpErr
 			return
 		}
-
-		existingOrder.BillingAddressID = addrID
-		log.WithField("billing_address_id", addrID).Debugf("Updated the billing address to address %s", addrID)
+		old := existingOrder.BillingAddressID
+		existingOrder.BillingAddress = *addr
+		log.WithFields(logrus.Fields{
+			"address_id":     addr.ID,
+			"old_address_id": old,
+		}).Debugf("Updated the billing address id to %s", addr.ID)
 	}
 
 	if orderParams.ShippingAddress != nil || orderParams.ShippingAddressID != "" {
@@ -273,19 +275,32 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		log.Debugf("Updating order's shipping address")
 
-		addrID, httpErr := a.processAddress(tx, existingOrder, orderParams.ShippingAddress, orderParams.ShippingAddressID)
+		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.ShippingAddress, orderParams.ShippingAddressID)
 		if httpErr != nil {
 			log.WithError(httpErr).Warn("Failed to update the shipping address")
 			cl.httpError = httpErr
 			return
 		}
 
-		existingOrder.ShippingAddressID = addrID
-		log.WithField("shipping_address_id", addrID).Debugf("Updated the shipping address to address %s", addrID)
+		old := existingOrder.ShippingAddressID
+		existingOrder.ShippingAddress = *addr
+		log.WithFields(logrus.Fields{
+			"address_id":     addr.ID,
+			"old_address_id": old,
+		}).Debugf("Updated the shipping address id to %s", addr.ID)
 	}
 
 	if orderParams.Data != nil {
-		// TODO existingOrder.Data = orderParams.Data
+		err := existingOrder.UpdateOrderData(tx, &orderParams.Data)
+		if err != nil {
+			log.WithError(err).Warn("Failed to update order data: " + err.Error())
+			if _, ok := err.(*models.InvalidDataType); ok {
+				cl.httpError = BadRequestError(w, "Bad type: "+err.Error())
+			} else {
+				cl.httpError = InternalServerError(w, "Problem while saving the extra data")
+			}
+			return
+		}
 	}
 
 	//
@@ -306,8 +321,14 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	log.Info("Saving order updates")
-	tx.Save(existingOrder)
-	tx.Commit()
+	if rsp := tx.Save(existingOrder); rsp.Error != nil {
+		log.WithError(err).Warn("Problem while saving order updates")
+		cl.httpError = InternalServerError(w, "Error saving order updates")
+	}
+	if rsp := tx.Commit(); rsp.Error != nil {
+		log.WithError(err).Warn("Problem while saving order updates")
+		cl.httpError = InternalServerError(w, "Error saving order updates")
+	}
 
 	sendJSON(w, 200, existingOrder)
 }
@@ -359,27 +380,27 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
-	shippingID, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
+	shipping, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
 		tx.Rollback()
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
-	if shippingID == "" {
+	if shipping == nil {
 		BadRequestError(w, "Shipping Address Required")
 		return
 	}
-	order.ShippingAddressID = shippingID
+	order.ShippingAddressID = shipping.ID
 
-	billingID, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
+	billing, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
 	if httpError != nil {
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
-	if billingID != "" {
-		order.BillingAddressID = billingID
+	if billing != nil {
+		order.BillingAddressID = billing.ID
 	} else {
-		order.BillingAddressID = shippingID
+		order.BillingAddressID = shipping.ID
 	}
 
 	if params.VATNumber != "" {
@@ -517,39 +538,38 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	return nil
 }
 
-func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (string, *HTTPError) {
+func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (*models.Address, *HTTPError) {
 	if address == nil && id == "" {
-		return "", nil
+		return nil, nil
 	}
 
 	if id != "" {
 		loadedAddress := new(models.Address)
 		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
-			return "", httpError(400, "Bad address id: %v, %v", id, result.Error)
+			return nil, httpError(400, "Bad address id: %v, %v", id, result.Error)
 		}
 
 		if order.UserID != loadedAddress.UserID {
-			return "", httpError(400, "Can't update the order to an address that doesn't belong to the user")
+			return nil, httpError(400, "Can't update the order to an address that doesn't belong to the user")
 		}
 
 		if loadedAddress.UserID == "" {
 			loadedAddress.UserID = order.UserID
 			tx.Save(loadedAddress)
 		}
-
-		return loadedAddress.ID, nil
+		return loadedAddress, nil
 	}
 
 	// it is a new address we're  making
 	if !address.Valid() {
-		return "", httpError(400, "Failed to validate address")
+		return nil, httpError(400, "Failed to validate address")
 	}
 
 	// is a valid id that doesn't already belong to a user
 	address.ID = uuid.NewRandom().String()
 	tx.Create(address)
 
-	return address.ID, nil
+	return address, nil
 }
 
 func (a *API) processLineItem(order *models.Order, item *models.LineItem, siteURL string, log *logrus.Entry) error {
@@ -583,7 +603,7 @@ func (a *API) processLineItem(order *models.Order, item *models.LineItem, siteUR
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {
-	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress")
+	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress").Preload("Data")
 }
 
 func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
