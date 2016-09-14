@@ -15,7 +15,7 @@ const PaidState = "paid"
 type Order struct {
 	ID string `json:"id"`
 
-	User      *User  `json:"user,omitempty"`
+	User      *User  `json:"user,omitempty",gorm:"ForeignKey:UserID"`
 	UserID    string `json:"user_id,omitempty"`
 	SessionID string `json:"-"`
 
@@ -37,10 +37,10 @@ type Order struct {
 	Notes        []*OrderNote   `json:"notes"`
 
 	ShippingAddress   Address `json:"shipping_address",gorm:"ForeignKey:ShippingAddressID"`
-	ShippingAddressID string
+	ShippingAddressID string  `json:"shipping_address_id"`
 
 	BillingAddress   Address `json:"billing_address",gorm:"ForeignKey:BillingAddressID"`
-	BillingAddressID string
+	BillingAddressID string  `json:"billing_address_id"`
 
 	VATNumber string `json:"vatnumber"`
 
@@ -51,11 +51,11 @@ type Order struct {
 	DeletedAt *time.Time `json:"-",sql:"index"`
 }
 
-// NUMBER|STRING|BOOL are the different types supported in custom data for orders
+// NumberType|StringType|BoolType are the different types supported in custom data for orders
 const (
-	NUMBER = iota
-	STRING
-	BOOL
+	NumberType = iota
+	StringType
+	BoolType
 )
 
 // Data is the custom data on an Order
@@ -73,11 +73,11 @@ type Data struct {
 // Value returns the value of the data field
 func (d *Data) Value() interface{} {
 	switch d.Type {
-	case STRING:
+	case StringType:
 		return d.StringValue
-	case NUMBER:
+	case NumberType:
 		return d.NumericValue
-	case BOOL:
+	case BoolType:
 		return d.BoolValue
 	}
 	return nil
@@ -89,7 +89,7 @@ type InvalidDataType struct {
 	Key string
 }
 
-func (i *InvalidDataType) Error() string {
+func (i InvalidDataType) Error() string {
 	return "Invalid datatype for data field " + i.Key + " only strings, numbers and bools allowed"
 }
 
@@ -97,11 +97,11 @@ func orderDataToMap(data []Data) map[string]interface{} {
 	result := map[string]interface{}{}
 	for _, field := range data {
 		switch field.Type {
-		case NUMBER:
+		case NumberType:
 			result[field.Key] = field.NumericValue
-		case STRING:
+		case StringType:
 			result[field.Key] = field.StringValue
-		case BOOL:
+		case BoolType:
 			result[field.Key] = field.BoolValue
 		}
 	}
@@ -136,14 +136,18 @@ func NewOrder(sessionID, email, currency string) *Order {
 // UpdateOrderData updates all user data from a map of updates
 func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) error {
 	for key, value := range *updates {
-		data := &Data{}
-		result := tx.First(data, "order_id = ? and key = ?", o.ID, key)
-		data.OrderID = o.ID
-		data.Key = key
+		data := &Data{
+			OrderID: o.ID,
+			Key:     key,
+		}
+		result := tx.FirstOrCreate(data)
 		if result.Error != nil && !result.RecordNotFound() {
-			tx.Rollback()
 			return result.Error
 		}
+
+		//data.OrderID = o.ID
+		//data.Key = key
+
 		if value == nil {
 			tx.Delete(data)
 			continue
@@ -151,21 +155,20 @@ func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) er
 		switch v := value.(type) {
 		case string:
 			data.StringValue = v
-			data.Type = STRING
+			data.Type = StringType
 		case float64:
 			data.NumericValue = v
-			data.Type = NUMBER
+			data.Type = NumberType
 		case bool:
 			data.BoolValue = v
-			data.Type = BOOL
+			data.Type = BoolType
 		default:
-			tx.Rollback()
 			return &InvalidDataType{key}
 		}
-		if result.RecordNotFound() {
-			tx.Create(data)
-		} else {
-			tx.Save(data)
+
+		rsp := tx.Save(data)
+		if rsp.Error != nil {
+			return rsp.Error
 		}
 	}
 	return nil

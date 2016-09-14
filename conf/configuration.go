@@ -11,13 +11,14 @@ type Configuration struct {
 	SiteURL string `mapstructure:"site_url" json:"site_url"`
 
 	JWT struct {
-		Secret string `mapstructure:"" json:"secret"`
+		Secret         string `mapstructure:"secret" json:"secret"`
+		AdminGroupName string `json:"admin_group_name"`
 	} `mapstructure:"jwt" json:"jwt"`
 
 	DB struct {
 		Driver  string `mapstructure:"driver" json:"driver"`
 		ConnURL string `mapstructure:"url" json:"url"`
-	}
+	} `mapstructure:"db" json:"db"`
 
 	API struct {
 		Host string `mapstructure:"host" json:"host"`

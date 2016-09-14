@@ -1,19 +1,20 @@
 package api
 
 import (
-	"fmt"
+	"net"
 	"net/http"
 	"regexp"
-	"time"
 
 	"golang.org/x/net/context"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/mailer"
 	"github.com/rs/cors"
+	"github.com/satori/go.uuid"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -21,69 +22,72 @@ var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 // API is the main REST API
 type API struct {
 	handler    http.Handler
+	listener   net.Listener
+	port       int
 	db         *gorm.DB
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
+	log        *logrus.Entry
 }
 
+// JWTClaims are what the token has access to
 type JWTClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID     string   `json:"id"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
 	*jwt.StandardClaims
 }
 
-func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	return context.WithValue(ctx, "config", a.config)
+type ResponseProxy struct {
+	http.ResponseWriter
+	statusCode int
 }
 
-func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		return ctx
-	}
+func (rp ResponseProxy) WriteHeader(status int) {
+	rp.setStatusCode(status)
+	rp.ResponseWriter.WriteHeader(status)
+}
 
-	matches := bearerRegexp.FindStringSubmatch(authHeader)
-	if len(matches) != 2 {
-		UnauthorizedError(w, "Bad authentication header")
-		return nil
-	}
-
-	token, err := jwt.ParseWithClaims(matches[1], &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Header["alg"] != "HS256" {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(getConfig(ctx).JWT.Secret), nil
-	})
-	if err != nil {
-		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
-		return nil
-	}
-	claims := token.Claims.(*JWTClaims)
-	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-		UnauthorizedError(w, fmt.Sprintf("Expired token: %v", err))
-		return nil
-	}
-
-	return context.WithValue(ctx, "jwt", token)
+func (rp *ResponseProxy) setStatusCode(code int) {
+	rp.statusCode = code
 }
 
 // ListenAndServe starts the REST API
 func (a *API) ListenAndServe(hostAndPort string) error {
-	return http.ListenAndServe(hostAndPort, a.handler)
+	var err error
+	a.listener, err = net.Listen("tcp", hostAndPort)
+	if err != nil {
+		return err
+	}
+
+	a.port = a.listener.Addr().(*net.TCPAddr).Port
+	return http.Serve(a.listener, a.handler)
+}
+
+// Shutdown does what it sounds like
+func (a *API) Shutdown() {
+	a.listener.Close()
 }
 
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
+	api := &API{
+		config:     config,
+		db:         db,
+		mailer:     mailer,
+		httpClient: &http.Client{},
+		log:        logrus.NewEntry(logrus.StandardLogger()),
+	}
 	mux := kami.New()
 
-	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
+
 	mux.Get("/", api.Index)
-	mux.Get("/orders", api.OrderList)
-	mux.Post("/orders", api.OrderCreate)
-	mux.Get("/orders/:id", api.OrderView)
+	mux.Get("/orders", api.trace(api.OrderList))
+	mux.Post("/orders", api.trace(api.OrderCreate))
+	mux.Get("/orders/:id", api.trace(api.OrderView))
+	mux.Post("/orders/:id", api.trace(api.OrderUpdate))
 	mux.Get("/orders/:order_id/payments", api.PaymentList)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
@@ -96,4 +100,35 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	api.handler = corsHandler.Handler(mux)
 	return api
+}
+
+func (a *API) trace(f func(context.Context, http.ResponseWriter, *http.Request)) func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		id := uuid.NewV4().String()
+		log := a.log.WithField("request_id", id)
+
+		ctx = WithRequestID(ctx, id)
+		ctx = WithLogger(ctx, log)
+		ctx = WithConfig(ctx, a.config)
+
+		log = log.WithFields(logrus.Fields{
+			"method": r.Method,
+			"url":    r.URL.String(),
+		})
+
+		// optionally add the user id stuff
+		claims := Claims(ctx)
+		if token != nil {
+			log = log.WithFields(logrus.Fields{
+				"user_id":     claims.ID,
+				"user_groups": claims.Groups,
+			})
+		}
+
+		rp := ResponseProxy{ResponseWriter: w}
+
+		log.Debug("request started")
+		defer log.WithField("status_code", rp.statusCode).Debugf("request completed: %d", rp.statusCode)
+		f(ctx, rp, r)
+	}
 }

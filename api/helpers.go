@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
@@ -15,11 +16,26 @@ type HTTPError struct {
 	Message string `json:"msg"`
 }
 
+func (e HTTPError) Error() string {
+	return fmt.Sprintf("%d: %s", e.Code, e.Message)
+}
+
+func httpError(code int, fmtString string, args ...interface{}) *HTTPError {
+	return &HTTPError{
+		Code:    code,
+		Message: fmt.Sprintf(fmtString, args...),
+	}
+}
+
 func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	encoder := json.NewEncoder(w)
 	encoder.Encode(obj)
+}
+
+func sendError(w http.ResponseWriter, err *HTTPError) {
+	sendJSON(w, err.Code, err)
 }
 
 func getToken(ctx context.Context) *jwt.Token {
@@ -38,6 +54,25 @@ func getConfig(ctx context.Context) *conf.Configuration {
 	return obj.(*conf.Configuration)
 }
 
+func isAdmin(ctx context.Context, claims *JWTClaims) bool {
+	if claims == nil {
+		return false
+	}
+
+	config := getConfig(ctx)
+	if config == nil {
+		return false
+	}
+
+	for _, v := range claims.Groups {
+		if v == config.JWT.AdminGroupName {
+			return true
+		}
+	}
+
+	return false
+}
+
 func userIDFromToken(token *jwt.Token) string {
 	if token == nil {
 		return ""
@@ -45,29 +80,4 @@ func userIDFromToken(token *jwt.Token) string {
 
 	claims := token.Claims.(*JWTClaims)
 	return claims.ID
-}
-
-// BadRequestError is simple Error Wrapper
-func BadRequestError(w http.ResponseWriter, message string) {
-	sendJSON(w, 400, &HTTPError{Code: 400, Message: message})
-}
-
-// UnprocessableEntity is simple Error Wrapper
-func UnprocessableEntity(w http.ResponseWriter, message string) {
-	sendJSON(w, 422, &HTTPError{Code: 422, Message: message})
-}
-
-// InternalServerError is simple Error Wrapper
-func InternalServerError(w http.ResponseWriter, message string) {
-	sendJSON(w, 500, &HTTPError{Code: 500, Message: message})
-}
-
-// NotFoundError is simple Error Wrapper
-func NotFoundError(w http.ResponseWriter, message string) {
-	sendJSON(w, 404, &HTTPError{Code: 404, Message: message})
-}
-
-// UnauthorizedError is simple Error Wrapper
-func UnauthorizedError(w http.ResponseWriter, message string) {
-	sendJSON(w, 401, &HTTPError{Code: 401, Message: message})
 }

@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -39,17 +40,33 @@ type LineItemMetadata struct {
 	Type        string          `json:"type"`
 }
 
+type FailedValidationError struct {
+	Message string
+}
+
+func (e FailedValidationError) Error() string {
+	return e.Message
+}
+
 func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
-	i.SKU = meta.Sku
+	// required to match
+	if i.SKU != meta.Sku {
+		return FailedValidationError{fmt.Sprintf("SKU values don't match: %s vs %s", i.SKU, meta.Sku)}
+	}
+	if i.VAT != meta.VAT {
+		return FailedValidationError{fmt.Sprintf("VAT values don't match: %s vs %s", i.VAT, meta.VAT)}
+	}
+
+	// not required
 	i.Title = meta.Title
 	i.Description = meta.Description
-	i.VAT = meta.VAT
 	i.Type = meta.Type
 
 	return i.calculatePrice(meta.Prices, order.Currency)
 }
 
 func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error {
+	found := false
 	for _, price := range prices {
 		if price.Currency == currency {
 			amount, err := strconv.ParseFloat(price.Amount, 64)
@@ -60,7 +77,12 @@ func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error
 			if i.Price == 0 || cents < i.Price {
 				i.Price = cents
 			}
+			found = true
 		}
+	}
+
+	if !found {
+		return FailedValidationError{fmt.Sprintf("Failed to currency: %s", currency)}
 	}
 	return nil
 }

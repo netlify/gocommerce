@@ -10,12 +10,6 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-// Configuration defines the info necessary to connect to a storage engine
-type Configuration struct {
-	Driver  string `json:"driver"`
-	ConnURL string `json:"conn_url"`
-}
-
 // Connect will connect to that storage engine
 func Connect(config *conf.Configuration) (*gorm.DB, error) {
 	db, err := gorm.Open(config.DB.Driver, config.DB.ConnURL)
@@ -28,7 +22,7 @@ func Connect(config *conf.Configuration) (*gorm.DB, error) {
 		return nil, err
 	}
 
-	db.AutoMigrate(&Order{}, &Address{}, &LineItem{}, &OrderNote{}, &User{}, &Transaction{})
+	db.AutoMigrate(&Order{}, &Data{}, &Address{}, &LineItem{}, &OrderNote{}, &User{}, &Transaction{})
 
 	return db, nil
 }
