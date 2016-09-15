@@ -4,5 +4,5 @@ language: go
 go:
   - 1.7
 
-before_install: make deps
+install: make deps
 script: make all
