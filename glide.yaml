@@ -27,6 +27,7 @@ import:
   - context
 - package: gopkg.in/gomail.v2
   version: 2.0.0
+- package: github.com/mattes/vat
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3
