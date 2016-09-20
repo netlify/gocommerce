@@ -9,12 +9,9 @@ import (
 	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
 	tu "github.com/netlify/gocommerce/testutils"
 )
-
-var testConfig conf.Configuration
 
 func TestUsersQueryForAllUsers(t *testing.T) {
 }
@@ -40,10 +37,11 @@ func TestUsersQueryForDeletedUser(t *testing.T) {
 }
 
 func TestUsersQueryForUserAsUser(t *testing.T) {
+	config := testConfig()
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil))
+	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil), config)
 	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
 
 	api := NewAPI(config, db, nil)
@@ -57,7 +55,8 @@ func TestUsersQueryForUserAsStranger(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	ctx := testContext(token("magical-unicorn", "", nil))
+	config := testConfig()
+	ctx := testContext(token("magical-unicorn", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
 
 	api := NewAPI(config, db, nil)
@@ -69,8 +68,9 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
+	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
-	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}))
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
 
 	api := NewAPI(config, db, nil)

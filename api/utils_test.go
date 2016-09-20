@@ -20,7 +20,6 @@ import (
 )
 
 var testLogger = logrus.NewEntry(logrus.StandardLogger())
-var config = &conf.Configuration{}
 var db *gorm.DB
 
 var urlWithUserID string
@@ -33,6 +32,7 @@ func TestMain(m *testing.M) {
 	}
 	defer os.Remove(f.Name())
 
+	config := testConfig()
 	config.DB.Driver = "sqlite3"
 	config.DB.ConnURL = f.Name()
 
@@ -50,7 +50,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func testContext(token *jwt.Token) context.Context {
+func testContext(token *jwt.Token, config *conf.Configuration) context.Context {
 	ctx := WithConfig(context.Background(), config)
 	ctx = WithLogger(ctx, testLogger)
 	return WithToken(ctx, token)
@@ -84,4 +84,8 @@ func validateError(t *testing.T, code int, body *bytes.Buffer) {
 
 	_, exists = errRsp["msg"]
 	assert.True(exists)
+}
+
+func testConfig() *conf.Configuration {
+	return &conf.Configuration{}
 }

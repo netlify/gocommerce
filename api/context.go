@@ -71,6 +71,7 @@ func IsAdmin(ctx context.Context) bool {
 	if claims == nil {
 		return false
 	}
+
 	config := Config(ctx)
 	if config == nil {
 		return false
