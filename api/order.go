@@ -4,9 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sync"
-	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Sirupsen/logrus"
@@ -63,7 +61,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	params := r.URL.Query()
 	query := orderQuery(a.db)
-	query, err = parseParams(query, params)
+	query, err = parseOrderParams(query, params)
 	if err != nil {
 		log.WithError(err).Info("Bad query parameters in request")
 		BadRequestError(w, "Bad parameters in query: "+err.Error())
@@ -604,37 +602,6 @@ func (a *API) processLineItem(order *models.Order, item *models.LineItem, siteUR
 
 func orderQuery(db *gorm.DB) *gorm.DB {
 	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress").Preload("Data")
-}
-
-func parseParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	if values, exists := params["from"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
-		if err != nil {
-			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
-		}
-		query = query.Where("created_at >= ?", date)
-	}
-
-	if values, exists := params["to"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
-		if err != nil {
-			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
-		}
-		query = query.Where("created_at <= ?", date)
-	}
-
-	if values, exists := params["sort"]; exists {
-		switch values[0] {
-		case "desc":
-			query = query.Order("created_at DESC")
-		case "asc":
-			query = query.Order("created_at ASC")
-		default:
-			return nil, fmt.Errorf("bad value for 'sort' parameter: only 'asc' or 'desc' are accepted")
-		}
-	}
-
-	return query, nil
 }
 
 func (a *API) checkExistence(inter interface{}) bool {

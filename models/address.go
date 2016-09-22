@@ -24,13 +24,11 @@ type Address struct {
 }
 
 func (a *Address) Valid() bool {
-	if a.LastName == "" {
-		return false
-	}
-	if a.Address1 == "" {
-		return false
-	}
-	if a.Country == "" || a.City == "" || a.Zip == "" {
+	if a.LastName == "" ||
+		a.Address1 == "" ||
+		a.Country == "" ||
+		a.City == "" ||
+		a.Zip == "" {
 		return false
 	}
 	return true

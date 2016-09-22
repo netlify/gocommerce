@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/guregu/kami"
+	"github.com/jinzhu/gorm"
 	"golang.org/x/net/context"
 
 	"github.com/netlify/gocommerce/models"
@@ -35,18 +36,45 @@ import (
 // user_id   id
 // limit     # of records to return (max)
 func (a *API) GetAllUsers(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	_, _, httpError := checkPermissions(ctx, true)
+	if httpError != nil {
+		sendError(w, httpError)
+		return
+	}
+
+	log := Logger(ctx)
+
+	query, err := parseUserQueryParams(a.db, r.URL.Query())
+	if err != nil {
+		log.WithError(err).Info("Bad query parameters in request")
+		BadRequestError(w, "Bad parameters in query: "+err.Error())
+		return
+	}
+
+	log.Debug("Parsed url params")
+
+	var users []models.User
+	results := query.Find(&users)
+	if results.Error != nil {
+		log.WithError(results.Error).Warn("Error qhile querying the database")
+		InternalServerError(w, "Failed to execute request")
+		return
+	}
+
+	numUsers := len(users)
+	log.WithField("user_count", numUsers).Debugf("Successfully retrieved %d users", numUsers)
+	sendJSON(w, 200, users)
 }
 
 // GetSingleUser will return the user specified.
 // If you're an admin you can request a user that is not your self
 func (a *API) GetSingleUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log := Logger(ctx)
-
-	userID, _, httpErr := checkPermissions(ctx)
+	userID, _, httpErr := checkPermissions(ctx, false)
 	if httpErr != nil {
 		sendError(w, httpErr)
 		return
 	}
+	log := Logger(ctx)
 
 	user := &models.User{
 		ID: userID,
@@ -71,10 +99,57 @@ func (a *API) GetSingleUser(ctx context.Context, w http.ResponseWriter, r *http.
 
 // GetAllAddresses will return the addresses for a given user
 func (a *API) GetAllAddresses(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	userID, _, httpErr := checkPermissions(ctx, false)
+	if httpErr != nil {
+		sendError(w, httpErr)
+		return
+	}
+
+	log := Logger(ctx)
+
+	if !userExists(a.db, userID) {
+		log.WithError(NotFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
+		return
+	}
+
+	addrs := []models.Address{}
+	results := a.db.Where("user_id = ?", userID).Find(&addrs)
+	if results.Error != nil {
+		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
+		InternalServerError(w, "problem while querying for userID: "+userID)
+		return
+	}
+
+	sendJSON(w, 200, &addrs)
 }
 
 // GetSingleAddress will return a particular address for a given user
 func (a *API) GetSingleAddress(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	userID, addrID, httpErr := checkPermissions(ctx, false)
+	if httpErr != nil {
+		sendError(w, httpErr)
+		return
+	}
+
+	log := Logger(ctx)
+
+	if !userExists(a.db, userID) {
+		log.WithError(NotFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
+		return
+	}
+
+	addr := &models.Address{
+		ID:     addrID,
+		UserID: userID,
+	}
+	results := a.db.First(addr)
+	if results.Error != nil {
+		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
+		InternalServerError(w, "problem while querying for userID: "+userID)
+		return
+	}
+
+	sendJSON(w, 200, &addr)
 }
 
 // DeleteSingleUser will soft delete the user. It requires admin access
@@ -102,7 +177,7 @@ func (a *API) UpdateUserEmail(ctx context.Context, w http.ResponseWriter, r *htt
 // -------------------------------------------------------------------------------------------------------------------
 // Helper methods
 // -------------------------------------------------------------------------------------------------------------------
-func checkPermissions(ctx context.Context) (string, string, *HTTPError) {
+func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTTPError) {
 	log := Logger(ctx)
 	userID := kami.Param(ctx, "user_id")
 	addrID := kami.Param(ctx, "addr_id")
@@ -125,5 +200,16 @@ func checkPermissions(ctx context.Context) (string, string, *HTTPError) {
 		return "", "", err
 	}
 
+	if adminOnly && !isAdmin {
+		err := httpError(401, "Admin permissions required")
+		log.WithError(err).Warn("Illegal access attempt")
+		return "", "", err
+	}
+
 	return userID, addrID, nil
+}
+
+func userExists(db *gorm.DB, userID string) bool {
+	results := db.Find(&models.User{ID: userID})
+	return !results.RecordNotFound()
 }

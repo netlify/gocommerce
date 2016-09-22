@@ -118,7 +118,7 @@ func (a *API) trace(f func(context.Context, http.ResponseWriter, *http.Request))
 
 		// optionally add the user id stuff
 		claims := Claims(ctx)
-		if token != nil {
+		if claims != nil {
 			log = log.WithFields(logrus.Fields{
 				"user_id":     claims.ID,
 				"user_groups": claims.Groups,

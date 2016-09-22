@@ -105,7 +105,7 @@ func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(400, recorder.Code)
-	validateError(t, 400, recorder.Body)
+	validateError(t, 400, recorder)
 }
 
 func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
@@ -119,7 +119,7 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 	api := NewAPI(config, nil, nil)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(401, recorder.Code)
-	validateError(t, 401, recorder.Body)
+	validateError(t, 401, recorder)
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -177,7 +177,7 @@ func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	assert.Equal(401, recorder.Code)
-	validateError(t, 401, recorder.Body)
+	validateError(t, 401, recorder)
 }
 
 func TestOrderQueryForAMissingOrder(t *testing.T) {
@@ -194,7 +194,7 @@ func TestOrderQueryForAMissingOrder(t *testing.T) {
 	api := NewAPI(config, db, nil)
 	api.OrderView(ctx, recorder, req)
 	assert.Equal(404, recorder.Code)
-	validateError(t, 404, recorder.Body)
+	validateError(t, 404, recorder)
 }
 
 func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
@@ -212,7 +212,7 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 	api := NewAPI(config, nil, nil)
 	api.OrderView(ctx, recorder, req)
 	assert.Equal(401, recorder.Code)
-	validateError(t, 401, recorder.Body)
+	validateError(t, 401, recorder)
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -449,7 +449,7 @@ func TestOrderUpdatePaymentInfoAfterPaid(t *testing.T) {
 	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		Currency: "monopoly",
 	})
-	validateError(t, 400, recorder.Body)
+	validateError(t, 400, recorder)
 }
 
 func TestOrderUpdateBillingAddressAfterPaid(t *testing.T) {
@@ -459,7 +459,7 @@ func TestOrderUpdateBillingAddressAfterPaid(t *testing.T) {
 	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		BillingAddressID: tu.TestAddress.ID,
 	})
-	validateError(t, 400, recorder.Body)
+	validateError(t, 400, recorder)
 }
 
 func TestOrderUpdateShippingAfterShipped(t *testing.T) {
@@ -469,7 +469,7 @@ func TestOrderUpdateShippingAfterShipped(t *testing.T) {
 	recorder := runUpdate(t, tu.FirstOrder, &OrderParams{
 		ShippingAddressID: tu.TestAddress.ID,
 	})
-	validateError(t, 400, recorder.Body)
+	validateError(t, 400, recorder)
 }
 
 func TestOrderUpdateAsNonAdmin(t *testing.T) {
@@ -492,7 +492,7 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderUpdate(ctx, recorder, req)
-	validateError(t, 401, recorder.Body)
+	validateError(t, 401, recorder)
 }
 
 func TestOrderUpdateWithNoCreds(t *testing.T) {
@@ -515,7 +515,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderUpdate(ctx, recorder, req)
-	validateError(t, 401, recorder.Body)
+	validateError(t, 401, recorder)
 }
 
 func TestOrderUpdateWithNewData(t *testing.T) {
@@ -566,7 +566,7 @@ func TestOrderUpdateWithBadData(t *testing.T) {
 		},
 	}
 	recorder := runUpdate(t, tu.FirstOrder, op)
-	validateError(t, 400, recorder.Body)
+	validateError(t, 400, recorder)
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -646,19 +646,6 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 		}
 		assert.True(found, fmt.Sprintf("Failed to find line item: %d", exp.ID))
 	}
-}
-
-func validateAddress(t *testing.T, expected models.Address, actual models.Address) {
-	assert := assert.New(t)
-	assert.Equal(expected.FirstName, actual.FirstName)
-	assert.Equal(expected.LastName, actual.LastName)
-	assert.Equal(expected.Company, actual.Company)
-	assert.Equal(expected.Address1, actual.Address1)
-	assert.Equal(expected.Address2, actual.Address2)
-	assert.Equal(expected.City, actual.City)
-	assert.Equal(expected.Country, actual.Country)
-	assert.Equal(expected.State, actual.State)
-	assert.Equal(expected.Zip, actual.Zip)
 }
 
 func validateLineItem(t *testing.T, expected *models.LineItem, actual *models.LineItem) {
