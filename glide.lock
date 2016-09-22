@@ -1,5 +1,5 @@
 hash: 8afad619b17ca9f3bc0862c44f2932e1c92c6df8a08ad06a7a8b87935b0038f3
-updated: 2016-09-08T11:33:13.872969792-07:00
+updated: 2016-09-22T12:57:09.661055746-07:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e
@@ -10,7 +10,7 @@ imports:
 - name: github.com/dimfeld/httppath
   version: c8e499c3ef3c3e272ed8bdcc1ccf39f73c88debc
 - name: github.com/dimfeld/httptreemux
-  version: 44179433cb08588bbb4cb250fb30d1c9fff4305a
+  version: 96acf0909c0b45ebf4a25a816cedc6d317e63679
 - name: github.com/fsnotify/fsnotify
   version: f12c6236fe7b5cf6bcf30e5935d08cb079d78334
 - name: github.com/go-sql-driver/mysql
@@ -20,11 +20,11 @@ imports:
   subpackages:
   - proto
 - name: github.com/guregu/kami
-  version: 4e406c5fecc9e1e2fdd8f20f80105629a851ce04
+  version: 556ef16b10fbac3cec79e38bbf26ce4af543608f
   subpackages:
   - treemux
 - name: github.com/hashicorp/hcl
-  version: 99df0eb941dd8ddbc83d3f3605a34f6a686ac85e
+  version: ef8133da8cda503718a74741312bf50821e6de79
   subpackages:
   - hcl/ast
   - hcl/parser
@@ -67,13 +67,13 @@ imports:
 - name: github.com/Sirupsen/logrus
   version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
 - name: github.com/spf13/cast
-  version: e31f36ffc91a2ba9ddb72a4b6a607ff9b3d3cb63
+  version: 60e7a69a428e9ac1cf7e0c865fc2fe810d34363e
 - name: github.com/spf13/cobra
   version: f62e98d28ab7ad31d707ba837a966378465c7b57
 - name: github.com/spf13/jwalterweatherman
   version: 33c24e77fb80341fe7130ee7c594256ff08ccc46
 - name: github.com/spf13/pflag
-  version: 6fd2ff4ff8dfcdf5556fbdc0ac0284408274b1a7
+  version: c7e63cf4530bcd3ba943729cee0efeff2ebea63f
 - name: github.com/spf13/viper
   version: b53595fb56a492ecef90ee0457595a999eb6ec15
 - name: github.com/stripe/stripe-go
@@ -95,11 +95,11 @@ imports:
   - html
   - html/atom
 - name: golang.org/x/sys
-  version: 30de6d19a3bd89a5f38ae4028e23aaa5582648af
+  version: 8f0908ab3b2457e2e15403d3697c9ef5cb4b57a9
   subpackages:
   - unix
 - name: google.golang.org/appengine
-  version: 4f7eeb5305a4ba1966344836ba4af9996b7b4e05
+  version: 45688856612892bdabe348fff413e5075ac72f46
   subpackages:
   - internal
   - internal/app_identity
@@ -113,7 +113,7 @@ imports:
 - name: gopkg.in/gomail.v2
   version: 41f3572897373c5538c50a2402db15db079fa4fd
 - name: gopkg.in/yaml.v2
-  version: e4d366fc3c7938e2958e662b4258c7a89e1f0e3e
+  version: 31c299268d302dd0aa9a0dcf765a3d58971ac83f
 testImports:
 - name: github.com/davecgh/go-spew
   version: 2df174808ee097f90d259e432cc04442cf60be21
