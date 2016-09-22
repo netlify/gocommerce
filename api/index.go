@@ -7,8 +7,8 @@ import (
 )
 
 const description = `{
-  "name": "GoCommerce",
-  "description": "GoCommerce is a flexible Ecommerce API for JAM sites"
+  "name": "Netlify Commerce",
+  "description": "Netlify Commerce is a flexible Ecommerce API for JAMStack sites"
 }`
 
 // Index endpoint

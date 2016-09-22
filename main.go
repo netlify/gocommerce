@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/netlify/gocommerce/cmd"
+	"github.com/netlify/commerce/cmd"
 )
 
 func main() {

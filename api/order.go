@@ -7,11 +7,11 @@ import (
 	"sync"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
-	"github.com/netlify/gocommerce/models"
+	"github.com/netlify/commerce/models"
 	"github.com/pborman/uuid"
 
 	"golang.org/x/net/context"
@@ -286,9 +286,13 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return err
 	}
 
-	metaTag := doc.Find("#gocommerce-product").First()
+	metaTag := doc.Find("#netlify-commerce-product").First()
 	if metaTag.Length() == 0 {
-		return fmt.Errorf("No script tag with id gocommerce-product tag found for '%v'", item.Title)
+		metaTag = doc.Find("#gocommerce-product").First() // Keep the code backwards compatible
+
+		if metaTag.Length() == 0 {
+			return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
+		}
 	}
 	meta := &models.LineItemMetadata{}
 	err = json.Unmarshal([]byte(metaTag.Text()), meta)

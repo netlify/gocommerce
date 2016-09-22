@@ -3,9 +3,10 @@ package mailer
 import (
 	"fmt"
 
-	"github.com/netlify/gocommerce/conf"
-	"github.com/netlify/gocommerce/models"
-	"gopkg.in/gomail.v2"
+	gomail "gopkg.in/gomail.v2"
+
+	"github.com/netlify/commerce/conf"
+	"github.com/netlify/commerce/models"
 )
 
 // Mailer will send mail and use templates from the site for easy mail styling
