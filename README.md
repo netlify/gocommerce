@@ -57,7 +57,7 @@ features. Currently it enables VAT calculations on a per country/product type ba
 
 The reason we make you include the file in the static site, is that you'll need to do the same
 VAT calculations client side during checkout to be able to show this to the user. The
-[gocommerce-js](https://github.com/netlify/gocommerce-js) client library can help you with
+[commerce-js](https://github.com/netlify/commerce-js) client library can help you with
 this.
 
 Here's an example settings file:
@@ -83,4 +83,4 @@ tax has been included in that product.
 
 # JavaScript Client Library
 
-The easiest way to use Netlify Commerce is with [gocommerce-js](https://github.com/netlify/gocommerce-js).
+The easiest way to use Netlify Commerce is with [commerce-js](https://github.com/netlify/commerce-js).
