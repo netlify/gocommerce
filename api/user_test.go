@@ -231,21 +231,47 @@ func TestUserQueryForSingleAddressAsUser(t *testing.T) {
 }
 
 func TestUserDeleteNonExistentUser(t *testing.T) {
-	// TODO
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx = kami.SetParam(ctx, "user_id", "dne")
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
+
+	NewAPI(config, db, nil).DeleteSingleUser(ctx, recorder, req)
+	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, "", recorder.Body.String())
 }
 
 func TestUserDeleteSingleUser(t *testing.T) {
-	dyingUser := models.User{
-		ID:    "going-to-die",
-		Email: "nobody@nowhere.com",
-	}
+	dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
 	dyingAddr := tu.GetTestAddress()
 	dyingAddr.UserID = dyingUser.ID
-	db.Create(&dyingUser)
-	db.Create(&dyingAddr)
-	// hard remove it
-	defer db.Unscoped().Delete(&dyingAddr)
-	defer db.Unscoped().Delete(&dyingUser)
+	dyingOrder := models.NewOrder("session2", dyingUser.Email, "usd")
+	dyingOrder.UserID = dyingUser.ID
+	dyingTransaction := models.NewTransaction(dyingOrder)
+	dyingTransaction.UserID = dyingUser.ID
+	dyingLineItem := models.LineItem{
+		ID:          123,
+		OrderID:     dyingOrder.ID,
+		Title:       "coffin",
+		SKU:         "123-cough-cough-123",
+		Type:        "home",
+		Description: "nappytimeplace",
+		Price:       100,
+		Quantity:    1,
+		Path:        "/right/to/the/grave",
+	}
+	items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
+	for _, i := range items {
+		db.Create(i)
+	}
+	defer func() {
+		for _, i := range items {
+			db.Unscoped().Delete(i)
+		}
+	}()
 
 	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
@@ -257,24 +283,20 @@ func TestUserDeleteSingleUser(t *testing.T) {
 
 	NewAPI(config, db, nil).DeleteSingleUser(ctx, recorder, req)
 	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, "", recorder.Body.String())
 
 	// now load it back and it should be soft deleted
-	foundUser := &models.User{
-		ID: dyingUser.ID,
-	}
-	if rsp := db.Unscoped().First(foundUser); rsp.Error != nil {
-		assert.FailNow(t, "failed to find user that should have been soft deleted")
-	}
-
-	assert.NotNil(t, foundUser.DeletedAt)
-
-	foundAddr := &models.Address{
-		ID: dyingAddr.ID,
-	}
-	if rsp := db.Unscoped().First(foundAddr); rsp.Error != nil {
-		assert.FailNow(t, "failed to find address that should have been soft deleted: "+rsp.Error.Error())
-	}
-	assert.NotNil(t, foundAddr.DeletedAt)
+	//found := &models.User{ID: dyingUser.ID}
+	assert.False(t, db.Unscoped().First(&dyingUser).RecordNotFound())
+	assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
+	assert.False(t, db.Unscoped().First(&dyingAddr).RecordNotFound())
+	assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
+	assert.False(t, db.Unscoped().First(dyingOrder).RecordNotFound())
+	assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
+	assert.False(t, db.Unscoped().First(&dyingTransaction).RecordNotFound())
+	assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
+	assert.False(t, db.Unscoped().First(&dyingLineItem).RecordNotFound())
+	assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
 }
 
 // ------------------------------------------------------------------------------------------------

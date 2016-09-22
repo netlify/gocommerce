@@ -183,6 +183,7 @@ func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *ht
 		InternalServerError(w, "Failed to delete user")
 		return
 	}
+	log.Debug("Deleted user")
 
 	orders := []models.Order{}
 	results = tx.Where("user_id = ?", userID).Find(&orders)
@@ -194,23 +195,22 @@ func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 
 	log.Debugf("Starting to collect info about %d orders", len(orders))
-	lineItemIDs := []int64{}
+	orderIDs := []string{}
 	for _, o := range orders {
-		for _, i := range o.LineItems {
-			lineItemIDs = append(lineItemIDs, i.ID)
-		}
+		orderIDs = append(orderIDs, o.ID)
 	}
 
-	if len(lineItemIDs) > 0 {
-		log.Debugf("Deleting %d line items", len(lineItemIDs))
-		results = tx.Where("id in ?", lineItemIDs).Delete(&models.LineItem{})
-		if results.Error != nil {
-			tx.Rollback()
-			log.WithError(results.Error).Warn("Failed to find associated orders")
-			InternalServerError(w, "Failed to delete user")
-			return
-		}
+	log.Debugf("Deleting line items")
+	results = tx.Where("order_id in (?)", orderIDs).Delete(&models.LineItem{})
+	if results.Error != nil {
+		tx.Rollback()
+		log.WithError(results.Error).
+			WithField("order_ids", orderIDs).
+			Warnf("Failed to delete line items associated with orders: %v", orderIDs)
+		InternalServerError(w, "Failed to delete user")
+		return
 	}
+	log.Debugf("Deleted %d items", results.RowsAffected)
 
 	if err := tryDelete(tx, w, log, userID, &models.Order{}); err != nil {
 		return
@@ -227,21 +227,6 @@ func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *ht
 
 	tx.Commit()
 	log.Infof("Deleted user")
-}
-
-func tryDelete(tx *gorm.DB, w http.ResponseWriter, log *logrus.Entry, userID string, face interface{}) error {
-	typeName := reflect.TypeOf(face).String()
-
-	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)
-	results := tx.Where("user_id = ?", userID).Delete(face)
-	if results.Error != nil {
-		tx.Rollback()
-		log.WithError(results.Error).Warnf("Failed to delete %s", typeName)
-		InternalServerError(w, "Failed to delete user")
-	}
-
-	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)
-	return results.Error
 }
 
 // DeleteSingleAddress will soft delete the address associated with that user. It requires admin access
@@ -304,4 +289,19 @@ func getUser(db *gorm.DB, userID string) *models.User {
 	}
 
 	return user
+}
+
+func tryDelete(tx *gorm.DB, w http.ResponseWriter, log *logrus.Entry, userID string, face interface{}) error {
+	typeName := reflect.TypeOf(face).String()
+
+	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)
+	results := tx.Where("user_id = ?", userID).Delete(face)
+	if results.Error != nil {
+		tx.Rollback()
+		log.WithError(results.Error).Warnf("Failed to delete %s", typeName)
+		InternalServerError(w, "Failed to delete user")
+	}
+
+	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)
+	return results.Error
 }
