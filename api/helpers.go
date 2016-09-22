@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/dgrijalva/jwt-go"
-	"github.com/netlify/gocommerce/conf"
+	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/netlify/commerce/conf"
 	"golang.org/x/net/context"
 )
 

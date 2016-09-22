@@ -8,11 +8,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/dgrijalva/jwt-go"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/gocommerce/conf"
-	"github.com/netlify/gocommerce/mailer"
+	"github.com/netlify/commerce/conf"
+	"github.com/netlify/commerce/mailer"
 	"github.com/rs/cors"
 )
 

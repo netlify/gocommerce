@@ -6,8 +6,8 @@ import (
 	"net/http"
 
 	"github.com/guregu/kami"
-	"github.com/netlify/gocommerce/models"
-	"github.com/stripe/stripe-go"
+	"github.com/netlify/commerce/models"
+	stripe "github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
 	"golang.org/x/net/context"
 )
@@ -150,7 +150,7 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 	config := getConfig(ctx)
 
 	settings := &models.SiteSettings{}
-	resp, err := a.httpClient.Get(config.SiteURL + "/gocommerce/settings.json")
+	resp, err := a.httpClient.Get(config.SiteURL + "/netlify-commerce/settings.json")
 	if err != nil {
 		return err
 	}

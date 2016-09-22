@@ -5,17 +5,17 @@ import (
 	"log"
 
 	"github.com/spf13/cobra"
-	"github.com/stripe/stripe-go"
+	stripe "github.com/stripe/stripe-go"
 
-	"github.com/netlify/gocommerce/api"
-	"github.com/netlify/gocommerce/conf"
-	"github.com/netlify/gocommerce/mailer"
-	"github.com/netlify/gocommerce/models"
+	"github.com/netlify/commerce/api"
+	"github.com/netlify/commerce/conf"
+	"github.com/netlify/commerce/mailer"
+	"github.com/netlify/commerce/models"
 )
 
 // RootCmd will run the log streamer
 var RootCmd = cobra.Command{
-	Use:  "gocommerce",
+	Use:  "commerce",
 	Long: "A service that will validate restful transactions and send them to stripe.",
 	Run: func(cmd *cobra.Command, args []string) {
 		configFile, err := cmd.PersistentFlags().GetString("config")

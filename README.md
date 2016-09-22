@@ -1,20 +1,23 @@
-# Gocommerce
+# Netlify Commerce
 
 A small go based API for static e-commerce sites.
 
 It handles orders and payments. Integrates with Stripe for payments and will support
 international pricing and VAT verification.
 
+Netlify Commerce is released under the [MIT License](LICENSE).
+Please make sure you understand its [implications and guarantees](https://writing.kemitchell.com/2016/09/21/MIT-License-Line-by-Line.html).
+
 ## Setting up
 
 See [the example configuration](config.example.json) for an example of how to configure
-Gocommerce.
+Netlify Ccommerce.
 
-The most important setting is the `site_url`. Gocommerce is always tied to a website,
+The most important setting is the `site_url`. Netlify Ccommerce is always tied to a website,
 and will use the site URL to verify product prices, offers, and settings for countries,
 product types and VAT rules.
 
-Gocommerce will also look for email templates within a designated site folder and use
+Netlify Commerce will also look for email templates within a designated site folder and use
 the site URL to construct links to order history.
 
 Create a `config.json` file based on `config.example.json` - You must set the `site_url`
@@ -22,13 +25,13 @@ and the `stripe_key` as a minimum.
 
 ### What your static site must support
 
-Each product you want to sell from your static site must have unique URL where Gocommerce
+Each product you want to sell from your static site must have unique URL where Netlify Commerce
 can find the meta data needed for calculating pricing and taxes in order to verify that
 the order is legitimate before using Stripe to charge the client.
 
 The metadata can be anywhere on the page, and goes in a script tag in this format:
 
-<script id="gocommerce-product" type="application/json">
+<script id="netlify-commerce-product" type="application/json">
 {"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
 </script>
 
@@ -36,20 +39,20 @@ The minimum required is the SKU, title and at least one "price". Default currenc
 
 ### Mail templates (Not implemented yet)
 
-Gocommerce will look for mail templates inside `https://yoursite.com/gocommerce/emails/`
+Netlify Commerce will look for mail templates inside `https://yoursite.com/netlify-commerce/emails/`
 when sending mails to users or administrators.
 
 Right now the mail templates are:
 
-* **Order Confirmation** `gocommerce/emails/confirmation.html`
+* **Order Confirmation** `netlify-commerce/emails/confirmation.html`
 
 ### VAT, Countries and Regions
 
-Gocommerce will regularly check for a file called `https://yoursite.com/gocommerce/settings.json`
+Netlify Commerce will regularly check for a file called `https://yoursite.com/netlify-commerce/settings.json`
 
 This file should have settings with rules for VAT or currency regions.
 
-This file is not required for gocommerce to work, but will enable support for various advanced
+This file is not required for Netlify Commerce to work, but will enable support for various advanced
 features. Currently it enables VAT calculations on a per country/product type basic.
 
 The reason we make you include the file in the static site, is that you'll need to do the same
@@ -74,10 +77,10 @@ Here's an example settings file:
 ```
 
 Based on these rules, if an order includes a product with "type" set to "ebook" in the product metadata
-on the site and the users billing Address is set to "Austria", Gocommerce will verify that a 20 percentage
+on the site and the users billing Address is set to "Austria", Netlify Commerce will verify that a 20 percentage
 tax has been included in that product.
 
 
 # JavaScript Client Library
 
-The easiest way to use Gocommerce is with [gocommerce-js](https://github.com/netlify/gocommerce-js).
+The easiest way to use Netlify Commerce is with [gocommerce-js](https://github.com/netlify/gocommerce-js).
