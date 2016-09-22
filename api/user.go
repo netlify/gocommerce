@@ -2,7 +2,9 @@ package api
 
 import (
 	"net/http"
+	"reflect"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"golang.org/x/net/context"
@@ -107,7 +109,7 @@ func (a *API) GetAllAddresses(ctx context.Context, w http.ResponseWriter, r *htt
 
 	log := Logger(ctx)
 
-	if !userExists(a.db, userID) {
+	if getUser(a.db, userID) == nil {
 		log.WithError(NotFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
 		return
 	}
@@ -133,7 +135,7 @@ func (a *API) GetSingleAddress(ctx context.Context, w http.ResponseWriter, r *ht
 
 	log := Logger(ctx)
 
-	if !userExists(a.db, userID) {
+	if getUser(a.db, userID) == nil {
 		log.WithError(NotFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
 		return
 	}
@@ -155,6 +157,91 @@ func (a *API) GetSingleAddress(ctx context.Context, w http.ResponseWriter, r *ht
 // DeleteSingleUser will soft delete the user. It requires admin access
 // return errors or 200 and no body
 func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	userID, _, httpError := checkPermissions(ctx, true)
+	if httpError != nil {
+		sendError(w, httpError)
+		return
+	}
+	logrus.SetLevel(logrus.DebugLevel)
+
+	log := Logger(ctx)
+	log.Debugf("Starting to delete user %s", userID)
+
+	user := getUser(a.db, userID)
+	if user == nil {
+		log.Info("attempted to delete non-existent user")
+		return // not an error ~ just an action
+	}
+
+	// do a cascading delete
+	tx := a.db.Begin()
+
+	results := tx.Delete(user)
+	if results.Error != nil {
+		tx.Rollback()
+		log.WithError(results.Error).Warn("Failed to find associated orders")
+		InternalServerError(w, "Failed to delete user")
+		return
+	}
+
+	orders := []models.Order{}
+	results = tx.Where("user_id = ?", userID).Find(&orders)
+	if results.Error != nil {
+		tx.Rollback()
+		log.WithError(results.Error).Warn("Failed to find associated orders")
+		InternalServerError(w, "Failed to delete user")
+		return
+	}
+
+	log.Debugf("Starting to collect info about %d orders", len(orders))
+	lineItemIDs := []int64{}
+	for _, o := range orders {
+		for _, i := range o.LineItems {
+			lineItemIDs = append(lineItemIDs, i.ID)
+		}
+	}
+
+	if len(lineItemIDs) > 0 {
+		log.Debugf("Deleting %d line items", len(lineItemIDs))
+		results = tx.Where("id in ?", lineItemIDs).Delete(&models.LineItem{})
+		if results.Error != nil {
+			tx.Rollback()
+			log.WithError(results.Error).Warn("Failed to find associated orders")
+			InternalServerError(w, "Failed to delete user")
+			return
+		}
+	}
+
+	if err := tryDelete(tx, w, log, userID, &models.Order{}); err != nil {
+		return
+	}
+	if err := tryDelete(tx, w, log, userID, &models.Transaction{}); err != nil {
+		return
+	}
+	if err := tryDelete(tx, w, log, userID, &models.OrderNote{}); err != nil {
+		return
+	}
+	if err := tryDelete(tx, w, log, userID, &models.Address{}); err != nil {
+		return
+	}
+
+	tx.Commit()
+	log.Infof("Deleted user")
+}
+
+func tryDelete(tx *gorm.DB, w http.ResponseWriter, log *logrus.Entry, userID string, face interface{}) error {
+	typeName := reflect.TypeOf(face).String()
+
+	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)
+	results := tx.Where("user_id = ?", userID).Delete(face)
+	if results.Error != nil {
+		tx.Rollback()
+		log.WithError(results.Error).Warnf("Failed to delete %s", typeName)
+		InternalServerError(w, "Failed to delete user")
+	}
+
+	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)
+	return results.Error
 }
 
 // DeleteSingleAddress will soft delete the address associated with that user. It requires admin access
@@ -209,7 +296,12 @@ func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTT
 	return userID, addrID, nil
 }
 
-func userExists(db *gorm.DB, userID string) bool {
-	results := db.Find(&models.User{ID: userID})
-	return !results.RecordNotFound()
+func getUser(db *gorm.DB, userID string) *models.User {
+	user := &models.User{ID: userID}
+	results := db.Find(user)
+	if results.RecordNotFound() {
+		return nil
+	}
+
+	return user
 }

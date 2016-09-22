@@ -26,7 +26,7 @@ func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 	validateError(t, 401, recorder)
 }
 
-func TestUsersQueryForAllUserWithParams(t *testing.T) {
+func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -229,6 +229,55 @@ func TestUserQueryForSingleAddressAsUser(t *testing.T) {
 	extractPayload(t, 200, recorder, addr)
 	validateAddress(t, tu.TestAddress, *addr)
 }
+
+func TestUserDeleteNonExistentUser(t *testing.T) {
+	// TODO
+}
+
+func TestUserDeleteSingleUser(t *testing.T) {
+	dyingUser := models.User{
+		ID:    "going-to-die",
+		Email: "nobody@nowhere.com",
+	}
+	dyingAddr := tu.GetTestAddress()
+	dyingAddr.UserID = dyingUser.ID
+	db.Create(&dyingUser)
+	db.Create(&dyingAddr)
+	// hard remove it
+	defer db.Unscoped().Delete(&dyingAddr)
+	defer db.Unscoped().Delete(&dyingUser)
+
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx = kami.SetParam(ctx, "user_id", dyingUser.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
+
+	NewAPI(config, db, nil).DeleteSingleUser(ctx, recorder, req)
+	assert.Equal(t, 200, recorder.Code)
+
+	// now load it back and it should be soft deleted
+	foundUser := &models.User{
+		ID: dyingUser.ID,
+	}
+	if rsp := db.Unscoped().First(foundUser); rsp.Error != nil {
+		assert.FailNow(t, "failed to find user that should have been soft deleted")
+	}
+
+	assert.NotNil(t, foundUser.DeletedAt)
+
+	foundAddr := &models.Address{
+		ID: dyingAddr.ID,
+	}
+	if rsp := db.Unscoped().First(foundAddr); rsp.Error != nil {
+		assert.FailNow(t, "failed to find address that should have been soft deleted: "+rsp.Error.Error())
+	}
+	assert.NotNil(t, foundAddr.DeletedAt)
+}
+
+// ------------------------------------------------------------------------------------------------
 
 func queryForAddresses(t *testing.T, ctx context.Context, config *conf.Configuration, id string) []models.Address {
 	ctx = kami.SetParam(ctx, "user_id", id)
