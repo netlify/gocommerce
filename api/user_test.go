@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,10 +19,10 @@ import (
 
 func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 	config := testConfig()
-	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", nil), config)
+
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
-	ctx := testContext(token("magical-unicorn", "", nil), config)
 
 	NewAPI(config, db, nil).GetAllUsers(ctx, recorder, req)
 	validateError(t, 401, recorder)
@@ -31,14 +33,18 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 		ID:    "villian",
 		Email: "twoface@dc.com",
 	}
-	db.Create(&toDie)
+	rsp := db.Create(&toDie)
+	if rsp.Error != nil {
+		assert.FailNow(t, "failed b/c of db error: "+rsp.Error.Error())
+	}
 	defer db.Unscoped().Delete(&toDie)
 
 	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
-	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
 	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+
+	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
+	recorder := httptest.NewRecorder()
 
 	NewAPI(config, db, nil).GetAllUsers(ctx, recorder, req)
 
@@ -49,6 +55,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsers(t *testing.T) {
+	db.LogMode(true)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -149,7 +156,7 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 	second := tu.GetTestAddress()
 	second.ID = "second"
 	second.UserID = tu.TestUser.ID
-	assert.True(t, second.Valid())
+	assert.Nil(t, second.Validate())
 	db.Create(&second)
 	defer db.Unscoped().Delete(&second)
 
@@ -159,7 +166,7 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 	addrs := queryForAddresses(t, ctx, config, tu.TestUser.ID)
 	assert.Equal(t, 2, len(addrs))
 	for _, a := range addrs {
-		assert.True(t, a.Valid(), fmt.Sprintf("invalid addr: %+v", a))
+		assert.Nil(t, a.Validate())
 		switch a.ID {
 		case second.ID:
 			validateAddress(t, *second, a)
@@ -297,6 +304,77 @@ func TestUserDeleteSingleUser(t *testing.T) {
 	assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
 	assert.False(t, db.Unscoped().First(&dyingLineItem).RecordNotFound())
 	assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+}
+
+func TestDeleteUserAddress(t *testing.T) {
+	addr := tu.GetTestAddress()
+	addr.UserID = tu.TestUser.ID
+	db.Create(addr)
+
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
+	ctx = kami.SetParam(ctx, "addr_id", addr.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
+
+	NewAPI(config, db, nil).DeleteSingleAddress(ctx, recorder, req)
+	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, "", recorder.Body.String())
+
+	assert.False(t, db.Unscoped().First(&addr).RecordNotFound())
+	assert.NotNil(t, addr.DeletedAt)
+}
+
+func TestCreateAnAddress(t *testing.T) {
+	addr := tu.GetTestAddress()
+	b, err := json.Marshal(&addr.AddressRequest)
+	assert.Nil(t, err)
+
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
+
+	NewAPI(config, db, nil).CreateNewAddress(ctx, recorder, req)
+
+	assert.Equal(t, 200, recorder.Code)
+
+	results := struct {
+		ID string
+	}{}
+	err = json.Unmarshal(recorder.Body.Bytes(), &results)
+	assert.Nil(t, err)
+
+	// now pull off the address from the DB
+	dbAddr := &models.Address{ID: results.ID, UserID: tu.TestUser.ID}
+	rsp := db.First(dbAddr)
+	assert.False(t, rsp.RecordNotFound())
+}
+
+func TestCreateInvalidAddress(t *testing.T) {
+	addr := tu.GetTestAddress()
+	addr.LastName = "" // required field
+
+	b, err := json.Marshal(&addr.AddressRequest)
+	assert.Nil(t, err)
+
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
+
+	NewAPI(config, db, nil).CreateNewAddress(ctx, recorder, req)
+
+	validateError(t, 400, recorder)
 }
 
 // ------------------------------------------------------------------------------------------------

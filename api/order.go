@@ -559,8 +559,8 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.A
 	}
 
 	// it is a new address we're  making
-	if !address.Valid() {
-		return nil, httpError(400, "Failed to validate address")
+	if err := address.Validate(); err != nil {
+		return nil, httpError(400, "Failed to validate address: "+err.Error())
 	}
 
 	// is a valid id that doesn't already belong to a user

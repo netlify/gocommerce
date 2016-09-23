@@ -24,13 +24,15 @@ func LoadTestData(db *gorm.DB) {
 	}
 
 	TestAddress = models.Address{
-		ID:       "first-address",
-		LastName: "wayne",
-		Address1: "123 cave way",
-		Country:  "dcland",
-		City:     "gotham",
-		Zip:      "324234",
-		User:     &TestUser,
+		AddressRequest: models.AddressRequest{
+			LastName: "wayne",
+			Address1: "123 cave way",
+			Country:  "dcland",
+			City:     "gotham",
+			Zip:      "324234",
+		},
+		ID:   "first-address",
+		User: &TestUser,
 	}
 
 	FirstOrder = models.NewOrder("session1", TestUser.Email, "usd")

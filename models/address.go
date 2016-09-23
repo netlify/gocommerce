@@ -1,13 +1,12 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
-type Address struct {
-	ID string `json:"id"`
-
-	User   *User  `json:"-"`
-	UserID string `json:"-"`
-
+type AddressRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 
@@ -18,18 +17,39 @@ type Address struct {
 	Country  string `json:"country"`
 	State    string `json:"state"`
 	Zip      string `json:"zip"`
-
-	CreatedAt time.Time  `json:"created_at"`
-	DeletedAt *time.Time `json:"deleted_at"`
 }
 
-func (a *Address) Valid() bool {
-	if a.LastName == "" ||
-		a.Address1 == "" ||
-		a.Country == "" ||
-		a.City == "" ||
-		a.Zip == "" {
-		return false
+type Address struct {
+	AddressRequest
+
+	ID string `json:"id"`
+
+	User   *User  `json:"-"`
+	UserID string `json:"-"`
+
+	CreatedAt time.Time  `json:"-"`
+	DeletedAt *time.Time `json:"-"`
+}
+
+func (a AddressRequest) Validate() error {
+	required := map[string]string{
+		"last name": a.LastName,
+		"address":   a.Address1,
+		"country":   a.Country,
+		"city":      a.City,
+		"zip":       a.Zip,
 	}
-	return true
+
+	missing := []string{}
+	for name, val := range required {
+		if val == "" {
+			missing = append(missing, name)
+		}
+	}
+
+	if len(missing) > 0 {
+		return fmt.Errorf("Required field missing: " + strings.Join(missing, ","))
+	}
+
+	return nil
 }

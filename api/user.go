@@ -1,34 +1,18 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
+	"github.com/pborman/uuid"
 	"golang.org/x/net/context"
 
 	"github.com/netlify/gocommerce/models"
 )
-
-// ENDPOINTS
-//
-// GET
-// /users/
-// /users/:id
-// /users/:id/addresses
-// /users/:id/addresses/:id
-//
-// DELETE
-// /users/:id
-// /users/:id/addresses/:id
-//
-// POST
-// /users								(create user)
-// /users/:id						(modify email)
-// /users/:id/addresses (create an address)
-//
 
 // GetAllUsers will return all of the users. It requires admin access.
 // It supports the filters:
@@ -162,8 +146,6 @@ func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *ht
 		sendError(w, httpError)
 		return
 	}
-	logrus.SetLevel(logrus.DebugLevel)
-
 	log := Logger(ctx)
 	log.Debugf("Starting to delete user %s", userID)
 
@@ -232,18 +214,72 @@ func (a *API) DeleteSingleUser(ctx context.Context, w http.ResponseWriter, r *ht
 // DeleteSingleAddress will soft delete the address associated with that user. It requires admin access
 // return errors or 200 and no body
 func (a *API) DeleteSingleAddress(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-}
+	userID, addrID, httpError := checkPermissions(ctx, true)
+	if httpError != nil {
+		sendError(w, httpError)
+		return
+	}
+	log := Logger(ctx).WithField("addr_id", addrID)
 
-// CreateNewUser will create a user with the info specified.
-func (a *API) CreateNewUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if getUser(a.db, userID) == nil {
+		log.Warn("requested non-existent user - not an error b/c it is a delete")
+		return
+	}
+
+	rsp := a.db.Delete(&models.Address{ID: addrID})
+	if rsp.RecordNotFound() {
+		log.Warn("Attempted to delete an address that doesn't exist")
+		return
+	} else if rsp.Error != nil {
+		log.WithError(rsp.Error).Warn("Error while deleting address")
+		InternalServerError(w, "error while deleting address")
+		return
+	}
+
+	log.Info("deleted address")
 }
 
 // CreateNewAddress will create an address associated with that user
 func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-}
+	userID, _, httpError := checkPermissions(ctx, true)
+	if httpError != nil {
+		sendError(w, httpError)
+		return
+	}
+	log := Logger(ctx)
 
-// UpdateUserEmail will update the user's email
-func (a *API) UpdateUserEmail(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if getUser(a.db, userID) == nil {
+		log.WithError(NotFoundError(w, "Couldn't find user "+userID)).Warn("Requested to add an address to a missing user")
+		return
+	}
+
+	addrReq := new(models.AddressRequest)
+	err := json.NewDecoder(r.Body).Decode(addrReq)
+	if err != nil {
+		log.WithError(err).Info("Failed to parse json")
+		BadRequestError(w, "Failed to parse json body")
+		return
+	}
+
+	if err := addrReq.Validate(); err != nil {
+		log.WithError(err).Infof("requested address is not valid")
+		BadRequestError(w, "requested address is missing a required field: "+err.Error())
+		return
+	}
+
+	addr := models.Address{
+		AddressRequest: *addrReq,
+		ID:             uuid.NewRandom().String(),
+		UserID:         userID,
+	}
+	rsp := a.db.Create(&addr)
+	if rsp.Error != nil {
+		log.WithError(rsp.Error).Warnf("Failed to save address %v", addr)
+		InternalServerError(w, "failed to save address")
+		return
+	}
+
+	sendJSON(w, 200, &struct{ ID string }{ID: addr.ID})
 }
 
 // -------------------------------------------------------------------------------------------------------------------
