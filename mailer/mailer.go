@@ -5,8 +5,8 @@ import (
 
 	gomail "gopkg.in/gomail.v2"
 
-	"github.com/netlify/commerce/conf"
-	"github.com/netlify/commerce/models"
+	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/models"
 )
 
 // Mailer will send mail and use templates from the site for easy mail styling

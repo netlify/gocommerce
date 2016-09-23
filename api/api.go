@@ -11,8 +11,8 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/commerce/conf"
-	"github.com/netlify/commerce/mailer"
+	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/mailer"
 	"github.com/rs/cors"
 )
 

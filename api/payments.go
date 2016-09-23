@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/guregu/kami"
-	"github.com/netlify/commerce/models"
+	"github.com/netlify/netlify-commerce/models"
 	stripe "github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
 	"golang.org/x/net/context"

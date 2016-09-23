@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/netlify/commerce/conf"
+	"github.com/netlify/netlify-commerce/conf"
 	"golang.org/x/net/context"
 )
 
