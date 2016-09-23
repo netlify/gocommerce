@@ -55,7 +55,6 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsers(t *testing.T) {
-	db.LogMode(true)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
