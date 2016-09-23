@@ -1,7 +1,7 @@
 FROM calavera/go-glide:v0.12.2
 
-ADD . /go/src/github.com/netlify/commerce
+ADD . /go/src/github.com/netlify/netlify-commerce
 
-RUN cd /go/src/github.com/netlify/commerce && make deps build && mv commerce /usr/local/bin/
+RUN cd /go/src/github.com/netlify/netlify-commerce && make deps build && mv netlify-commerce /usr/local/bin/
 
-CMD ["commerce"]
+CMD ["netlify-commerce"]

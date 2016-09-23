@@ -1,5 +1,5 @@
-hash: 6ac64190758f83c55eab12b728d36229ebdb6575b906b90dcd7c7c51476cea7c
-updated: 2016-09-22T14:55:43.238899847-07:00
+hash: 9c42e699c0a79f18d6b81d38bbf1b123feab6e9883b56d6ed5e420a2859c9eb7
+updated: 2016-09-23T12:27:33.058130839-07:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e

@@ -11,7 +11,7 @@ import (
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
-	"github.com/netlify/commerce/models"
+	"github.com/netlify/netlify-commerce/models"
 	"github.com/pborman/uuid"
 
 	"golang.org/x/net/context"

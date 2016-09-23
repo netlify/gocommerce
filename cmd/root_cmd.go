@@ -7,10 +7,10 @@ import (
 	"github.com/spf13/cobra"
 	stripe "github.com/stripe/stripe-go"
 
-	"github.com/netlify/commerce/api"
-	"github.com/netlify/commerce/conf"
-	"github.com/netlify/commerce/mailer"
-	"github.com/netlify/commerce/models"
+	"github.com/netlify/netlify-commerce/api"
+	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/mailer"
+	"github.com/netlify/netlify-commerce/models"
 )
 
 // RootCmd will run the log streamer
