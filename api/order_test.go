@@ -229,7 +229,8 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 // -------------------------------------------------------------------------------------------------------------------
 // TODO vvvv ~ need to make it verifiable
 //func TestCreateAnOrderAsAnExistingUser(t *testing.T) {
-//	assert := assert.New(t)
+//	db := db(t)
+//	config := testConfig()
 //	orderRequest := &OrderParams{
 //		SessionID: "test-session",
 //		LineItems: []*OrderLineItem{&OrderLineItem{
@@ -237,13 +238,15 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 //			Path:     "/fashion/utility-belt",
 //			Quantity: 1,
 //		}},
-//		BillingAddress: &testAddress,
+//		BillingAddress: &tu.TestAddress,
 //		ShippingAddress: &models.Address{
-//			LastName: "robin",
-//			Address1: "123456 circus lane",
-//			Country:  "dcland",
-//			City:     "gotham",
-//			Zip:      "234789",
+//			AddressRequest: models.AddressRequest{
+//				LastName: "robin",
+//				Address1: "123456 circus lane",
+//				Country:  "dcland",
+//				City:     "gotham",
+//				Zip:      "234789",
+//			},
 //		},
 //	}
 //
@@ -252,18 +255,17 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 //		assert.FailNow(t, "setup failure")
 //	}
 //
-//	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil))
+//	ctx := testContext(token(tu.TestUser.ID, tu.TestUser.Email, nil), config)
 //	recorder := httptest.NewRecorder()
 //	req, err := http.NewRequest("PUT", "https://not-real/orders", bytes.NewReader(bs))
 //
-//	api := NewAPI(config, db, nil)
-//	api.OrderCreate(ctx, recorder, req)
-//	assert.Equal(200, recorder.Code)
+//	NewAPI(config, db, nil).OrderCreate(ctx, recorder, req)
+//	assert.Equal(t, 200, recorder.Code)
 //
 //	//ret := new(models.Order)
 //	ret := make(map[string]interface{})
 //	err = json.Unmarshal(recorder.Body.Bytes(), ret)
-//	assert.NoError(err)
+//	assert.NoError(t, err)
 //
 //	fmt.Printf("%+v\n", ret)
 //}
