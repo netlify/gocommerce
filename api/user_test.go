@@ -8,16 +8,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"github.com/guregu/kami"
 	tu "github.com/netlify/gocommerce/testutils"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/net/context"
 
-	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
 )
 
 func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	ctx := testContext(token("magical-unicorn", "", nil), config)
 
@@ -29,6 +30,7 @@ func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsersWithParams(t *testing.T) {
+	db := db(t)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -55,6 +57,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsers(t *testing.T) {
+	db := db(t)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -107,6 +110,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 //}
 
 func TestUsersQueryForUserAsUser(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
@@ -123,6 +127,7 @@ func TestUsersQueryForUserAsUser(t *testing.T) {
 }
 
 func TestUsersQueryForUserAsStranger(t *testing.T) {
+	db := db(t)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
@@ -136,6 +141,7 @@ func TestUsersQueryForUserAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForUserAsAdmin(t *testing.T) {
+	db := db(t)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
@@ -152,8 +158,8 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
+	db := db(t)
 	second := tu.GetTestAddress()
-	second.ID = "second"
 	second.UserID = tu.TestUser.ID
 	assert.Nil(t, second.Validate())
 	db.Create(&second)
@@ -162,7 +168,8 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
-	addrs := queryForAddresses(t, ctx, config, tu.TestUser.ID)
+
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), tu.TestUser.ID)
 	assert.Equal(t, 2, len(addrs))
 	for _, a := range addrs {
 		assert.Nil(t, a.Validate())
@@ -178,14 +185,16 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	ctx := testContext(token(tu.TestUser.ID, "", nil), config)
-	addrs := queryForAddresses(t, ctx, config, tu.TestUser.ID)
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), tu.TestUser.ID)
 	assert.Equal(t, 1, len(addrs))
 	validateAddress(t, tu.TestAddress, addrs[0])
 }
 
 func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	ctx := testContext(token("stranger-danger", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", tu.TestUser.ID)
@@ -197,6 +206,7 @@ func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
+	db := db(t)
 	u := models.User{
 		ID:    "temporary",
 		Email: "junk@junk.com",
@@ -206,11 +216,12 @@ func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
 
 	config := testConfig()
 	ctx := testContext(token(u.ID, "", nil), config)
-	addrs := queryForAddresses(t, ctx, config, u.ID)
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), u.ID)
 	assert.Equal(t, 0, len(addrs))
 }
 
 func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	ctx := testContext(token("dne", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", "dne")
@@ -221,7 +232,8 @@ func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
 	validateError(t, 404, recorder)
 }
 
-func TestUserQueryForSingleAddressAsUser(t *testing.T) {
+func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	ctx := testContext(token(tu.TestUser.ID, "", nil), config)
 
@@ -236,7 +248,8 @@ func TestUserQueryForSingleAddressAsUser(t *testing.T) {
 	validateAddress(t, tu.TestAddress, *addr)
 }
 
-func TestUserDeleteNonExistentUser(t *testing.T) {
+func TestUsersDeleteNonExistentUser(t *testing.T) {
+	db := db(t)
 	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(token("magical-unicorn", "", &[]string{"admin"}), config)
@@ -250,7 +263,8 @@ func TestUserDeleteNonExistentUser(t *testing.T) {
 	assert.Equal(t, "", recorder.Body.String())
 }
 
-func TestUserDeleteSingleUser(t *testing.T) {
+func TestUsersDeleteSingleUser(t *testing.T) {
+	db := db(t)
 	dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
 	dyingAddr := tu.GetTestAddress()
 	dyingAddr.UserID = dyingUser.ID
@@ -306,6 +320,7 @@ func TestUserDeleteSingleUser(t *testing.T) {
 }
 
 func TestDeleteUserAddress(t *testing.T) {
+	db := db(t)
 	addr := tu.GetTestAddress()
 	addr.UserID = tu.TestUser.ID
 	db.Create(addr)
@@ -328,6 +343,7 @@ func TestDeleteUserAddress(t *testing.T) {
 }
 
 func TestCreateAnAddress(t *testing.T) {
+	db := db(t)
 	addr := tu.GetTestAddress()
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
@@ -357,6 +373,7 @@ func TestCreateAnAddress(t *testing.T) {
 }
 
 func TestCreateInvalidAddress(t *testing.T) {
+	db := db(t)
 	addr := tu.GetTestAddress()
 	addr.LastName = "" // required field
 
@@ -378,12 +395,12 @@ func TestCreateInvalidAddress(t *testing.T) {
 
 // ------------------------------------------------------------------------------------------------
 
-func queryForAddresses(t *testing.T, ctx context.Context, config *conf.Configuration, id string) []models.Address {
+func queryForAddresses(t *testing.T, ctx context.Context, api *API, id string) []models.Address {
 	ctx = kami.SetParam(ctx, "user_id", id)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).GetAllAddresses(ctx, recorder, req)
+	api.GetAllAddresses(ctx, recorder, req)
 	addrs := []models.Address{}
 	extractPayload(t, 200, recorder, &addrs)
 	return addrs

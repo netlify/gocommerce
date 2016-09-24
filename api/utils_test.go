@@ -20,34 +20,65 @@ import (
 )
 
 var testLogger = logrus.NewEntry(logrus.StandardLogger())
-var db *gorm.DB
 
 var urlWithUserID string
 var urlForFirstOrder string
 
+var dbFiles []string
+
 func TestMain(m *testing.M) {
+	//f, err := ioutil.TempFile("", "test-db")
+	//if err != nil {
+	//	panic(err)
+	//}
+	//defer os.Remove(f.Name())
+	//dbName = f.Name()
+
+	//config := testConfig()
+	//config.DB.Driver = "sqlite3"
+	//config.DB.ConnURL = f.Name()
+
+	//// setup test db
+	//db, err := models.Connect(config)
+	//if err != nil {
+	//	panic(err)
+	//}
+	//defer db.Close()
+
+	//tu.LoadTestData(db)
+	dbFiles = []string{}
+	defer func() {
+		fmt.Printf("removing lingering %d db files\n", len(dbFiles))
+		for _, f := range dbFiles {
+			os.Remove(f)
+		}
+	}()
+
+	os.Exit(m.Run())
+}
+
+func db(t *testing.T) *gorm.DB {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
 		panic(err)
 	}
-	defer os.Remove(f.Name())
+	dbFiles = append(dbFiles, f.Name())
 
 	config := testConfig()
 	config.DB.Driver = "sqlite3"
 	config.DB.ConnURL = f.Name()
 
-	// setup test db
-	db, err = models.Connect(config)
+	db, err := models.Connect(config)
 	if err != nil {
-		panic(err)
+		assert.FailNow(t, "failed to connect to db")
 	}
-	defer db.Close()
 
+	//	db.LogMode(true)
 	tu.LoadTestData(db)
 	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", tu.FirstOrder.ID)
 	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", tu.TestUser.ID)
 
-	os.Exit(m.Run())
+	return db
 }
 
 func testContext(token *jwt.Token, config *conf.Configuration) context.Context {
