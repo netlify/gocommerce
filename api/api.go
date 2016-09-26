@@ -80,7 +80,12 @@ func timeRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) co
 
 func logHandler(ctx context.Context, wp mutil.WriterProxy, req *http.Request) {
 	start := ctx.Value("_netlify_commerce_timing").(time.Time)
-	logrus.Infof("method=%s path=%s status=%v duration=%v", req.Method, req.URL.Path, wp.Status(), time.Since(start))
+	logrus.WithFields(logrus.Fields{
+		"method":   req.Method,
+		"path":     req.URL.Path,
+		"status":   wp.Status(),
+		"duration": time.Since(start),
+	}).Info("")
 }
 
 // NewAPI instantiates a new REST API
