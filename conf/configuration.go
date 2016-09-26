@@ -1,6 +1,8 @@
 package conf
 
 import (
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -70,13 +72,13 @@ func Load(configFile string) (*Configuration, error) {
 		return nil, err
 	}
 
-	return handleNested(config), nil
+	return handleNested(config)
 }
 
 // This is supppper sad. It is b/c the marshal function doesn't work on nested
 // values. The overrides work, but the marshal won't discover them.
 // see: https://github.com/spf13/viper/issues/190
-func handleNested(config *Configuration) *Configuration {
+func handleNested(config *Configuration) (*Configuration, error) {
 	config.JWT.Secret = viper.GetString("jwt.secret")
 
 	config.DB.Driver = viper.GetString("db.driver")
@@ -84,6 +86,14 @@ func handleNested(config *Configuration) *Configuration {
 
 	config.API.Host = viper.GetString("api.host")
 	config.API.Port = viper.GetInt("api.port")
+	if config.API.Port == 0 && os.Getenv("PORT") != "" {
+		port, err := strconv.Atoi(os.Getenv("PORT"))
+		if err != nil {
+			return nil, err
+		}
+
+		config.API.Port = port
+	}
 
 	config.Mailer.Host = viper.GetString("mailer.host")
 	config.Mailer.Port = viper.GetInt("mailer.port")
@@ -96,5 +106,5 @@ func handleNested(config *Configuration) *Configuration {
 	config.Payment.Stripe.SecretKey = viper.GetString("payment.stripe.secret_key")
 	// TODO paypal
 
-	return config
+	return config, nil
 }
