@@ -7,8 +7,8 @@ import (
 	"github.com/netlify/netlify-commerce/conf"
 )
 
-// RootCmd will run the log streamer
-var RootCmd = cobra.Command{
+// rootCmd will run the log streamer
+var rootCmd = cobra.Command{
 	Use:  "netlify-commerce",
 	Long: "A service that will validate restful transactions and send them to stripe.",
 	Run: func(cmd *cobra.Command, args []string) {
@@ -16,10 +16,11 @@ var RootCmd = cobra.Command{
 	},
 }
 
-// InitCommands will add flags and subcommands to the different commands
-func InitCommands() {
-	RootCmd.PersistentFlags().StringP("config", "c", "", "The configuration file")
-	RootCmd.AddCommand(&serveCmd, &migrateCmd)
+// NewRoot will add flags and subcommands to the different commands
+func RootCmd() *cobra.Command {
+	rootCmd.PersistentFlags().StringP("config", "c", "", "The configuration file")
+	rootCmd.AddCommand(&serveCmd, &migrateCmd)
+	return &rootCmd
 }
 
 func execWithConfig(cmd *cobra.Command, fn func(config *conf.Configuration)) {
