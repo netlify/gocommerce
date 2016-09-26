@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"log"
-
+	"github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
 
 	"github.com/netlify/netlify-commerce/conf"
@@ -26,12 +25,12 @@ func InitCommands() {
 func execWithConfig(cmd *cobra.Command, fn func(config *conf.Configuration)) {
 	configFile, err := cmd.Flags().GetString("config")
 	if err != nil {
-		log.Fatalf("%+v", err)
+		logrus.Fatalf("%+v", err)
 	}
 
 	config, err := conf.Load(configFile)
 	if err != nil {
-		log.Fatalf("Failed to load configration: %+v", err)
+		logrus.Fatalf("Failed to load configration: %+v", err)
 	}
 
 	fn(config)

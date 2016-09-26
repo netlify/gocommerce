@@ -1,8 +1,7 @@
 package cmd
 
 import (
-	"log"
-
+	"github.com/Sirupsen/logrus"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/models"
 	"github.com/spf13/cobra"
@@ -19,7 +18,7 @@ var migrateCmd = cobra.Command{
 func migrate(config *conf.Configuration) {
 	db, err := models.Connect(config)
 	if err != nil {
-		log.Fatalf("Error opening database: %v", err)
+		logrus.Fatalf("Error opening database: %+v", err)
 	}
 
 	db.AutoMigrate(models.Address{})

@@ -1,10 +1,9 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
-
-	"golang.org/x/net/context"
 
 	"github.com/guregu/kami"
 	"github.com/mattes/vat"

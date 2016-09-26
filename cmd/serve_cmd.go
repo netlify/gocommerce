@@ -2,8 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/netlify/netlify-commerce/api"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
@@ -23,7 +23,7 @@ var serveCmd = cobra.Command{
 func serve(config *conf.Configuration) {
 	db, err := models.Connect(config)
 	if err != nil {
-		log.Fatalf("Error opening database: %v", err)
+		logrus.Fatalf("Error opening database: %+v", err)
 	}
 
 	mailer := mailer.NewMailer(config)
@@ -32,5 +32,7 @@ func serve(config *conf.Configuration) {
 
 	stripe.Key = config.Payment.Stripe.SecretKey
 
-	api.ListenAndServe(fmt.Sprintf("%v:%v", config.API.Host, config.API.Port))
+	l := fmt.Sprintf("%v:%v", config.API.Host, config.API.Port)
+	logrus.Infof("Netlify Commerce API started on: %s", l)
+	api.ListenAndServe(l)
 }

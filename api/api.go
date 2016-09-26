@@ -1,12 +1,11 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"time"
-
-	"golang.org/x/net/context"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
@@ -14,6 +13,7 @@ import (
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
 	"github.com/rs/cors"
+	"github.com/zenazn/goji/web/mutil"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -73,10 +73,14 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
+func logHandler(context.Context, mutil.WriterProxy, *http.Request) {
+}
+
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
 	mux := kami.New()
+	mux.LogHandler = logHandler
 
 	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)

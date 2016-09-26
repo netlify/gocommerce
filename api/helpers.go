@@ -1,12 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/netlify/netlify-commerce/conf"
-	"golang.org/x/net/context"
 )
 
 // HTTPError is an error with a message

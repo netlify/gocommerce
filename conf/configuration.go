@@ -120,5 +120,9 @@ func handleNested(config *Configuration) (*Configuration, error) {
 	config.Payment.Stripe.SecretKey = viper.GetString("payment.stripe.secret_key")
 	// TODO paypal
 
+	if config.API.Port == 0 && config.API.Host == "" {
+		config.API.Port = 8080
+	}
+
 	return config, nil
 }
