@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 	"github.com/netlify/netlify-commerce/models"
 	stripe "github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
-	"golang.org/x/net/context"
 )
 
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups

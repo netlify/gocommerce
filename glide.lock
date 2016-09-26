@@ -1,5 +1,5 @@
-hash: 9c42e699c0a79f18d6b81d38bbf1b123feab6e9883b56d6ed5e420a2859c9eb7
-updated: 2016-09-23T12:27:33.058130839-07:00
+hash: 32b5dc0bd7b1ecdffd204eb8223346efa39c68ea771549ba9bd7b2b5e9ea489e
+updated: 2016-09-26T13:27:06.402094312-07:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e
@@ -18,7 +18,7 @@ imports:
   subpackages:
   - proto
 - name: github.com/guregu/kami
-  version: 250b4ba03b6732f3805e8355a18345a540a791d2
+  version: 556ef16b10fbac3cec79e38bbf26ce4af543608f
   subpackages:
   - treemux
 - name: github.com/hashicorp/hcl
@@ -68,6 +68,8 @@ imports:
   version: a62a804a8a009876ca59105f7899938a1349f4b3
 - name: github.com/rs/xhandler
   version: ed27b6fd65218132ee50cd95f38474a3d8a2cd12
+- name: github.com/Sirupsen/logrus
+  version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
 - name: github.com/spf13/afero
   version: 20500e2abd0d1f4564a499e83d11d6c73cd58c27
   subpackages:

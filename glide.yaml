@@ -6,7 +6,7 @@ import:
 - package: github.com/go-sql-driver/mysql
   version: v1.2
 - package: github.com/guregu/kami
-  version: v1.4
+  version: v2.1
 - package: github.com/jinzhu/gorm
   version: v1.0
 - package: github.com/lib/pq
@@ -22,12 +22,11 @@ import:
   version: v16.3.1
   subpackages:
   - charge
-- package: golang.org/x/net
-  subpackages:
-  - context
 - package: gopkg.in/gomail.v2
   version: 2.0.0
 - package: github.com/mattes/vat
+- package: github.com/pkg/errors
+  version: ^0.7.1
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3

@@ -1,4 +1,5 @@
 config.json
 gorm.db
+netlify-commerce
 
 vendor/

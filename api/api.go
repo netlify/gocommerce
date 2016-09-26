@@ -1,19 +1,20 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
 	"time"
 
-	"golang.org/x/net/context"
-
+	"github.com/Sirupsen/logrus"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
 	"github.com/rs/cors"
+	"github.com/zenazn/goji/web/mutil"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -73,11 +74,27 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
+func timeRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	return context.WithValue(ctx, "_netlify_commerce_timing", time.Now())
+}
+
+func logHandler(ctx context.Context, wp mutil.WriterProxy, req *http.Request) {
+	start := ctx.Value("_netlify_commerce_timing").(time.Time)
+	logrus.WithFields(logrus.Fields{
+		"method":   req.Method,
+		"path":     req.URL.Path,
+		"status":   wp.Status(),
+		"duration": time.Since(start),
+	}).Info("")
+}
+
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
 	mux := kami.New()
+	mux.LogHandler = logHandler
 
+	mux.Use("/", timeRequest)
 	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
 	mux.Get("/", api.Index)

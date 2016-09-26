@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -13,8 +14,6 @@ import (
 	"github.com/mattes/vat"
 	"github.com/netlify/netlify-commerce/models"
 	"github.com/pborman/uuid"
-
-	"golang.org/x/net/context"
 )
 
 type OrderLineItem struct {
