@@ -1,10 +1,12 @@
 package conf
 
 import (
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
@@ -49,6 +51,8 @@ type Configuration struct {
 
 // Load will construct the config from the file `config.json`
 func Load(configFile string) (*Configuration, error) {
+	viper.SetConfigType("json")
+
 	if configFile != "" {
 		viper.SetConfigFile(configFile)
 	} else {
@@ -62,14 +66,13 @@ func Load(configFile string) (*Configuration, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, err
+	if err := viper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
+		return nil, errors.Wrap(err, "reading configuration from files")
 	}
 
 	config := new(Configuration)
-
 	if err := viper.Unmarshal(config); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "unmarshaling configuration")
 	}
 
 	return handleNested(config)
@@ -87,12 +90,20 @@ func handleNested(config *Configuration) (*Configuration, error) {
 		config.DB.ConnURL = os.Getenv("DATABASE_URL")
 	}
 
+	if config.DB.Driver == "" && config.DB.ConnURL != "" {
+		u, err := url.Parse(config.DB.ConnURL)
+		if err != nil {
+			return nil, errors.Wrap(err, "parsing db connection url")
+		}
+		config.DB.Driver = u.Scheme
+	}
+
 	config.API.Host = viper.GetString("api.host")
 	config.API.Port = viper.GetInt("api.port")
 	if config.API.Port == 0 && os.Getenv("PORT") != "" {
 		port, err := strconv.Atoi(os.Getenv("PORT"))
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "formatting PORT into int")
 		}
 
 		config.API.Port = port

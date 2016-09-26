@@ -28,6 +28,8 @@ import:
 - package: gopkg.in/gomail.v2
   version: 2.0.0
 - package: github.com/mattes/vat
+- package: github.com/pkg/errors
+  version: ^0.7.1
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3
