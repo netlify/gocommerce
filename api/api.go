@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
@@ -73,7 +74,13 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func logHandler(context.Context, mutil.WriterProxy, *http.Request) {
+func timeRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	return context.WithValue(ctx, "_netlify_commerce_timing", time.Now())
+}
+
+func logHandler(ctx context.Context, wp mutil.WriterProxy, req *http.Request) {
+	start := ctx.Value("_netlify_commerce_timing").(time.Time)
+	logrus.Infof("method=%s path=%s status=%v duration=%v", req.Method, req.URL.Path, wp.Status(), time.Since(start))
 }
 
 // NewAPI instantiates a new REST API
@@ -82,6 +89,7 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	mux := kami.New()
 	mux.LogHandler = logHandler
 
+	mux.Use("/", timeRequest)
 	mux.Use("/", api.withConfig)
 	mux.Use("/", api.withToken)
 	mux.Get("/", api.Index)
