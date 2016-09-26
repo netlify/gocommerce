@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/url"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/netlify/netlify-commerce/conf"
@@ -70,4 +72,29 @@ func NotFoundError(w http.ResponseWriter, message string) {
 // UnauthorizedError is simple Error Wrapper
 func UnauthorizedError(w http.ResponseWriter, message string) {
 	sendJSON(w, 401, &HTTPError{Code: 401, Message: message})
+}
+
+func calculateTotalPages(perPage, total uint64) uint64 {
+	pages := total / perPage
+	if total%perPage > 0 {
+		return pages + 1
+	}
+	return pages
+}
+
+func addPaginationHeaders(w http.ResponseWriter, r *http.Request, page, perPage, total uint64) {
+	totalPages := calculateTotalPages(perPage, total)
+	url, _ := url.ParseRequestURI(r.URL.String())
+	query := url.Query()
+	header := ""
+	if totalPages > page {
+		query.Set("page", fmt.Sprintf("%v", page+1))
+		url.RawQuery = query.Encode()
+		header += "<" + url.String() + ">; rel=\"next\", "
+	}
+	query.Set("page", fmt.Sprintf("%v", totalPages))
+	url.RawQuery = query.Encode()
+	header += "<" + url.String() + ">; rel=\"last\""
+
+	w.Header().Add("Link", header)
 }
