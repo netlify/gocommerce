@@ -83,6 +83,9 @@ func handleNested(config *Configuration) (*Configuration, error) {
 
 	config.DB.Driver = viper.GetString("db.driver")
 	config.DB.ConnURL = viper.GetString("db.url")
+	if config.DB.ConnURL == "" && os.Getenv("DATABASE_URL") != "" {
+		config.DB.ConnURL = os.Getenv("DATABASE_URL")
+	}
 
 	config.API.Host = viper.GetString("api.host")
 	config.API.Port = viper.GetInt("api.port")
