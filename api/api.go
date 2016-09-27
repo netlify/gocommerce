@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"regexp"
 	"time"
@@ -13,8 +14,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
+	"github.com/pborman/uuid"
 	"github.com/rs/cors"
-	"github.com/zenazn/goji/web/mutil"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -22,20 +23,34 @@ var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 // API is the main REST API
 type API struct {
 	handler    http.Handler
+	listener   net.Listener
+	port       int
 	db         *gorm.DB
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
+	log        *logrus.Entry
+}
+
+type ResponseProxy struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (rp ResponseProxy) WriteHeader(status int) {
+	rp.setStatusCode(status)
+	rp.ResponseWriter.WriteHeader(status)
+}
+
+func (rp *ResponseProxy) setStatusCode(code int) {
+	rp.statusCode = code
 }
 
 type JWTClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID     string   `json:"id"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
 	*jwt.StandardClaims
-}
-
-func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	return context.WithValue(ctx, "config", a.config)
 }
 
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
@@ -71,32 +86,29 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 // ListenAndServe starts the REST API
 func (a *API) ListenAndServe(hostAndPort string) error {
-	return http.ListenAndServe(hostAndPort, a.handler)
+	var err error
+	a.listener, err = net.Listen("tcp", hostAndPort)
+	if err != nil {
+		return err
+	}
+
+	a.port = a.listener.Addr().(*net.TCPAddr).Port
+	return http.Serve(a.listener, a.handler)
 }
 
-func timeRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	return context.WithValue(ctx, "_netlify_commerce_timing", time.Now())
-}
-
-func logHandler(ctx context.Context, wp mutil.WriterProxy, req *http.Request) {
-	start := ctx.Value("_netlify_commerce_timing").(time.Time)
-	logrus.WithFields(logrus.Fields{
-		"method":   req.Method,
-		"path":     req.URL.Path,
-		"status":   wp.Status(),
-		"duration": time.Since(start),
-	}).Info("")
+// Shutdown does what it sounds like
+func (a *API) Shutdown() {
+	a.listener.Close()
 }
 
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
-	mux := kami.New()
-	mux.LogHandler = logHandler
 
-	mux.Use("/", timeRequest)
-	mux.Use("/", api.withConfig)
+	mux := kami.New()
 	mux.Use("/", api.withToken)
+
+	// endpoints
 	mux.Get("/", api.Index)
 	mux.Get("/orders", api.OrderList)
 	mux.Post("/orders", api.OrderCreate)
@@ -113,4 +125,41 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	api.handler = corsHandler.Handler(mux)
 	return api
+}
+
+func (a *API) trace(f func(context.Context, http.ResponseWriter, *http.Request)) func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+		id := uuid.NewRandom().String()
+		log := a.log.WithField("request_id", id)
+
+		log = log.WithFields(logrus.Fields{
+			"method": r.Method,
+			"path":   r.URL.Path,
+		})
+
+		// optionally add the user id stuff
+		claims := getClaims(ctx)
+		if claims != nil {
+			log = log.WithFields(logrus.Fields{
+				"claim_id":     claims.ID,
+				"claim_groups": claims.Groups,
+				"claim_email":  claims.Email,
+			})
+		}
+
+		ctx = withRequestID(ctx, id)
+		ctx = withLogger(ctx, log)
+		ctx = withConfig(ctx, a.config)
+
+		rp := ResponseProxy{ResponseWriter: w}
+		startTime := time.Now()
+
+		log.Info("request started")
+		defer log.WithFields(logrus.Fields{
+			"status":   rp.statusCode,
+			"duration": time.Since(startTime),
+		}).Infof("request completed: %d", rp.statusCode)
+
+		f(ctx, rp, r)
+	}
 }
