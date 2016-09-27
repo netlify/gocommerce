@@ -31,6 +31,10 @@ type Transaction struct {
 	DeletedAt *time.Time `json:"-"`
 }
 
+func (Transaction) TableName() string {
+	return tableName("transactions")
+}
+
 // NewTransaction returns a new transaction for an order
 func NewTransaction(order *Order) *Transaction {
 	return &Transaction{

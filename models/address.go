@@ -23,6 +23,10 @@ type Address struct {
 	DeletedAt *time.Time `json:"deleted_at"`
 }
 
+func (Address) TableName() string {
+	return tableName("addresses")
+}
+
 func (a *Address) Valid() bool {
 	if a.LastName == "" {
 		return false

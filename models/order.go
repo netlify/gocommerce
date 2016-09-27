@@ -12,6 +12,13 @@ import (
 const PendingState = "pending"
 const PaidState = "paid"
 
+// NUMBER|STRING|BOOL are the different types supported in custom data for orders
+const (
+	NUMBER = iota
+	STRING
+	BOOL
+)
+
 type Order struct {
 	ID string `json:"id"`
 
@@ -44,22 +51,19 @@ type Order struct {
 
 	VATNumber string `json:"vatnumber"`
 
-	Data []Data `json:"-"`
+	Data []OrderData `json:"-"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"-",sql:"index"`
 }
 
-// NUMBER|STRING|BOOL are the different types supported in custom data for orders
-const (
-	NUMBER = iota
-	STRING
-	BOOL
-)
+func (Order) TableName() string {
+	return tableName("orders")
+}
 
-// Data is the custom data on an Order
-type Data struct {
+// OrderData is the custom data on an Order
+type OrderData struct {
 	OrderID string `gorm:"primary_key"`
 	Key     string `gorm:"primary_key"`
 
@@ -70,8 +74,12 @@ type Data struct {
 	BoolValue    bool
 }
 
+func (OrderData) TableName() string {
+	return tableName("orders_data")
+}
+
 // Value returns the value of the data field
-func (d *Data) Value() interface{} {
+func (d *OrderData) Value() interface{} {
 	switch d.Type {
 	case STRING:
 		return d.StringValue
@@ -93,7 +101,7 @@ func (i *InvalidDataType) Error() string {
 	return "Invalid datatype for data field " + i.Key + " only strings, numbers and bools allowed"
 }
 
-func orderDataToMap(data []Data) map[string]interface{} {
+func orderDataToMap(data []OrderData) map[string]interface{} {
 	result := map[string]interface{}{}
 	for _, field := range data {
 		switch field.Type {
@@ -136,7 +144,7 @@ func NewOrder(sessionID, email, currency string) *Order {
 // UpdateOrderData updates all user data from a map of updates
 func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) error {
 	for key, value := range *updates {
-		data := &Data{}
+		data := &OrderData{}
 		result := tx.First(data, "order_id = ? and key = ?", o.ID, key)
 		data.OrderID = o.ID
 		data.Key = key

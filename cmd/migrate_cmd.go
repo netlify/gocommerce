@@ -21,11 +21,7 @@ func migrate(config *conf.Configuration) {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
 
-	db.AutoMigrate(models.Address{})
-	db.AutoMigrate(models.LineItem{})
-	db.AutoMigrate(models.Order{})
-	db.AutoMigrate(models.OrderNote{})
-	db.AutoMigrate(models.SiteSettings{})
-	db.AutoMigrate(models.Transaction{})
-	db.AutoMigrate(models.User{})
+	if err := models.AutoMigrate(db); err != nil {
+		logrus.Fatalf("Error migrating tables: %+v", err)
+	}
 }

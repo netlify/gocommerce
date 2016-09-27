@@ -19,8 +19,10 @@ type Configuration struct {
 	} `mapstructure:"jwt" json:"jwt"`
 
 	DB struct {
-		Driver  string `mapstructure:"driver" json:"driver"`
-		ConnURL string `mapstructure:"url" json:"url"`
+		Driver      string `mapstructure:"driver" json:"driver"`
+		ConnURL     string `mapstructure:"url" json:"url"`
+		Namespace   string `mapstructure:"namespace" json:"namespace"`
+		Automigrate bool   `mapstructure:"automigrate" json:"automigrate"`
 	}
 
 	API struct {
@@ -86,6 +88,9 @@ func handleNested(config *Configuration) (*Configuration, error) {
 
 	config.DB.Driver = viper.GetString("db.driver")
 	config.DB.ConnURL = viper.GetString("db.url")
+	config.DB.Namespace = viper.GetString("db.namespace")
+	config.DB.Automigrate = viper.GetBool("db.automigrate")
+
 	if config.DB.ConnURL == "" && os.Getenv("DATABASE_URL") != "" {
 		config.DB.ConnURL = os.Getenv("DATABASE_URL")
 	}

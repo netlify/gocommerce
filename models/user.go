@@ -10,3 +10,7 @@ type User struct {
 	UpdatedAt time.Time
 	DeletedAt *time.Time
 }
+
+func (User) TableName() string {
+	return tableName("users")
+}
