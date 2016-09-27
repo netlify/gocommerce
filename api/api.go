@@ -109,13 +109,13 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	mux.Use("/", api.withToken)
 
 	// endpoints
-	mux.Get("/", api.Index)
-	mux.Get("/orders", api.OrderList)
-	mux.Post("/orders", api.OrderCreate)
-	mux.Get("/orders/:id", api.OrderView)
-	mux.Get("/orders/:order_id/payments", api.PaymentList)
-	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
-	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
+	mux.Get("/", api.trace(api.Index))
+	mux.Get("/orders", api.trace(api.OrderList))
+	mux.Post("/orders", api.trace(api.OrderCreate))
+	mux.Get("/orders/:id", api.trace(api.OrderView))
+	mux.Get("/orders/:order_id/payments", api.trace(api.PaymentList))
+	mux.Post("/orders/:order_id/payments", api.trace(api.PaymentCreate))
+	mux.Get("/vatnumbers/:number", api.trace(api.VatnumberLookup))
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
