@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/models"
 )
 
 // rootCmd will run the log streamer
@@ -32,6 +33,10 @@ func execWithConfig(cmd *cobra.Command, fn func(config *conf.Configuration)) {
 	config, err := conf.Load(configFile)
 	if err != nil {
 		logrus.Fatalf("Failed to load configration: %+v", err)
+	}
+
+	if config.DB.Namespace != "" {
+		models.Namespace = config.DB.Namespace
 	}
 
 	fn(config)

@@ -24,6 +24,10 @@ type LineItem struct {
 	DeletedAt *time.Time `json:"-"`
 }
 
+func (LineItem) TableName() string {
+	return tableName("line_items")
+}
+
 type PriceMetadata struct {
 	Amount   string `json:"amount"`
 	Currency string `json:"currency"`

@@ -13,3 +13,7 @@ type OrderNote struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"-"`
 }
+
+func (OrderNote) TableName() string {
+	return tableName("orders_notes")
+}
