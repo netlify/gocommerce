@@ -21,13 +21,13 @@ func populateConfig(config *Configuration) (*Configuration, error) {
 
 func recursivelySet(val reflect.Value, prefix string) error {
 	if val.Kind() != reflect.Ptr {
-		return errors.New("WTF")
+		return errors.New("Must pass a pointer")
 	}
 
 	// dereference
 	val = reflect.Indirect(val)
 	if val.Kind() != reflect.Struct {
-		return errors.New("FML")
+		return errors.New("must be a reference to a struct")
 	}
 
 	// grab the type for this instance
@@ -41,7 +41,10 @@ func recursivelySet(val reflect.Value, prefix string) error {
 
 		switch thisField.Kind() {
 		case reflect.Struct:
-			recursivelySet(thisField.Addr(), tag+".")
+			err := recursivelySet(thisField.Addr(), tag+".")
+			if err != nil {
+				return err
+			}
 		case reflect.Int:
 			fallthrough
 		case reflect.Int32:
@@ -50,6 +53,9 @@ func recursivelySet(val reflect.Value, prefix string) error {
 			// you can only set with an int64 -> int
 			configVal := int64(viper.GetInt(tag))
 			thisField.SetInt(configVal)
+		case reflect.Bool:
+			configVal := viper.GetBool(tag)
+			thisField.SetBool(configVal)
 		case reflect.String:
 			configVal := viper.GetString(tag)
 			thisField.SetString(configVal)
