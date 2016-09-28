@@ -2,12 +2,7 @@ package models
 
 import "time"
 
-type Address struct {
-	ID string `json:"id"`
-
-	User   *User  `json:"-"`
-	UserID string `json:"-"`
-
+type AddressRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 
@@ -18,6 +13,15 @@ type Address struct {
 	Country  string `json:"country"`
 	State    string `json:"state"`
 	Zip      string `json:"zip"`
+}
+
+type Address struct {
+	AddressRequest
+
+	ID string `json:"id"`
+
+	User   *User  `json:"-"`
+	UserID string `json:"-"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	DeletedAt *time.Time `json:"deleted_at"`

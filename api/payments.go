@@ -26,7 +26,7 @@ type PaymentParams struct {
 func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	token := getToken(ctx)
 	if token == nil {
-		UnauthorizedError(w, "Listing payments requires authentication")
+		unauthorizedError(w, "Listing payments requires authentication")
 		return
 	}
 
@@ -34,9 +34,9 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 	order := &models.Order{}
 	if result := a.db.Preload("Transactions").First(order, "id = ?", orderID); result.Error != nil {
 		if result.RecordNotFound() {
-			NotFoundError(w, "Order not found")
+			notFoundError(w, "Order not found")
 		} else {
-			InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		}
 	}
 
@@ -49,12 +49,12 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
-		BadRequestError(w, fmt.Sprintf("Could not read params: %v", err))
+		badRequestError(w, fmt.Sprintf("Could not read params: %v", err))
 		return
 	}
 
 	if params.StripeToken == "" {
-		BadRequestError(w, "Payments requires a stripe_token")
+		badRequestError(w, "Payments requires a stripe_token")
 		return
 	}
 
@@ -65,22 +65,22 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	if result := tx.Preload("LineItems").Preload("BillingAddress").First(order, "id = ?", orderID); result.Error != nil {
 		tx.Rollback()
 		if result.RecordNotFound() {
-			NotFoundError(w, "No order with this ID found")
+			notFoundError(w, "No order with this ID found")
 		} else {
-			InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		}
 		return
 	}
 
 	if order.PaymentState == models.PaidState {
 		tx.Rollback()
-		BadRequestError(w, "This order has already been paid")
+		badRequestError(w, "This order has already been paid")
 		return
 	}
 
 	if order.Currency != params.Currency {
 		tx.Rollback()
-		BadRequestError(w, fmt.Sprintf("Currencies doesn't match - %v vs %v", order.Currency, params.Currency))
+		badRequestError(w, fmt.Sprintf("Currencies doesn't match - %v vs %v", order.Currency, params.Currency))
 		return
 	}
 
@@ -94,13 +94,13 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	} else {
 		if token == nil {
 			tx.Rollback()
-			UnauthorizedError(w, "You must be logged in to pay for this order")
+			unauthorizedError(w, "You must be logged in to pay for this order")
 			return
 		}
 		claims := token.Claims.(*JWTClaims)
 		if order.UserID != claims.ID {
 			tx.Rollback()
-			UnauthorizedError(w, "You must be logged in to pay for this order")
+			unauthorizedError(w, "You must be logged in to pay for this order")
 			return
 		}
 	}
@@ -108,7 +108,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
-		InternalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
+		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
 		return
 	}
 
@@ -132,7 +132,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 	if err != nil {
 		tx.Commit()
-		InternalServerError(w, fmt.Sprintf("There was an error charging your card: %v", err))
+		internalServerError(w, fmt.Sprintf("There was an error charging your card: %v", err))
 		return
 	}
 
