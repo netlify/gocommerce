@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"fmt"
-	"net"
 	"net/http"
 	"regexp"
 	"time"
@@ -12,10 +11,12 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/mailer"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
+	"github.com/zenazn/goji/web/mutil"
+
+	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/mailer"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -23,27 +24,11 @@ var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 // API is the main REST API
 type API struct {
 	handler    http.Handler
-	listener   net.Listener
-	port       int
 	db         *gorm.DB
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
 	log        *logrus.Entry
-}
-
-type ResponseProxy struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rp ResponseProxy) WriteHeader(status int) {
-	rp.setStatusCode(status)
-	rp.ResponseWriter.WriteHeader(status)
-}
-
-func (rp *ResponseProxy) setStatusCode(code int) {
-	rp.statusCode = code
 }
 
 type JWTClaims struct {
@@ -54,51 +39,54 @@ type JWTClaims struct {
 }
 
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	log := getLogger(ctx)
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
+		log.Info("Making unauthenticated request")
 		return ctx
 	}
 
 	matches := bearerRegexp.FindStringSubmatch(authHeader)
 	if len(matches) != 2 {
+		log.Info("Invalid auth header format: " + authHeader)
 		UnauthorizedError(w, "Bad authentication header")
 		return nil
 	}
 
 	token, err := jwt.ParseWithClaims(matches[1], &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Header["alg"] != "HS256" {
+		if token.Header["alg"] != jwt.SigningMethodHS256.Name {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(getConfig(ctx).JWT.Secret), nil
 	})
 	if err != nil {
-		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
-		return nil
-	}
-	claims := token.Claims.(*JWTClaims)
-	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-		UnauthorizedError(w, fmt.Sprintf("Expired token: %v", err))
+		log.Infof("Invalid token: %v", err)
+		UnauthorizedError(w, "Invalid token")
 		return nil
 	}
 
-	return context.WithValue(ctx, "jwt", token)
+	claims := token.Claims.(*JWTClaims)
+	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
+		msg := fmt.Sprintf("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
+		log.Info(msg)
+		UnauthorizedError(w, msg)
+		return nil
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"claims_id":     claims.ID,
+		"claims_email":  claims.Email,
+		"claims_groups": claims.Groups,
+	})
+	log.Info("successfully parsed claims")
+	ctx = withLogger(ctx, log)
+
+	return withToken(ctx, token)
 }
 
 // ListenAndServe starts the REST API
 func (a *API) ListenAndServe(hostAndPort string) error {
-	var err error
-	a.listener, err = net.Listen("tcp", hostAndPort)
-	if err != nil {
-		return err
-	}
-
-	a.port = a.listener.Addr().(*net.TCPAddr).Port
-	return http.Serve(a.listener, a.handler)
-}
-
-// Shutdown does what it sounds like
-func (a *API) Shutdown() {
-	a.listener.Close()
+	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
 // NewAPI instantiates a new REST API
@@ -106,16 +94,18 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
 
 	mux := kami.New()
+	mux.Use("/", api.populateContext)
 	mux.Use("/", api.withToken)
+	mux.LogHandler = api.logCompleted
 
 	// endpoints
-	mux.Get("/", api.trace(api.Index))
-	mux.Get("/orders", api.trace(api.OrderList))
-	mux.Post("/orders", api.trace(api.OrderCreate))
-	mux.Get("/orders/:id", api.trace(api.OrderView))
-	mux.Get("/orders/:order_id/payments", api.trace(api.PaymentList))
-	mux.Post("/orders/:order_id/payments", api.trace(api.PaymentCreate))
-	mux.Get("/vatnumbers/:number", api.trace(api.VatnumberLookup))
+	mux.Get("/", api.Index)
+	mux.Get("/orders", api.OrderList)
+	mux.Post("/orders", api.OrderCreate)
+	mux.Get("/orders/:id", api.OrderView)
+	mux.Get("/orders/:order_id/payments", api.PaymentList)
+	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
+	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
@@ -127,39 +117,31 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	return api
 }
 
-func (a *API) trace(f func(context.Context, http.ResponseWriter, *http.Request)) func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	return func(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-		id := uuid.NewRandom().String()
-		log := a.log.WithField("request_id", id)
+func (a *API) logCompleted(ctx context.Context, wp mutil.WriterProxy, r *http.Request) {
+	log := getLogger(ctx).WithField("status", wp.Status())
 
-		log = log.WithFields(logrus.Fields{
-			"method": r.Method,
-			"path":   r.URL.Path,
-		})
-
-		// optionally add the user id stuff
-		claims := getClaims(ctx)
-		if claims != nil {
-			log = log.WithFields(logrus.Fields{
-				"claim_id":     claims.ID,
-				"claim_groups": claims.Groups,
-				"claim_email":  claims.Email,
-			})
-		}
-
-		ctx = withRequestID(ctx, id)
-		ctx = withLogger(ctx, log)
-		ctx = withConfig(ctx, a.config)
-
-		rp := ResponseProxy{ResponseWriter: w}
-		startTime := time.Now()
-
-		log.Info("request started")
-		defer log.WithFields(logrus.Fields{
-			"status":   rp.statusCode,
-			"duration": time.Since(startTime),
-		}).Infof("request completed: %d", rp.statusCode)
-
-		f(ctx, rp, r)
+	start := getStartTime(ctx)
+	if start != nil {
+		log = log.WithField("duration", time.Since(*start))
 	}
+
+	log.Infof("Completed request %s. path: %s, method: %s, status: %d", getRequestID(ctx), r.URL.Path, r.Method, wp.Status())
+}
+
+func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	id := uuid.NewRandom().String()
+	log := a.log.WithField("request_id", id)
+
+	log = log.WithFields(logrus.Fields{
+		"method": r.Method,
+		"path":   r.URL.Path,
+	})
+
+	ctx = withRequestID(ctx, id)
+	ctx = withLogger(ctx, log)
+	ctx = withConfig(ctx, a.config)
+	ctx = withStartTime(ctx, time.Now())
+
+	log.Info("request started")
+	return ctx
 }

@@ -1,6 +1,8 @@
 package api
 
 import (
+	"time"
+
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/net/context"
@@ -9,30 +11,35 @@ import (
 )
 
 const (
-	TokenKey     = "jwt"
-	ConfigKey    = "config"
-	LoggerKey    = "logger"
-	RequestIDKey = "request_id"
+	tokenKey     = "jwt"
+	configKey    = "config"
+	loggerKey    = "logger"
+	requestIDKey = "request_id"
+	startKey     = "request_start_time"
 )
 
+func withStartTime(ctx context.Context, when time.Time) context.Context {
+	return context.WithValue(ctx, startKey, &when)
+}
+
 func withLogger(ctx context.Context, l *logrus.Entry) context.Context {
-	return context.WithValue(ctx, LoggerKey, l)
+	return context.WithValue(ctx, loggerKey, l)
 }
 
 func withConfig(ctx context.Context, config *conf.Configuration) context.Context {
-	return context.WithValue(ctx, ConfigKey, config)
+	return context.WithValue(ctx, configKey, config)
 }
 
 func withToken(ctx context.Context, token *jwt.Token) context.Context {
-	return context.WithValue(ctx, TokenKey, token)
+	return context.WithValue(ctx, tokenKey, token)
 }
 
 func withRequestID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, RequestIDKey, id)
+	return context.WithValue(ctx, requestIDKey, id)
 }
 
 func getRequestID(ctx context.Context) string {
-	obj := ctx.Value(RequestIDKey)
+	obj := ctx.Value(requestIDKey)
 	if obj == nil {
 		return ""
 	}
@@ -40,8 +47,17 @@ func getRequestID(ctx context.Context) string {
 	return obj.(string)
 }
 
+func getStartTime(ctx context.Context) *time.Time {
+	obj := ctx.Value(startKey)
+	if obj == nil {
+		return nil
+	}
+
+	return obj.(*time.Time)
+}
+
 func getConfig(ctx context.Context) *conf.Configuration {
-	obj := ctx.Value(ConfigKey)
+	obj := ctx.Value(configKey)
 	if obj == nil {
 		return nil
 	}
@@ -50,7 +66,7 @@ func getConfig(ctx context.Context) *conf.Configuration {
 }
 
 func getToken(ctx context.Context) *jwt.Token {
-	obj := ctx.Value(TokenKey)
+	obj := ctx.Value(tokenKey)
 	if obj == nil {
 		return nil
 	}
@@ -66,7 +82,7 @@ func getClaims(ctx context.Context) *JWTClaims {
 	return token.Claims.(*JWTClaims)
 }
 
-func IsAdmin(ctx context.Context) bool {
+func isAdmin(ctx context.Context) bool {
 	claims := getClaims(ctx)
 	if claims == nil {
 		return false
@@ -87,7 +103,7 @@ func IsAdmin(ctx context.Context) bool {
 }
 
 func getLogger(ctx context.Context) *logrus.Entry {
-	obj := ctx.Value(LoggerKey)
+	obj := ctx.Value(loggerKey)
 	if obj == nil {
 		return logrus.NewEntry(logrus.StandardLogger())
 	}
