@@ -11,10 +11,12 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/mailer"
+	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 	"github.com/zenazn/goji/web/mutil"
+
+	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/netlify-commerce/mailer"
 )
 
 var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
@@ -26,47 +28,60 @@ type API struct {
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
+	log        *logrus.Entry
 }
 
 type JWTClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	ID     string   `json:"id"`
+	Email  string   `json:"email"`
+	Groups []string `json:"groups"`
 	*jwt.StandardClaims
 }
 
-func (a *API) withConfig(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	return context.WithValue(ctx, "config", a.config)
-}
-
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	log := getLogger(ctx)
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
+		log.Info("Making unauthenticated request")
 		return ctx
 	}
 
 	matches := bearerRegexp.FindStringSubmatch(authHeader)
 	if len(matches) != 2 {
+		log.Info("Invalid auth header format: " + authHeader)
 		UnauthorizedError(w, "Bad authentication header")
 		return nil
 	}
 
 	token, err := jwt.ParseWithClaims(matches[1], &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Header["alg"] != "HS256" {
+		if token.Header["alg"] != jwt.SigningMethodHS256.Name {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(getConfig(ctx).JWT.Secret), nil
 	})
 	if err != nil {
-		UnauthorizedError(w, fmt.Sprintf("Invalid token: %v", err))
-		return nil
-	}
-	claims := token.Claims.(*JWTClaims)
-	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-		UnauthorizedError(w, fmt.Sprintf("Expired token: %v", err))
+		log.Infof("Invalid token: %v", err)
+		UnauthorizedError(w, "Invalid token")
 		return nil
 	}
 
-	return context.WithValue(ctx, "jwt", token)
+	claims := token.Claims.(*JWTClaims)
+	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
+		msg := fmt.Sprintf("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
+		log.Info(msg)
+		UnauthorizedError(w, msg)
+		return nil
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"claims_id":     claims.ID,
+		"claims_email":  claims.Email,
+		"claims_groups": claims.Groups,
+	})
+	log.Info("successfully parsed claims")
+	ctx = withLogger(ctx, log)
+
+	return withToken(ctx, token)
 }
 
 // ListenAndServe starts the REST API
@@ -74,29 +89,16 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func timeRequest(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	return context.WithValue(ctx, "_netlify_commerce_timing", time.Now())
-}
-
-func logHandler(ctx context.Context, wp mutil.WriterProxy, req *http.Request) {
-	start := ctx.Value("_netlify_commerce_timing").(time.Time)
-	logrus.WithFields(logrus.Fields{
-		"method":   req.Method,
-		"path":     req.URL.Path,
-		"status":   wp.Status(),
-		"duration": time.Since(start),
-	}).Info("")
-}
-
 // NewAPI instantiates a new REST API
 func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
-	mux := kami.New()
-	mux.LogHandler = logHandler
 
-	mux.Use("/", timeRequest)
-	mux.Use("/", api.withConfig)
+	mux := kami.New()
+	mux.Use("/", api.populateContext)
 	mux.Use("/", api.withToken)
+	mux.LogHandler = api.logCompleted
+
+	// endpoints
 	mux.Get("/", api.Index)
 	mux.Get("/orders", api.OrderList)
 	mux.Post("/orders", api.OrderCreate)
@@ -113,4 +115,33 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	api.handler = corsHandler.Handler(mux)
 	return api
+}
+
+func (a *API) logCompleted(ctx context.Context, wp mutil.WriterProxy, r *http.Request) {
+	log := getLogger(ctx).WithField("status", wp.Status())
+
+	start := getStartTime(ctx)
+	if start != nil {
+		log = log.WithField("duration", time.Since(*start))
+	}
+
+	log.Infof("Completed request %s. path: %s, method: %s, status: %d", getRequestID(ctx), r.URL.Path, r.Method, wp.Status())
+}
+
+func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
+	id := uuid.NewRandom().String()
+	log := a.log.WithField("request_id", id)
+
+	log = log.WithFields(logrus.Fields{
+		"method": r.Method,
+		"path":   r.URL.Path,
+	})
+
+	ctx = withRequestID(ctx, id)
+	ctx = withLogger(ctx, log)
+	ctx = withConfig(ctx, a.config)
+	ctx = withStartTime(ctx, time.Now())
+
+	log.Info("request started")
+	return ctx
 }

@@ -1,12 +1,10 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/netlify/netlify-commerce/conf"
 )
 
 // HTTPError is an error with a message
@@ -20,22 +18,6 @@ func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
 	w.WriteHeader(status)
 	encoder := json.NewEncoder(w)
 	encoder.Encode(obj)
-}
-
-func getToken(ctx context.Context) *jwt.Token {
-	obj := ctx.Value("jwt")
-	if obj == nil {
-		return nil
-	}
-	return obj.(*jwt.Token)
-}
-
-func getConfig(ctx context.Context) *conf.Configuration {
-	obj := ctx.Value("config")
-	if obj == nil {
-		return nil
-	}
-	return obj.(*conf.Configuration)
 }
 
 func userIDFromToken(token *jwt.Token) string {
