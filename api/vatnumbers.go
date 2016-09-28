@@ -14,7 +14,7 @@ func (a *API) VatnumberLookup(ctx context.Context, w http.ResponseWriter, r *htt
 
 	response, err := vat.CheckVAT(number)
 	if err != nil {
-		InternalServerError(w, fmt.Sprintf("Failed to lookup VAT Number: %v", err))
+		internalServerError(w, fmt.Sprintf("Failed to lookup VAT Number: %v", err))
 		return
 	}
 

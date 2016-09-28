@@ -5,10 +5,11 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/netlify/netlify-commerce/conf"
 	"github.com/pkg/errors"
 
 	"github.com/jinzhu/gorm"
+
+	"github.com/netlify/netlify-commerce/conf"
 )
 
 // Namespace puts all tables names under a common
@@ -57,7 +58,6 @@ func AutoMigrate(db *gorm.DB) error {
 		Order{},
 		OrderData{},
 		OrderNote{},
-		SiteSettings{},
 		Transaction{},
 		User{})
 	return db.Error

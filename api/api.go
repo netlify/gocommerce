@@ -49,7 +49,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	matches := bearerRegexp.FindStringSubmatch(authHeader)
 	if len(matches) != 2 {
 		log.Info("Invalid auth header format: " + authHeader)
-		UnauthorizedError(w, "Bad authentication header")
+		unauthorizedError(w, "Bad authentication header")
 		return nil
 	}
 
@@ -61,7 +61,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	})
 	if err != nil {
 		log.Infof("Invalid token: %v", err)
-		UnauthorizedError(w, "Invalid token")
+		unauthorizedError(w, "Invalid token")
 		return nil
 	}
 
@@ -69,7 +69,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
 		msg := fmt.Sprintf("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
 		log.Info(msg)
-		UnauthorizedError(w, msg)
+		unauthorizedError(w, msg)
 		return nil
 	}
 

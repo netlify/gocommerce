@@ -53,27 +53,54 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
+// OrderList can query based on
+//  - orders since        &from=iso8601      - default = 0
+//  - orders before       &to=iso8601        - default = now
+//  - sort asc or desc    &sort=[asc | desc] - default = desc
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	token := getToken(ctx)
-	if token == nil {
-		UnauthorizedError(w, "Order History Requires Authentication")
+	log := getLogger(ctx)
+
+	var err error
+	claims := getClaims(ctx)
+	if claims == nil {
+		unauthorizedError(w, "Order History Requires Authentication")
+		log.Info("request made with no claims")
 		return
 	}
 
-	claims := token.Claims.(*JWTClaims)
+	params := r.URL.Query()
+	query := orderQuery(a.db)
+	query, err = parseOrderParams(query, params)
+	if err != nil {
+		log.WithError(err).Info("Bad query parameters in request")
+		badRequestError(w, "Bad parameters in query: "+err.Error())
+		return
+	}
+
+	// handle the admin info
+	id := claims.ID
+	if values, exists := params["user_id"]; exists {
+		if isAdmin(ctx) {
+			id = values[0]
+			log.WithField("admin_id", claims.ID).Debugf("Making admin request for user %s by %s", id, claims.ID)
+		} else {
+			log.Warnf("Request for user id %s as user %s - but not an admin", values[0], id)
+			badRequestError(w, "Can't request user id if you're not that user, or an admin")
+			return
+		}
+	}
+	query = query.Where("user_id = ?", id)
+	log.WithField("query_user_id", id).Debug("URL parsed and query perpared")
 
 	var orders []models.Order
-	result := a.db.
-		Preload("LineItems").
-		Preload("ShippingAddress").
-		Preload("BillingAddress").
-		Where("user_id = ?", claims.ID).
-		Find(&orders)
+	result := query.Find(&orders)
 	if result.Error != nil {
-		InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+		log.WithError(err).Warn("Error while querying database")
+		internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		return
 	}
 
+	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
 	sendJSON(w, 200, orders)
 }
 
@@ -84,15 +111,15 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	order := &models.Order{}
 	if result := a.db.Preload("LineItems").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
-			NotFoundError(w, "Order not found")
+			notFoundError(w, "Order not found")
 		} else {
-			InternalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		}
 		return
 	}
 
 	if order.UserID != "" && (order.UserID != userIDFromToken(token)) {
-		UnauthorizedError(w, "You don't have access to this order")
+		unauthorizedError(w, "You don't have access to this order")
 		return
 	}
 
@@ -105,7 +132,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
-		BadRequestError(w, fmt.Sprintf("Could not read Order params: %v", err))
+		badRequestError(w, fmt.Sprintf("Could not read Order params: %v", err))
 		return
 	}
 
@@ -132,7 +159,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 	if shippingID == "" {
-		BadRequestError(w, "Shipping Address Required")
+		badRequestError(w, "Shipping Address Required")
 		return
 	}
 	order.ShippingAddressID = shippingID
@@ -152,12 +179,12 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {
 			tx.Rollback()
-			InternalServerError(w, fmt.Sprintf("Error verifying VAT number %v", err))
+			internalServerError(w, fmt.Sprintf("Error verifying VAT number %v", err))
 			return
 		}
 		if !valid {
 			tx.Rollback()
-			BadRequestError(w, fmt.Sprintf("Vat number %v is not valid", order.VATNumber))
+			badRequestError(w, fmt.Sprintf("Vat number %v is not valid", order.VATNumber))
 			return
 		}
 		order.VATNumber = params.VATNumber
@@ -166,7 +193,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if params.Data != nil {
 		if err := order.UpdateOrderData(tx, &params.Data); err != nil {
 			tx.Rollback()
-			BadRequestError(w, fmt.Sprintf("Bad order metadata %v", err))
+			badRequestError(w, fmt.Sprintf("Bad order metadata %v", err))
 			return
 		}
 	}
@@ -300,4 +327,8 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 	}
 
 	return item.Process(order, meta)
+}
+
+func orderQuery(db *gorm.DB) *gorm.DB {
+	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress").Preload("Data")
 }
