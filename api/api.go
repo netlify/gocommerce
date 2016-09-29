@@ -89,6 +89,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	})
 
 	log.Info("successfully parsed claims")
+	ctx = withAdminFlag(ctx, isAdmin)
 	ctx = withLogger(ctx, log)
 
 	return withToken(ctx, token)

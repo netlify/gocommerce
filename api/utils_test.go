@@ -61,12 +61,13 @@ func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	return db, config
 }
 
-func testContext(token *jwt.Token, config *conf.Configuration) context.Context {
+func testContext(token *jwt.Token, config *conf.Configuration, adminFlag bool) context.Context {
 	ctx := context.Background()
 	ctx = withConfig(ctx, config)
 	ctx = withRequestID(ctx, "test-request")
 	ctx = withLogger(ctx, testLogger)
 	ctx = withStartTime(ctx, time.Now())
+	ctx = withAdminFlag(ctx, adminFlag)
 	return withToken(ctx, token)
 }
 
@@ -76,16 +77,11 @@ func testConfig() *conf.Configuration {
 	return config
 }
 
-func testToken(id, email string, groups *[]string) *jwt.Token {
+func testToken(id, email string) *jwt.Token {
 	claims := &JWTClaims{
 		ID:     id,
 		Email:  email,
 		Groups: []string{},
-	}
-	if groups != nil {
-		for _, g := range *groups {
-			claims.Groups = append(claims.Groups, g)
-		}
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return t

@@ -11,10 +11,14 @@ import (
 	"github.com/netlify/netlify-commerce/models"
 )
 
+// ------------------------------------------------------------------------------------------------
+// List by ORDER
+// ------------------------------------------------------------------------------------------------
+
 func TestPaymentsOrderForAllAsOwner(t *testing.T) {
 	db, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, "", nil), config)
+	ctx := testContext(testToken(testUser.ID, ""), config, false)
 	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
@@ -34,8 +38,7 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 	db.Create(anotherTransaction)
 	defer db.Unscoped().Delete(anotherTransaction)
 
-	config.JWT.AdminGroupName = "admin"
-	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
@@ -62,11 +65,11 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
 	db, config := db(t)
 
-	ctx := testContext(nil, config)
+	ctx := testContext(nil, config, false)
+	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
+
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	kami.SetParam(ctx, "order_id", firstOrder.ID)
-
 	NewAPI(config, db, nil).PaymentListForOrder(ctx, w, r)
 
 	// should get a 401 ~ claims are required

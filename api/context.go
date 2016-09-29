@@ -16,6 +16,7 @@ const (
 	loggerKey    = "logger"
 	requestIDKey = "request_id"
 	startKey     = "request_start_time"
+	adminFlagKey = "is_admin"
 )
 
 func withStartTime(ctx context.Context, when time.Time) context.Context {
@@ -82,24 +83,16 @@ func getClaims(ctx context.Context) *JWTClaims {
 	return token.Claims.(*JWTClaims)
 }
 
+func withAdminFlag(ctx context.Context, isAdmin bool) context.Context {
+	return context.WithValue(ctx, adminFlagKey, isAdmin)
+}
+
 func isAdmin(ctx context.Context) bool {
-	claims := getClaims(ctx)
-	if claims == nil {
+	obj := ctx.Value(adminFlagKey)
+	if obj == nil {
 		return false
 	}
-
-	config := getConfig(ctx)
-	if config == nil {
-		return false
-	}
-
-	for _, g := range claims.Groups {
-		if g == config.JWT.AdminGroupName {
-			return true
-		}
-	}
-
-	return false
+	return obj.(bool)
 }
 
 func getLogger(ctx context.Context) *logrus.Entry {
