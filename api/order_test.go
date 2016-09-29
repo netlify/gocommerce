@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/netlify/netlify-commerce/models"
@@ -16,7 +17,6 @@ import (
 // ------------------------------------------------------------------------------------------------
 func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 	db := db(t)
-	assert := assert.New(t)
 
 	config := testConfig()
 	ctx := testContext(testToken(testUser.ID, testUser.Email, nil), config)
@@ -28,7 +28,7 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 
 	orders := []models.Order{}
 	extractPayload(t, 200, recorder, &orders)
-	assert.Equal(2, len(orders))
+	assert.Equal(t, 2, len(orders))
 
 	for _, o := range orders {
 		switch o.ID {
@@ -41,14 +41,13 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
 			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
-			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
+			assert.Fail(t, fmt.Sprintf("unexpected order: %+v\n", o))
 		}
 	}
 }
 
 func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	db := db(t)
-	assert := assert.New(t)
 
 	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
@@ -61,7 +60,7 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	orders := []models.Order{}
 	extractPayload(t, 200, recorder, &orders)
 
-	assert.Equal(2, len(orders))
+	assert.Equal(t, 2, len(orders))
 	for _, o := range orders {
 		switch o.ID {
 		case firstOrder.ID:
@@ -73,14 +72,13 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 			validateAddress(t, secondOrder.BillingAddress, o.BillingAddress)
 			validateAddress(t, secondOrder.ShippingAddress, o.ShippingAddress)
 		default:
-			assert.Fail(fmt.Sprintf("unexpected order: %+v\n", o))
+			assert.Fail(t, fmt.Sprintf("unexpected order: %+v\n", o))
 		}
 	}
 }
 
 func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
 	db := db(t)
-	assert := assert.New(t)
 
 	config := testConfig()
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
@@ -89,13 +87,12 @@ func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(200, recorder.Code)
-	assert.Equal("[]\n", recorder.Body.String())
+	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, "[]\n", recorder.Body.String())
 }
 
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	db := db(t)
-	assert := assert.New(t)
 	config := testConfig()
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
 
@@ -104,12 +101,11 @@ func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 
 	api := NewAPI(config, db, nil)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(400, recorder.Code)
+	assert.Equal(t, 400, recorder.Code)
 	validateError(t, 400, recorder)
 }
 
 func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
-	assert := assert.New(t)
 	config := testConfig()
 	ctx := testContext(nil, config)
 
@@ -118,7 +114,96 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 
 	api := NewAPI(config, nil, nil)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(401, recorder.Code)
+	assert.Equal(t, 401, recorder.Code)
+	validateError(t, 401, recorder)
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// VIEW
+// -------------------------------------------------------------------------------------------------------------------
+
+func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
+	db := db(t)
+	config := testConfig()
+	ctx := testContext(testToken(testUser.ID, "marp@wayneindustries.com", nil), config)
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
+
+	NewAPI(config, db, nil).OrderView(ctx, recorder, req)
+	order := new(models.Order)
+	extractPayload(t, 200, recorder, order)
+	validateOrder(t, firstOrder, order)
+	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
+}
+
+func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
+	db := db(t)
+	config := testConfig()
+	config.JWT.AdminGroupName = "admin"
+	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}), config)
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
+
+	NewAPI(config, db, nil).OrderView(ctx, recorder, req)
+	order := new(models.Order)
+	extractPayload(t, 200, recorder, order)
+	validateOrder(t, firstOrder, order)
+	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
+	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
+}
+
+func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
+	db := db(t)
+	config := testConfig()
+	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
+
+	NewAPI(config, db, nil).OrderView(ctx, recorder, req)
+	assert.Equal(t, 401, recorder.Code)
+	validateError(t, 401, recorder)
+}
+
+func TestOrderQueryForAMissingOrder(t *testing.T) {
+	db := db(t)
+	config := testConfig()
+	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParam(ctx, "id", "does-not-exist")
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real/does-not-exist", nil)
+
+	NewAPI(config, db, nil).OrderView(ctx, recorder, req)
+	validateError(t, 404, recorder)
+}
+
+func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
+	config := testConfig()
+	ctx := testContext(nil, config)
+
+	// have to add it to the context ~ it isn't from the params
+	ctx = kami.SetParam(ctx, "id", "does-not-exist")
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real/does-not-exist", nil)
+
+	// use nil for DB b/c it should *NEVER* be called
+	NewAPI(config, nil, nil).OrderView(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
 
