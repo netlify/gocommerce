@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/jinzhu/gorm"
 	stripe "github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
+
+	"github.com/netlify/netlify-commerce/models"
 )
 
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
@@ -22,24 +25,44 @@ type PaymentParams struct {
 	StripeToken string `json:"stripe_token"`
 }
 
-// PaymentList is the endpoint for listing transactions for an order
-func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	token := getToken(ctx)
-	if token == nil {
-		unauthorizedError(w, "Listing payments requires authentication")
+// PaymentListForOrder is the endpoint for listing transactions for an order. You must be the owner
+// of the order (user_id) or an admin. Listing the payments for an anon order.
+func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log, claims, orderID, httpErr := initEndpoint(ctx, w, "order_id", true)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
 
-	orderID := kami.Param(ctx, "order_id")
-	order := &models.Order{}
-	if result := a.db.Preload("Transactions").First(order, "id = ?", orderID); result.Error != nil {
-		if result.RecordNotFound() {
+	order, rsp := queryForOrder(a.db, orderID)
+	if rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			log.Infof("Failed to find order %s", orderID)
 			notFoundError(w, "Order not found")
 		} else {
-			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			log.WithError(rsp.Error).Warnf("Error while querying for order %s", orderID)
+			internalServerError(w, "Error during database query")
 		}
+		return
 	}
 
+	isAdmin := isAdmin(ctx)
+
+	// now we need to check if you're allowed to look at this order
+	if order.UserID == "" && !isAdmin {
+		// anon order ~ only accessible by an admin
+		log.Warn("Queried for an anonymous order but not as admin")
+		sendJSON(w, 401, unauthorizedError(w, "Anonymous orders must be accessed by admins"))
+		return
+	}
+
+	if order.UserID != claims.ID && !isAdmin {
+		log.Warnf("Attempt to access order as %s, but order.UserID is %s", claims.ID, order.UserID)
+		sendJSON(w, 401, unauthorizedError(w, "Anonymous orders must be accessed by admins"))
+		return
+	}
+
+	log.Debugf("Returning %d transactions", len(order.Transactions))
 	sendJSON(w, 200, order.Transactions)
 }
 
@@ -169,4 +192,22 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 	}
 
 	return nil
+}
+
+func initEndpoint(ctx context.Context, w http.ResponseWriter, paramKey string, authRequired bool) (*logrus.Entry, *JWTClaims, string, *HTTPError) {
+	paramValue := kami.Param(ctx, paramKey)
+	log := getLogger(ctx).WithField(paramKey, paramValue)
+
+	claims := getClaims(ctx)
+	if claims == nil && authRequired {
+		log.Warn("Claims is missing and auth required")
+		return log, nil, paramValue, unauthorizedError(w, "Listing payments requires authentication")
+	}
+
+	return log, claims, paramValue, nil
+}
+
+func queryForOrder(db *gorm.DB, orderID string) (*models.Order, *gorm.DB) {
+	order := &models.Order{}
+	return order, db.Preload("Transactions").First(order, "id = ?", orderID)
 }
