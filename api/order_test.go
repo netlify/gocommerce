@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/guregu/kami"
+	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/netlify/netlify-commerce/models"
@@ -207,6 +208,107 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 	validateError(t, 401, recorder)
 }
 
+// --------------------------------------------------------------------------------------------------------------------
+// Create ~ email logic
+// --------------------------------------------------------------------------------------------------------------------
+func TestOrderSetUserIDLogic_AnonymousUser(t *testing.T) {
+	assert := assert.New(t)
+	simpleOrder := models.NewOrder("session", "params@email.com", "usd")
+	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
+	assert.Nil(err)
+	assert.Equal("params@email.com", simpleOrder.Email)
+}
+
+func TestOrderSetUserIDLogic_AnonymousUserWithNoEmail(t *testing.T) {
+	assert := assert.New(t)
+	simpleOrder := models.NewOrder("session", "", "usd")
+	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
+	if !assert.Error(err) {
+		assert.Equal(400, err.Code)
+	}
+}
+
+func TestOrderSetUserIDLogic_NewUserNoEmailOnRequest(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "", "usd"),
+		testToken("alfred", "alfred@wayne.com", nil).Claims.(*JWTClaims),
+		"alfred@wayne.com",
+		"alfred@wayne.com",
+	)
+}
+
+func TestOrderSetUserIDLogic_NewUserNoEmailOnClaim(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		testToken("alfred", "", nil).Claims.(*JWTClaims),
+		"",
+		"joker@wayne.com",
+	)
+}
+
+func TestOrderSetUserIDLogic_NewUserAllTheEmails(t *testing.T) {
+	validateNewUserEmail(
+		t,
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		testToken("alfred", "alfred@wayne.com", nil).Claims.(*JWTClaims),
+		"alfred@wayne.com",
+		"joker@wayne.com",
+	)
+}
+
+func TestOrderSetUserIDLogic_NewUserNoEmails(t *testing.T) {
+	db := db(t)
+	assert := assert.New(t)
+	simpleOrder := models.NewOrder("session", "", "usd")
+	claims := testToken("alfred", "", nil).Claims.(*JWTClaims)
+	err := setOrderEmail(db, simpleOrder, claims, testLogger)
+	if assert.Error(err) {
+		assert.Equal(400, err.Code)
+	}
+}
+
+func TestOrderSetUserIDLogic_KnownUserClaimsOnRequest(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		db(t),
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		testToken(testUser.ID, "", nil).Claims.(*JWTClaims),
+		"joker@wayne.com",
+	)
+}
+
+func TestOrderSetUserIDLogic_KnownUserClaimsOnClaim(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		db(t),
+		models.NewOrder("session", "", "usd"),
+		testToken(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
+		testUser.Email,
+	)
+}
+
+func TestOrderSetUserIDLogic_KnownUserAllTheEmail(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		db(t),
+		models.NewOrder("session", "joker@wayne.com", "usd"),
+		testToken(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
+		"joker@wayne.com",
+	)
+}
+
+func TestOrderSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
+	validateExistingUserEmail(
+		t,
+		db(t),
+		models.NewOrder("session", "", "usd"),
+		testToken(testUser.ID, "", nil).Claims.(*JWTClaims),
+		testUser.Email,
+	)
+}
+
 // -------------------------------------------------------------------------------------------------------------------
 // HELPERS
 // -------------------------------------------------------------------------------------------------------------------
@@ -283,34 +385,34 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 //	assert.Equal(expected.Quantity, actual.Quantity)
 //}
 
-//func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedUserEmail, expectedOrderEmail string) {
-//	db := db(t)
-//	assert := assert.New(t)
-//	result := db.First(new(models.User), "id = ?", claims.ID)
-//	if !result.RecordNotFound() {
-//		assert.FailNow("Unclean test env -- user exists with ID " + claims.ID)
-//	}
-//
-//	err := setOrderEmail(db, order, claims, testLogger)
-//	if assert.NoError(err) {
-//		user := new(models.User)
-//		result = db.First(user, "id = ?", claims.ID)
-//		assert.False(result.RecordNotFound())
-//		assert.Equal(claims.ID, user.ID)
-//		assert.Equal(claims.ID, order.UserID)
-//		assert.Equal(expectedOrderEmail, order.Email)
-//		assert.Equal(expectedUserEmail, user.Email)
-//
-//		db.Unscoped().Delete(user)
-//		t.Logf("Deleted user %s", claims.ID)
-//	}
-//}
+func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedUserEmail, expectedOrderEmail string) {
+	db := db(t)
+	assert := assert.New(t)
+	result := db.First(new(models.User), "id = ?", claims.ID)
+	if !result.RecordNotFound() {
+		assert.FailNow("Unclean test env -- user exists with ID " + claims.ID)
+	}
 
-//func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, claims *JWTClaims, expectedOrderEmail string) {
-//	assert := assert.New(t)
-//	err := setOrderEmail(db, order, claims, testLogger)
-//	if assert.NoError(err) {
-//		assert.Equal(claims.ID, order.UserID)
-//		assert.Equal(expectedOrderEmail, order.Email)
-//	}
-//}
+	err := setOrderEmail(db, order, claims, testLogger)
+	if assert.NoError(err) {
+		user := new(models.User)
+		result = db.First(user, "id = ?", claims.ID)
+		assert.False(result.RecordNotFound())
+		assert.Equal(claims.ID, user.ID)
+		assert.Equal(claims.ID, order.UserID)
+		assert.Equal(expectedOrderEmail, order.Email)
+		assert.Equal(expectedUserEmail, user.Email)
+
+		db.Unscoped().Delete(user)
+		t.Logf("Deleted user %s", claims.ID)
+	}
+}
+
+func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, claims *JWTClaims, expectedOrderEmail string) {
+	assert := assert.New(t)
+	err := setOrderEmail(db, order, claims, testLogger)
+	if assert.NoError(err) {
+		assert.Equal(claims.ID, order.UserID)
+		assert.Equal(expectedOrderEmail, order.Email)
+	}
+}
