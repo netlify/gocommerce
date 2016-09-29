@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"fmt"
+	"strings"
+	"time"
+)
 
 type AddressRequest struct {
 	FirstName string `json:"first_name"`
@@ -31,15 +35,25 @@ func (Address) TableName() string {
 	return tableName("addresses")
 }
 
-func (a *Address) Valid() bool {
-	if a.LastName == "" {
-		return false
+func (a AddressRequest) Validate() error {
+	required := map[string]string{
+		"last name": a.LastName,
+		"address":   a.Address1,
+		"country":   a.Country,
+		"city":      a.City,
+		"zip":       a.Zip,
 	}
-	if a.Address1 == "" {
-		return false
+
+	missing := []string{}
+	for name, val := range required {
+		if val == "" {
+			missing = append(missing, name)
+		}
 	}
-	if a.Country == "" || a.City == "" || a.Zip == "" {
-		return false
+
+	if len(missing) > 0 {
+		return fmt.Errorf("Required field missing: " + strings.Join(missing, ","))
 	}
-	return true
+
+	return nil
 }

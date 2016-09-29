@@ -143,51 +143,71 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 // OrderCreate endpoint
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := getLogger(ctx)
+
 	params := &OrderParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
-		badRequestError(w, fmt.Sprintf("Could not read Order params: %v", err))
+		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
+		badRequestError(w, "Could not read Order params: %v", err)
 		return
 	}
 
-	token := getToken(ctx)
+	claims := getClaims(ctx)
 
 	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
+	log = log.WithFields(logrus.Fields{
+		"order_id":   order.ID,
+		"session_id": params.SessionID,
+	})
+	ctx = withLogger(ctx, log)
 
+	log.WithFields(logrus.Fields{
+		"email":    params.Email,
+		"currency": params.Currency,
+	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
 
-	user := &models.User{}
-	if httpError := a.setUserIDFromToken(tx, user, order, token); httpError != nil {
+	order.Email = params.Email
+	httpError := setOrderEmail(tx, order, claims, log)
+	if httpError != nil {
+		tx.Rollback()
+		log.WithError(err).Info("Failed to set the order email from the token")
 		sendJSON(w, httpError.Code, err)
 		return
 	}
 
-	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
-		sendJSON(w, httpError.Code, httpError)
-		return
-	}
+	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
-	shippingID, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
-	if httpError != nil {
+	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+		tx.Rollback()
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
-	if shippingID == "" {
+	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
+
+	shipping, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
+	if httpError != nil {
+		tx.Rollback()
+		sendJSON(w, httpError.Code, httpError)
+		return
+	}
+	if shipping == nil {
 		badRequestError(w, "Shipping Address Required")
 		return
 	}
-	order.ShippingAddressID = shippingID
+	order.ShippingAddressID = shipping.ID
 
-	billingID, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
+	billing, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
 	if httpError != nil {
 		sendJSON(w, httpError.Code, httpError)
 		return
 	}
-	if billingID != "" {
-		order.BillingAddressID = billingID
+	if billing != nil {
+		order.BillingAddressID = billing.ID
 	} else {
-		order.BillingAddressID = shippingID
+		order.BillingAddressID = shipping.ID
 	}
 
 	if params.VATNumber != "" {
@@ -216,7 +236,8 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	tx.Create(order)
 	tx.Commit()
 
-	sendJSON(w, 200, order)
+	log.Infof("Successfully created order %s", order.ID)
+	sendJSON(w, 201, order)
 }
 
 func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
@@ -241,6 +262,47 @@ func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.O
 				return &HTTPError{Code: 500, Message: fmt.Sprintf("Token had an invalid ID: %v", result.Error)}
 			}
 		}
+	}
+	return nil
+}
+
+// An order's email is determined by a few things. The rules guiding it are:
+// 1 - if no claims are provided then the one in the params is used (for anon orders)
+// 2 - if claims are provided they must be a valid user id
+// 3 - if that user doesn't exist then a user will be created with the id/email specified.
+//     if the user doesn't have an email, the one from the order is used
+// 4 - if the order doesn't have an email, but the user does, we will use that one
+//
+func setOrderEmail(tx *gorm.DB, order *models.Order, claims *JWTClaims, log *logrus.Entry) *HTTPError {
+	if claims == nil {
+		log.Debug("No claims provided, proceeding as an anon request")
+	} else {
+		if claims.ID == "" {
+			return httpError(400, "Token had an invalid ID: %s", claims.ID)
+		}
+
+		log = log.WithField("user_id", claims.ID)
+		order.UserID = claims.ID
+
+		user := new(models.User)
+		result := tx.First(user, "id = ?", claims.ID)
+		if result.RecordNotFound() {
+			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.ID)
+			user.ID = claims.ID
+			user.Email = claims.Email
+			tx.Create(user)
+		} else if result.Error != nil {
+			log.WithError(result.Error).Warnf("Unexpected error from the db while querying for user id %d", user.ID)
+			return httpError(500, "Token had an invalid ID: %v", result.Error)
+		}
+
+		if order.Email == "" {
+			order.Email = user.Email
+		}
+	}
+
+	if order.Email == "" {
+		return httpError(400, "Either the order parameters or the user must provide an email")
 	}
 	return nil
 }
@@ -287,31 +349,37 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	return nil
 }
 
-func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (string, *HTTPError) {
-	if id != "" {
-		if result := tx.First(address, "id = ?", id); result.Error != nil {
-			tx.Rollback()
-			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
-		}
-		if address.UserID == "" {
-			address.UserID = order.UserID
-			tx.Save(address)
-		} else if order.UserID != address.UserID {
-			tx.Rollback()
-			return "", &HTTPError{Code: 400, Message: fmt.Sprintf("Bad address id: %v", id)}
-		}
-	} else {
-		if address == nil {
-			return "", nil
-		} else if address.Valid() {
-			address.ID = uuid.NewRandom().String()
-			tx.Create(address)
-		} else {
-			tx.Rollback()
-			return "", &HTTPError{Code: 400, Message: "Failed to validate address"}
-		}
+func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (*models.Address, *HTTPError) {
+	if address == nil && id == "" {
+		return nil, nil
 	}
-	return address.ID, nil
+
+	if id != "" {
+		loadedAddress := new(models.Address)
+		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
+			return nil, httpError(400, "Bad address id: %v, %v", id, result.Error)
+		}
+
+		if order.UserID != loadedAddress.UserID {
+			return nil, httpError(400, "Can't update the order to an address that doesn't belong to the user")
+		}
+
+		if loadedAddress.UserID == "" {
+			loadedAddress.UserID = order.UserID
+			tx.Save(loadedAddress)
+		}
+		return loadedAddress, nil
+	}
+
+	// it is a new address we're  making
+	if err := address.Validate(); err != nil {
+		return nil, httpError(400, "Failed to validate address: "+err.Error())
+	}
+
+	// is a valid id that doesn't already belong to a user
+	address.ID = uuid.NewRandom().String()
+	tx.Create(address)
+	return address, nil
 }
 
 func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem) error {
