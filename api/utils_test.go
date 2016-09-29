@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func db(t *testing.T) *gorm.DB {
+func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
 		panic(err)
@@ -58,7 +58,7 @@ func db(t *testing.T) *gorm.DB {
 	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
 	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", testUser.ID)
 
-	return db
+	return db, config
 }
 
 func testContext(token *jwt.Token, config *conf.Configuration) context.Context {

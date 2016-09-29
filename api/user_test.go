@@ -16,8 +16,7 @@ import (
 )
 
 func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("magical-unicorn", "", nil), config)
 
 	recorder := httptest.NewRecorder()
@@ -28,7 +27,7 @@ func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsersWithParams(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -39,7 +38,6 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	}
 	defer db.Unscoped().Delete(&toDie)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 
@@ -55,7 +53,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 }
 
 func TestUsersQueryForAllUsers(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
@@ -63,7 +61,6 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 	db.Create(&toDie)
 	defer db.Unscoped().Delete(&toDie)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
@@ -107,8 +104,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 //}
 
 func TestUsersQueryForUserAsUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
@@ -124,11 +120,10 @@ func TestUsersQueryForUserAsUser(t *testing.T) {
 }
 
 func TestUsersQueryForUserAsStranger(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	config := testConfig()
 	ctx := testContext(testToken("magical-unicorn", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
@@ -138,11 +133,10 @@ func TestUsersQueryForUserAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForUserAsAdmin(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
@@ -155,14 +149,13 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	second := getTestAddress()
 	second.UserID = testUser.ID
 	assert.Nil(t, second.Validate())
 	db.Create(&second)
 	defer db.Unscoped().Delete(&second)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 
@@ -182,8 +175,7 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken(testUser.ID, "", nil), config)
 	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), testUser.ID)
 	assert.Equal(t, 1, len(addrs))
@@ -191,8 +183,7 @@ func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("stranger-danger", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 	recorder := httptest.NewRecorder()
@@ -203,7 +194,7 @@ func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
 }
 
 func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	u := models.User{
 		ID:    "temporary",
 		Email: "junk@junk.com",
@@ -211,15 +202,13 @@ func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
 	db.Create(u)
 	defer db.Unscoped().Delete(u)
 
-	config := testConfig()
 	ctx := testContext(testToken(u.ID, "", nil), config)
 	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), u.ID)
 	assert.Equal(t, 0, len(addrs))
 }
 
 func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("dne", "", nil), config)
 	ctx = kami.SetParam(ctx, "user_id", "dne")
 	recorder := httptest.NewRecorder()
@@ -230,8 +219,7 @@ func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
 }
 
 func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken(testUser.ID, "", nil), config)
 
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
@@ -246,8 +234,7 @@ func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 }
 
 func TestUsersDeleteNonExistentUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", "dne")
@@ -261,7 +248,7 @@ func TestUsersDeleteNonExistentUser(t *testing.T) {
 }
 
 func TestUsersDeleteSingleUser(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
 	dyingAddr := getTestAddress()
 	dyingAddr.UserID = dyingUser.ID
@@ -290,7 +277,6 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 		}
 	}()
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", dyingUser.ID)
@@ -317,12 +303,11 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 }
 
 func TestDeleteUserAddress(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	addr := getTestAddress()
 	addr.UserID = testUser.ID
 	db.Create(addr)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
@@ -340,12 +325,11 @@ func TestDeleteUserAddress(t *testing.T) {
 }
 
 func TestCreateAnAddress(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	addr := getTestAddress()
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
@@ -370,14 +354,13 @@ func TestCreateAnAddress(t *testing.T) {
 }
 
 func TestCreateInvalidAddress(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 	addr := getTestAddress()
 	addr.LastName = "" // required field
 
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", "", &[]string{"admin"}), config)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)

@@ -19,9 +19,8 @@ import (
 // LIST
 // ------------------------------------------------------------------------------------------------
 func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 
-	config := testConfig()
 	ctx := testContext(testToken(testUser.ID, testUser.Email, nil), config)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
@@ -50,9 +49,8 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 }
 
 func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 
-	config := testConfig()
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}), config)
 	recorder := httptest.NewRecorder()
@@ -81,9 +79,8 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 }
 
 func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
-	db := db(t)
+	db, config := db(t)
 
-	config := testConfig()
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
@@ -95,8 +92,7 @@ func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
 }
 
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
 
 	recorder := httptest.NewRecorder()
@@ -126,8 +122,7 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 // -------------------------------------------------------------------------------------------------------------------
 
 func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken(testUser.ID, "marp@wayneindustries.com", nil), config)
 
 	// have to add it to the context ~ it isn't from the params
@@ -145,8 +140,7 @@ func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 }
 
 func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com", &[]string{"admin"}), config)
 
@@ -165,8 +159,7 @@ func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 }
 
 func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
 
 	// have to add it to the context ~ it isn't from the params
@@ -181,8 +174,7 @@ func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 }
 
 func TestOrderQueryForAMissingOrder(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com", nil), config)
 
 	// have to add it to the context ~ it isn't from the params
@@ -261,7 +253,7 @@ func TestOrderSetUserIDLogic_NewUserAllTheEmails(t *testing.T) {
 }
 
 func TestOrderSetUserIDLogic_NewUserNoEmails(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	assert := assert.New(t)
 	simpleOrder := models.NewOrder("session", "", "usd")
 	claims := testToken("alfred", "", nil).Claims.(*JWTClaims)
@@ -272,9 +264,10 @@ func TestOrderSetUserIDLogic_NewUserNoEmails(t *testing.T) {
 }
 
 func TestOrderSetUserIDLogic_KnownUserClaimsOnRequest(t *testing.T) {
+	db, _ := db(t)
 	validateExistingUserEmail(
 		t,
-		db(t),
+		db,
 		models.NewOrder("session", "joker@wayne.com", "usd"),
 		testToken(testUser.ID, "", nil).Claims.(*JWTClaims),
 		"joker@wayne.com",
@@ -282,9 +275,10 @@ func TestOrderSetUserIDLogic_KnownUserClaimsOnRequest(t *testing.T) {
 }
 
 func TestOrderSetUserIDLogic_KnownUserClaimsOnClaim(t *testing.T) {
+	db, _ := db(t)
 	validateExistingUserEmail(
 		t,
-		db(t),
+		db,
 		models.NewOrder("session", "", "usd"),
 		testToken(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
 		testUser.Email,
@@ -292,9 +286,10 @@ func TestOrderSetUserIDLogic_KnownUserClaimsOnClaim(t *testing.T) {
 }
 
 func TestOrderSetUserIDLogic_KnownUserAllTheEmail(t *testing.T) {
+	db, _ := db(t)
 	validateExistingUserEmail(
 		t,
-		db(t),
+		db,
 		models.NewOrder("session", "joker@wayne.com", "usd"),
 		testToken(testUser.ID, testUser.Email, nil).Claims.(*JWTClaims),
 		"joker@wayne.com",
@@ -302,9 +297,10 @@ func TestOrderSetUserIDLogic_KnownUserAllTheEmail(t *testing.T) {
 }
 
 func TestOrderSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
+	db, _ := db(t)
 	validateExistingUserEmail(
 		t,
-		db(t),
+		db,
 		models.NewOrder("session", "", "usd"),
 		testToken(testUser.ID, "", nil).Claims.(*JWTClaims),
 		testUser.Email,
@@ -315,7 +311,7 @@ func TestOrderSetUserIDLogic_KnownUserNoEmail(t *testing.T) {
 // UPDATE
 // --------------------------------------------------------------------------------------------------------------------
 func TestOrderUpdateFields(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Save(firstOrder)
 	assert := assert.New(t)
 
@@ -345,7 +341,7 @@ func TestOrderUpdateFields(t *testing.T) {
 }
 
 func TestOrderUpdateAddress_ExistingAddress(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Save(firstOrder)
 	assert := assert.New(t)
 
@@ -377,7 +373,7 @@ func TestOrderUpdateAddress_ExistingAddress(t *testing.T) {
 }
 
 func TestOrderUpdateAddress_NewAddress(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Save(firstOrder)
 	assert := assert.New(t)
 
@@ -405,7 +401,7 @@ func TestOrderUpdateAddress_NewAddress(t *testing.T) {
 }
 
 func TestOrderUpdatePaymentInfoAfterPaid(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Save(firstOrder)
 	db.Model(firstOrder).Update("payment_state", "paid")
 
@@ -416,7 +412,7 @@ func TestOrderUpdatePaymentInfoAfterPaid(t *testing.T) {
 }
 
 func TestOrderUpdateBillingAddressAfterPaid(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Model(firstOrder).Update("payment_state", "pending")
 	db.Model(firstOrder).Update("payment_state", "paid")
 
@@ -427,7 +423,7 @@ func TestOrderUpdateBillingAddressAfterPaid(t *testing.T) {
 }
 
 func TestOrderUpdateShippingAfterShipped(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Model(firstOrder).Update("fulfillment_state", "pending")
 	db.Model(firstOrder).Update("fulfillment_state", "paid")
 
@@ -438,8 +434,7 @@ func TestOrderUpdateShippingAfterShipped(t *testing.T) {
 }
 
 func TestOrderUpdateAsNonAdmin(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(testToken("villian", "villian@wayneindustries.com", nil), config)
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
@@ -462,8 +457,7 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 }
 
 func TestOrderUpdateWithNoCreds(t *testing.T) {
-	db := db(t)
-	config := testConfig()
+	db, config := db(t)
 	ctx := testContext(nil, config)
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
@@ -486,7 +480,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 }
 
 func TestOrderUpdateWithNewData(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	assert := assert.New(t)
 	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.OrderData{})
 
@@ -523,7 +517,7 @@ func TestOrderUpdateWithNewData(t *testing.T) {
 }
 
 func TestOrderUpdateWithBadData(t *testing.T) {
-	db := db(t)
+	db, _ := db(t)
 	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.OrderData{})
 
 	op := &OrderParams{
@@ -612,7 +606,7 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 //}
 
 func validateNewUserEmail(t *testing.T, order *models.Order, claims *JWTClaims, expectedUserEmail, expectedOrderEmail string) {
-	db := db(t)
+	db, _ := db(t)
 	assert := assert.New(t)
 	result := db.First(new(models.User), "id = ?", claims.ID)
 	if !result.RecordNotFound() {
