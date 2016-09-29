@@ -103,6 +103,7 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	mux.Get("/orders", api.OrderList)
 	mux.Post("/orders", api.OrderCreate)
 	mux.Get("/orders/:id", api.OrderView)
+	mux.Post("/orders/:id", api.OrderUpdate)
 	mux.Get("/orders/:order_id/payments", api.PaymentList)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
