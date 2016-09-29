@@ -44,10 +44,10 @@ type Order struct {
 	Notes        []*OrderNote   `json:"notes"`
 
 	ShippingAddress   Address `json:"shipping_address",gorm:"ForeignKey:ShippingAddressID"`
-	ShippingAddressID string
+	ShippingAddressID string  `json:"shipping_address_id"`
 
 	BillingAddress   Address `json:"billing_address",gorm:"ForeignKey:BillingAddressID"`
-	BillingAddressID string
+	BillingAddressID string  `json:"billing_address_id"`
 
 	VATNumber string `json:"vatnumber"`
 

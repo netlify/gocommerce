@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/Sirupsen/logrus"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
@@ -104,26 +105,40 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	sendJSON(w, 200, orders)
 }
 
+// OrderView will request a specific order using the 'id' parameter.
+// Only the owner of the order, an admin, or an anon order are allowed to be seen
 func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	token := getToken(ctx)
 	id := kami.Param(ctx, "id")
+	log := getLogger(ctx).WithField("order_id", id)
+	claims := getClaims(ctx)
+	if claims == nil {
+		log.Info("Request with no claims made")
+		unauthorizedError(w, "Order History Requires Authentication")
+		return
+	}
 
 	order := &models.Order{}
-	if result := a.db.Preload("LineItems").First(order, "id = ?", id); result.Error != nil {
+	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
+			log.Debug("Requested record that doesn't exist")
 			notFoundError(w, "Order not found")
 		} else {
+			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
 			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		}
 		return
 	}
 
-	if order.UserID != "" && (order.UserID != userIDFromToken(token)) {
+	if order.UserID == "" || (order.UserID == claims.ID) || isAdmin(ctx) {
+		log.Debugf("Successfully got order %s", order.ID)
+		sendJSON(w, 200, order)
+	} else {
+		log.WithFields(logrus.Fields{
+			"user_id":       claims.ID,
+			"order_user_id": order.UserID,
+		}).Warnf("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
 		unauthorizedError(w, "You don't have access to this order")
-		return
 	}
-
-	sendJSON(w, 200, order)
 }
 
 // OrderCreate endpoint
