@@ -130,7 +130,7 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
 
 	mux.Get("/payments", api.PaymentList)
-	//mux.Get("/payments/:pay_id", api.PaymentView)
+	mux.Get("/payments/:pay_id", api.PaymentView)
 	//mux.Get("/payments/:pay_id", api.PaymentUpdate)
 
 	corsHandler := cors.New(cors.Options{

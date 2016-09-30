@@ -49,7 +49,16 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
 	assert.Equal(t, 2, len(trans))
-	validateAllTransactions(t, trans)
+	for _, tran := range trans {
+		switch tran.ID {
+		case anotherTransaction.ID:
+			validateTransaction(t, anotherTransaction, &tran)
+		case firstTransaction.ID:
+			validateTransaction(t, firstTransaction, &tran)
+		default:
+			assert.Fail(t, "Unknown transaction: "+tran.ID)
+		}
+	}
 }
 
 func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
@@ -165,13 +174,33 @@ func TestPaymentsListNoParams(t *testing.T) {
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something?processor_id=stripe", nil)
+	r, _ := http.NewRequest("GET", "http://something", nil)
 	NewAPI(config, db, nil).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
 
 	validateAllTransactions(t, trans)
+}
+
+func TestPaymentsViewAsStranger(t *testing.T) {
+}
+func TestPaymentsView(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentsView(ctx, w, r)
+
+	trans := new(models.Transaction)
+	extractPayload(t, 200, w, trans)
+
+	validateTransaction(t, firstTransaction, trans)
+}
+func TestPaymentsViewMissingPayment(t *testing.T) {
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -198,8 +227,8 @@ func validateAllTransactions(t *testing.T, trans []models.Transaction) {
 	assert.Equal(t, 2, len(trans))
 	for _, tran := range trans {
 		switch tran.ID {
-		case anotherTransaction.ID:
-			validateTransaction(t, anotherTransaction, &tran)
+		case secondTransaction.ID:
+			validateTransaction(t, secondTransaction, &tran)
 		case firstTransaction.ID:
 			validateTransaction(t, firstTransaction, &tran)
 		default:

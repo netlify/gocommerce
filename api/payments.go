@@ -188,14 +188,9 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins
 func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log, _, _, httpErr := initEndpoint(ctx, w, "", true)
+	log, _, httpErr := requireAdmin(ctx, w, "")
 	if httpErr != nil {
 		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	if !isAdmin(ctx) {
-		log.Warn("Illegal access attempt")
-		unauthorizedError(w, "Can only access payments as admin")
 		return
 	}
 
@@ -214,9 +209,45 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, 200, trans)
 }
 
+func (a *API) PaymentsView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log, payID, httpErr := requireAdmin(ctx, w, "pay_id")
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	trans, httpErr := queryForTransactions(a.db, log, "id = ?", payID)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	if len(trans) == 0 {
+		notFoundError(w, "Failed to find a transaction for ID: %s", payID)
+	} else {
+		sendJSON(w, 200, trans[0])
+	}
+}
+
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
+func requireAdmin(ctx context.Context, w http.ResponseWriter, paramKey string) (*logrus.Entry, string, *HTTPError) {
+	log := getLogger(ctx)
+	paramValue := ""
+	if paramKey != "" {
+		paramValue = kami.Param(ctx, paramKey)
+		log = log.WithField(paramKey, paramValue)
+	}
+
+	if !isAdmin(ctx) {
+		log.Warn("Illegal access attempt")
+		return nil, paramValue, unauthorizedError(w, "Can only access payments as admin")
+	}
+
+	return log, paramValue, nil
+}
+
 func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint64) error {
 	config := getConfig(ctx)
 
