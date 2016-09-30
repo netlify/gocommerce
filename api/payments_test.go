@@ -49,17 +49,7 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
 	assert.Equal(t, 2, len(trans))
-
-	for _, tran := range trans {
-		switch tran.ID {
-		case anotherTransaction.ID:
-			validateTransaction(t, anotherTransaction, &tran)
-		case firstTransaction.ID:
-			validateTransaction(t, firstTransaction, &tran)
-		default:
-			assert.Fail(t, "Unknown transaction: "+tran.ID)
-		}
-	}
+	validateAllTransactions(t, trans)
 }
 
 func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
@@ -91,16 +81,7 @@ func TestPaymentsUserForAllAsUser(t *testing.T) {
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
-	assert.Equal(t, 2, len(actual))
-
-	for _, tran := range actual {
-		switch tran.ID {
-		case firstTransaction.ID:
-			validateTransaction(t, firstTransaction, &tran)
-		case secondTransaction.ID:
-			validateTransaction(t, secondTransaction, &tran)
-		}
-	}
+	validateAllTransactions(t, actual)
 }
 
 func TestPaymentsUserForAllAsAdmin(t *testing.T) {
@@ -115,16 +96,8 @@ func TestPaymentsUserForAllAsAdmin(t *testing.T) {
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
-	assert.Equal(t, 2, len(actual))
 
-	for _, tran := range actual {
-		switch tran.ID {
-		case firstTransaction.ID:
-			validateTransaction(t, firstTransaction, &tran)
-		case secondTransaction.ID:
-			validateTransaction(t, secondTransaction, &tran)
-		}
-	}
+	validateAllTransactions(t, actual)
 }
 
 func TestPaymentsUserForAllAsAnon(t *testing.T) {
@@ -156,6 +129,52 @@ func TestPaymentsUserForAllAsStranger(t *testing.T) {
 }
 
 // ------------------------------------------------------------------------------------------------
+// List with params
+// ------------------------------------------------------------------------------------------------
+func TestPaymentsListAllAsNonAdmin(t *testing.T) {
+	config := testConfig()
+	ctx := testContext(testToken("stranger-danger", ""), config, false)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, nil, nil).PaymentList(ctx, w, r)
+
+	// should get a 401 ~ not the right user
+	validateError(t, 401, w)
+}
+
+func TestPaymentsListWithParams(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something?processor_id=stripe", nil)
+	NewAPI(config, db, nil).PaymentList(ctx, w, r)
+
+	trans := []models.Transaction{}
+	extractPayload(t, 200, w, &trans)
+
+	assert.Equal(t, 1, len(trans))
+	validateTransaction(t, firstTransaction, &trans[0])
+}
+
+func TestPaymentsListNoParams(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something?processor_id=stripe", nil)
+	NewAPI(config, db, nil).PaymentList(ctx, w, r)
+
+	trans := []models.Transaction{}
+	extractPayload(t, 200, w, &trans)
+
+	validateAllTransactions(t, trans)
+}
+
+// ------------------------------------------------------------------------------------------------
 // Validators
 // ------------------------------------------------------------------------------------------------
 func validateTransaction(t *testing.T, expected *models.Transaction, actual *models.Transaction) {
@@ -173,4 +192,18 @@ func validateTransaction(t *testing.T, expected *models.Transaction, actual *mod
 	assert.Equal(expected.Status, actual.Status)
 	assert.Equal(expected.Type, actual.Type)
 	assert.Equal(expected.CreatedAt.UTC(), actual.CreatedAt.UTC())
+}
+
+func validateAllTransactions(t *testing.T, trans []models.Transaction) {
+	assert.Equal(t, 2, len(trans))
+	for _, tran := range trans {
+		switch tran.ID {
+		case anotherTransaction.ID:
+			validateTransaction(t, anotherTransaction, &tran)
+		case firstTransaction.ID:
+			validateTransaction(t, firstTransaction, &tran)
+		default:
+			assert.Fail(t, "Unknown transaction: "+tran.ID)
+		}
+	}
 }

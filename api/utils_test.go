@@ -123,6 +123,7 @@ func loadTestData(db *gorm.DB) {
 	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
 	firstOrder.UserID = testUser.ID
 	firstTransaction = models.NewTransaction(firstOrder)
+	firstTransaction.ProcessorID = "stripe"
 	firstLineItem = models.LineItem{
 		ID:          11,
 		OrderID:     firstOrder.ID,
