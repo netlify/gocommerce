@@ -42,7 +42,7 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	var users []models.User
 	results := query.Find(&users)
 	if results.Error != nil {
-		log.WithError(results.Error).Warn("Error qhile querying the database")
+		log.WithError(results.Error).Warn("Error while querying the database")
 		internalServerError(w, "Failed to execute request")
 		return
 	}

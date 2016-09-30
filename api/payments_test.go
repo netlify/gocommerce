@@ -77,6 +77,85 @@ func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
 }
 
 // ------------------------------------------------------------------------------------------------
+// List by USER
+// ------------------------------------------------------------------------------------------------
+func TestPaymentsUserForAllAsUser(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken(testUser.ID, ""), config, false)
+	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+
+	actual := []models.Transaction{}
+	extractPayload(t, 200, w, &actual)
+	assert.Equal(t, 2, len(actual))
+
+	for _, tran := range actual {
+		switch tran.ID {
+		case firstTransaction.ID:
+			validateTransaction(t, firstTransaction, &tran)
+		case secondTransaction.ID:
+			validateTransaction(t, secondTransaction, &tran)
+		}
+	}
+}
+
+func TestPaymentsUserForAllAsAdmin(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+
+	actual := []models.Transaction{}
+	extractPayload(t, 200, w, &actual)
+	assert.Equal(t, 2, len(actual))
+
+	for _, tran := range actual {
+		switch tran.ID {
+		case firstTransaction.ID:
+			validateTransaction(t, firstTransaction, &tran)
+		case secondTransaction.ID:
+			validateTransaction(t, secondTransaction, &tran)
+		}
+	}
+}
+
+func TestPaymentsUserForAllAsAnon(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(nil, config, false)
+	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+
+	// should get a 401 ~ claims are required
+	validateError(t, 401, w)
+}
+
+func TestPaymentsUserForAllAsStranger(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("stranger-danger", ""), config, false)
+	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+
+	// should get a 401 ~ not the right user
+	validateError(t, 401, w)
+}
+
+// ------------------------------------------------------------------------------------------------
 // Validators
 // ------------------------------------------------------------------------------------------------
 func validateTransaction(t *testing.T, expected *models.Transaction, actual *models.Transaction) {

@@ -51,7 +51,6 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	db, config := db(t)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
@@ -141,7 +140,6 @@ func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 
 func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 	db, config := db(t)
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
 
 	// have to add it to the context ~ it isn't from the params
@@ -535,7 +533,6 @@ func TestOrderUpdateWithBadData(t *testing.T) {
 
 func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *OrderParams) *httptest.ResponseRecorder {
 	config := testConfig()
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
 	ctx = kami.SetParam(ctx, "id", order.ID)
 

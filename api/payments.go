@@ -25,6 +25,29 @@ type PaymentParams struct {
 	StripeToken string `json:"stripe_token"`
 }
 
+// PaymentListForUser is the endpoint for listing transactions for a user.
+// The ID in the claim and the ID in the path must match (or have admin override)
+func (a *API) PaymentListForUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log, claims, userID, httpErr := initEndpoint(ctx, w, "user_id", true)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	if userID != claims.ID && !isAdmin(ctx) {
+		log.Warn("Illegal access attempt")
+		unauthorizedError(w, "Can't access payments for this user")
+		return
+	}
+
+	trans, httpErr := queryForTransactions(a.db, log, "user_id = ?", userID)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+	sendJSON(w, 200, trans)
+}
+
 // PaymentListForOrder is the endpoint for listing transactions for an order. You must be the owner
 // of the order (user_id) or an admin. Listing the payments for an anon order.
 func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r *http.Request) {
@@ -34,15 +57,9 @@ func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r 
 		return
 	}
 
-	order, rsp := queryForOrder(a.db, orderID)
-	if rsp.Error != nil {
-		if rsp.RecordNotFound() {
-			log.Infof("Failed to find order %s", orderID)
-			notFoundError(w, "Order not found")
-		} else {
-			log.WithError(rsp.Error).Warnf("Error while querying for order %s", orderID)
-			internalServerError(w, "Error during database query")
-		}
+	order, httpErr := queryForOrder(a.db, orderID, log)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
 
@@ -169,6 +186,37 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	sendJSON(w, 200, tr)
 }
 
+// PaymentList will list all the payments that meet the criteria. It is only available to admins
+func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log, _, _, httpErr := initEndpoint(ctx, w, "", true)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+	if !isAdmin(ctx) {
+		log.Warn("Illegal access attempt")
+		unauthorizedError(w, "Can only access payments as admin")
+		return
+	}
+
+	query, err := parsePaymentQueryParams(a.db, r.URL.Query())
+	if err != nil {
+		log.WithError(err).Info("Malformed request")
+		badRequestError(w, err.Error())
+		return
+	}
+
+	trans, httpErr := queryForTransactions(query, log, "", "")
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+	sendJSON(w, 200, trans)
+}
+
+// ------------------------------------------------------------------------------------------------
+// Helpers
+// ------------------------------------------------------------------------------------------------
 func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint64) error {
 	config := getConfig(ctx)
 
@@ -195,8 +243,12 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 }
 
 func initEndpoint(ctx context.Context, w http.ResponseWriter, paramKey string, authRequired bool) (*logrus.Entry, *JWTClaims, string, *HTTPError) {
-	paramValue := kami.Param(ctx, paramKey)
-	log := getLogger(ctx).WithField(paramKey, paramValue)
+	log := getLogger(ctx)
+	paramValue := ""
+	if paramKey != "" {
+		paramValue = kami.Param(ctx, paramKey)
+		log = log.WithField(paramKey, paramValue)
+	}
 
 	claims := getClaims(ctx)
 	if claims == nil && authRequired {
@@ -207,7 +259,31 @@ func initEndpoint(ctx context.Context, w http.ResponseWriter, paramKey string, a
 	return log, claims, paramValue, nil
 }
 
-func queryForOrder(db *gorm.DB, orderID string) (*models.Order, *gorm.DB) {
+func queryForOrder(db *gorm.DB, orderID string, log *logrus.Entry) (*models.Order, *HTTPError) {
 	order := &models.Order{}
-	return order, db.Preload("Transactions").First(order, "id = ?", orderID)
+	if rsp := db.Preload("Transactions").Find(order, "id = ?", orderID); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			log.Infof("Failed to find order %s", orderID)
+			return nil, httpError(404, "Order not found")
+		}
+
+		log.WithError(rsp.Error).Warnf("Error while querying for order %s", orderID)
+		return nil, httpError(500, "Error while querying for order")
+	}
+	return order, nil
+}
+
+func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]models.Transaction, *HTTPError) {
+	trans := []models.Transaction{}
+	if rsp := db.Find(&trans, clause, id); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			log.Infof("Failed to find transactions that meet criteria '%s' '%s'", clause, id)
+			return nil, httpError(404, "Transactions not found")
+		}
+
+		log.WithError(rsp.Error).Warnf("Error while querying for transactions '%s' '%s'", clause, id)
+		return nil, httpError(500, "Error while querying for transactions")
+	}
+
+	return trans, nil
 }

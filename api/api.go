@@ -121,6 +121,7 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	mux.Get("/users/", api.UserList)
 	mux.Get("/users/:user_id", api.UserView)
+	mux.Get("/users/:user_id/payments", api.PaymentListForUser)
 	mux.Delete("/users/:user_id", api.UserDelete)
 	mux.Get("/users/:user_id/addresses", api.AddressList)
 	mux.Get("/users/:user_id/addresses/:addr_id", api.AddressView)

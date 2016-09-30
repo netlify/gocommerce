@@ -121,6 +121,7 @@ func loadTestData(db *gorm.DB) {
 	}
 
 	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
+	firstOrder.UserID = testUser.ID
 	firstTransaction = models.NewTransaction(firstOrder)
 	firstLineItem = models.LineItem{
 		ID:          11,
@@ -135,6 +136,7 @@ func loadTestData(db *gorm.DB) {
 	}
 
 	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
+	secondOrder.UserID = testUser.ID
 	secondTransaction = models.NewTransaction(secondOrder)
 	secondLineItem1 = models.LineItem{
 		ID:          21,

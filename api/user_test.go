@@ -38,7 +38,6 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	}
 	defer db.Unscoped().Delete(&toDie)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
 	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
@@ -61,7 +60,6 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 	db.Create(&toDie)
 	defer db.Unscoped().Delete(&toDie)
 
-	config.JWT.AdminGroupName = "admin"
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
@@ -137,7 +135,6 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
@@ -156,7 +153,6 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 	db.Create(&second)
 	defer db.Unscoped().Delete(&second)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
 	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), testUser.ID)
@@ -235,7 +231,6 @@ func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 
 func TestUsersDeleteNonExistentUser(t *testing.T) {
 	db, config := db(t)
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", "dne")
 
@@ -277,7 +272,6 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 		}
 	}()
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", dyingUser.ID)
 
@@ -308,7 +302,6 @@ func TestDeleteUserAddress(t *testing.T) {
 	addr.UserID = testUser.ID
 	db.Create(addr)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 	ctx = kami.SetParam(ctx, "addr_id", addr.ID)
@@ -330,7 +323,6 @@ func TestCreateAnAddress(t *testing.T) {
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
@@ -361,7 +353,6 @@ func TestCreateInvalidAddress(t *testing.T) {
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	config.JWT.AdminGroupName = "admin"
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
