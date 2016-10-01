@@ -183,8 +183,18 @@ func TestPaymentsListNoParams(t *testing.T) {
 	validateAllTransactions(t, trans)
 }
 
-func TestPaymentsViewAsStranger(t *testing.T) {
+func TestPaymentsViewAsNonAdmin(t *testing.T) {
+	config := testConfig()
+	ctx := testContext(testToken("stranger-danger", ""), config, false)
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, nil, nil).PaymentView(ctx, w, r)
+
+	// should get a 401 ~ not the right user
+	validateError(t, 401, w)
 }
+
 func TestPaymentsView(t *testing.T) {
 	db, config := db(t)
 
@@ -193,15 +203,33 @@ func TestPaymentsView(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentsView(ctx, w, r)
+	NewAPI(config, db, nil).PaymentView(ctx, w, r)
 
 	trans := new(models.Transaction)
 	extractPayload(t, 200, w, trans)
 
 	validateTransaction(t, firstTransaction, trans)
 }
+
 func TestPaymentsViewMissingPayment(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", "nonsense")
+
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "http://something", nil)
+	NewAPI(config, db, nil).PaymentView(ctx, w, r)
+
+	validateError(t, 404, w)
 }
+
+// TODO
+func TestPaymentsRefundMismatchedCurrency(t *testing.T)    {}
+func TestPaymentsRefundMissingStripeToken(t *testing.T)    {}
+func TestPaymentsRefundAmountTooHighOrLow(t *testing.T)    {}
+func TestPaymentsRefundFailedTransaction(t *testing.T)     {}
+func TestPaymentsRefundInProgressTransaction(t *testing.T) {}
 
 // ------------------------------------------------------------------------------------------------
 // Validators

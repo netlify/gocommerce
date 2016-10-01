@@ -188,7 +188,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins
 func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log, _, httpErr := requireAdmin(ctx, w, "")
+	log, _, httpErr := requireAdmin(ctx, "")
 	if httpErr != nil {
 		sendJSON(w, httpErr.Code, httpErr)
 		return
@@ -209,30 +209,60 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, 200, trans)
 }
 
-func (a *API) PaymentsView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log, payID, httpErr := requireAdmin(ctx, w, "pay_id")
-	if httpErr != nil {
+func (a *API) PaymentView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	if trans, httpErr := a.getTransaction(ctx); httpErr != nil {
 		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	trans, httpErr := queryForTransactions(a.db, log, "id = ?", payID)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	if len(trans) == 0 {
-		notFoundError(w, "Failed to find a transaction for ID: %s", payID)
 	} else {
-		sendJSON(w, 200, trans[0])
+		sendJSON(w, 200, trans)
 	}
+}
+
+func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	params := &PaymentParams{Currency: "USD"}
+	jsonDecoder := json.NewDecoder(r.Body)
+	err := jsonDecoder.Decode(params)
+	if err != nil {
+		badRequestError(w, "Could not read params: %v", err)
+		return
+	}
+
+	trans, httpErr := a.getTransaction(ctx)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	if trans.Currency != params.Currency {
+		badRequestError(w, "Currencies doesn't match - %v vs %v", trans.Currency, params.Currency)
+		return
+	}
+	_ = trans
 }
 
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
-func requireAdmin(ctx context.Context, w http.ResponseWriter, paramKey string) (*logrus.Entry, string, *HTTPError) {
+func (a *API) getTransaction(ctx context.Context) (*models.Transaction, *HTTPError) {
+	log, payID, httpErr := requireAdmin(ctx, "pay_id")
+	if httpErr != nil {
+		return nil, httpErr
+	}
+
+	trans := &models.Transaction{ID: payID}
+	if rsp := a.db.First(trans); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			log.Infof("Failed to find transaction %s", payID)
+			return nil, httpError(404, "Transaction not found")
+		}
+
+		log.WithError(rsp.Error).Warnf("Error while querying for transaction '%s'", payID)
+		return nil, httpError(500, "Error while querying for transactions")
+	}
+
+	return trans, nil
+}
+
+func requireAdmin(ctx context.Context, paramKey string) (*logrus.Entry, string, *HTTPError) {
 	log := getLogger(ctx)
 	paramValue := ""
 	if paramKey != "" {
@@ -242,7 +272,7 @@ func requireAdmin(ctx context.Context, w http.ResponseWriter, paramKey string) (
 
 	if !isAdmin(ctx) {
 		log.Warn("Illegal access attempt")
-		return nil, paramValue, unauthorizedError(w, "Can only access payments as admin")
+		return nil, paramValue, httpError(401, "Can only access payments as admin")
 	}
 
 	return log, paramValue, nil
