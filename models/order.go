@@ -11,6 +11,7 @@ import (
 
 const PendingState = "pending"
 const PaidState = "paid"
+const FailedState = "failed"
 
 // NumberType | StringType | BoolType are the different types supported in custom data for orders
 const (

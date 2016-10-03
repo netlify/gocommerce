@@ -6,6 +6,9 @@ import (
 	"github.com/pborman/uuid"
 )
 
+const ChargeTransactionType = "charge"
+const RefundTransactionType = "refund"
+
 // Transaction is an transaction with a payment provider
 type Transaction struct {
 	ID      string `json:"id"`
@@ -17,9 +20,8 @@ type Transaction struct {
 	User   *User  `json:"-"`
 	UserID string `json:"user_id"`
 
-	Amount         uint64 `json:"amount"`
-	AmountReversed uint64 `json:"amount_reversed"`
-	Currency       string `json:"currency"`
+	Amount   uint64 `json:"amount"`
+	Currency string `json:"currency"`
 
 	FailureCode        string `json:"failure_code"`
 	FailureDescription string `json:"failure_description"`
@@ -43,7 +45,8 @@ func NewTransaction(order *Order) *Transaction {
 		OrderID:  order.ID,
 		User:     order.User,
 		UserID:   order.UserID,
-		Currency: "USD",
+		Currency: order.Currency,
 		Amount:   order.Total,
+		Type:     ChargeTransactionType,
 	}
 }

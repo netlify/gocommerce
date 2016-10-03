@@ -9,10 +9,12 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	stripe "github.com/stripe/stripe-go"
+	"github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
+	"github.com/stripe/stripe-go/refund"
 
 	"github.com/netlify/netlify-commerce/models"
+	"github.com/pborman/uuid"
 )
 
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
@@ -23,6 +25,11 @@ type PaymentParams struct {
 	Amount      uint64 `json:"amount"`
 	Currency    string `json:"currency"`
 	StripeToken string `json:"stripe_token"`
+}
+
+type paymentProvider interface {
+	charge(amount uint64, currency, token string) (string, error)
+	refund(amount uint64, id string) (string, error)
 }
 
 // PaymentListForUser is the endpoint for listing transactions for a user.
@@ -151,16 +158,10 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
 		return
 	}
+	stripeID, err := getCharger(ctx).charge(params.Amount, params.Currency, params.StripeToken)
 
-	ch, err := charge.New(&stripe.ChargeParams{
-		Amount:   params.Amount,
-		Source:   &stripe.SourceParams{Token: params.StripeToken},
-		Currency: "USD",
-	})
 	tr := models.NewTransaction(order)
-	if ch != nil {
-		tr.ProcessorID = ch.ID
-	}
+	tr.ProcessorID = stripeID
 	if err != nil {
 		tr.FailureCode = "500"
 		tr.FailureDescription = err.Error()
@@ -236,7 +237,50 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		badRequestError(w, "Currencies doesn't match - %v vs %v", trans.Currency, params.Currency)
 		return
 	}
-	_ = trans
+
+	if params.Amount <= 0 || params.Amount > trans.Amount {
+		badRequestError(w, "The balance of the refund must be between 0 and the total amount")
+		return
+	}
+
+	if trans.FailureCode != "" {
+		badRequestError(w, "Can't refund a failed transaction")
+		return
+	}
+
+	if trans.Status != models.PaidState {
+		badRequestError(w, "Can't refund a transaction that hasn't been paid")
+		return
+	}
+
+	// ok make the refund
+	m := &models.Transaction{
+		ID:       uuid.NewRandom().String(),
+		Amount:   params.Amount,
+		Currency: params.Currency,
+		UserID:   trans.UserID,
+		OrderID:  trans.OrderID,
+		Type:     models.RefundTransactionType,
+		Status:   models.PendingState,
+	}
+
+	a.db.Create(m)
+	log := getLogger(ctx)
+	log.Debug("Starting refund to stripe")
+	stripeID, err := getCharger(ctx).refund(params.Amount, trans.ProcessorID)
+	if err != nil {
+		log.WithError(err).Info("Failed to refund value")
+		m.FailureCode = "500"
+		m.FailureDescription = err.Error()
+		m.Status = models.FailedState
+	} else {
+		m.ProcessorID = stripeID
+		m.Status = models.PaidState
+	}
+
+	log.Infof("Finished transaction with stripe: %s", m.ProcessorID)
+	a.db.Save(m)
+	sendJSON(w, http.StatusOK, m)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -347,4 +391,33 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 	}
 
 	return trans, nil
+}
+
+type stripeProvider struct {
+}
+
+func (stripeProvider) charge(amount uint64, currency, token string) (string, error) {
+	ch, err := charge.New(&stripe.ChargeParams{
+		Amount:   amount,
+		Source:   &stripe.SourceParams{Token: token},
+		Currency: stripe.Currency(currency),
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return ch.ID, nil
+}
+
+func (stripeProvider) refund(amount uint64, id string) (string, error) {
+	r, err := refund.New(&stripe.RefundParams{
+		Charge: id,
+		Amount: amount,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return r.ID, err
 }

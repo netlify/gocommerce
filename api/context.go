@@ -17,6 +17,7 @@ const (
 	requestIDKey = "request_id"
 	startKey     = "request_start_time"
 	adminFlagKey = "is_admin"
+	payerKey     = "payer_interface"
 )
 
 func withStartTime(ctx context.Context, when time.Time) context.Context {
@@ -37,6 +38,14 @@ func withToken(ctx context.Context, token *jwt.Token) context.Context {
 
 func withRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
+}
+
+func getCharger(ctx context.Context) paymentProvider {
+	obj := ctx.Value(payerKey)
+	if obj == nil {
+		return new(stripeProvider)
+	}
+	return obj.(paymentProvider)
 }
 
 func getRequestID(ctx context.Context) string {

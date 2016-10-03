@@ -1,6 +1,8 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,6 +10,13 @@ import (
 	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
 
+	"errors"
+
+	"fmt"
+
+	"context"
+
+	"github.com/jinzhu/gorm"
 	"github.com/netlify/netlify-commerce/models"
 )
 
@@ -224,12 +233,127 @@ func TestPaymentsViewMissingPayment(t *testing.T) {
 	validateError(t, 404, w)
 }
 
-// TODO
-func TestPaymentsRefundMismatchedCurrency(t *testing.T)    {}
-func TestPaymentsRefundMissingStripeToken(t *testing.T)    {}
-func TestPaymentsRefundAmountTooHighOrLow(t *testing.T)    {}
-func TestPaymentsRefundFailedTransaction(t *testing.T)     {}
-func TestPaymentsRefundInProgressTransaction(t *testing.T) {}
+func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
+	w, _ := runPaymentRefund(t, &PaymentParams{
+		Amount:      1,
+		Currency:    "monopoly-money",
+		StripeToken: "123",
+	})
+
+	validateError(t, 400, w)
+}
+
+func TestPaymentsRefundMissingStripeToken(t *testing.T) {
+	w, _ := runPaymentRefund(t, &PaymentParams{
+		Amount:      1,
+		Currency:    firstTransaction.ID,
+		StripeToken: "",
+	})
+	validateError(t, 400, w)
+}
+
+func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
+	w, _ := runPaymentRefund(t, &PaymentParams{
+		Amount:      1000,
+		Currency:    firstTransaction.Currency,
+		StripeToken: "123",
+	})
+
+	validateError(t, 400, w)
+}
+
+func TestPaymentsRefundUnknownPayment(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", "nothign")
+
+	params := &PaymentParams{
+		Amount:      1,
+		Currency:    firstTransaction.Currency,
+		StripeToken: "123",
+	}
+
+	body, _ := json.Marshal(params)
+	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+
+	validateError(t, 404, w)
+}
+
+func TestPaymentsRefundUnpaid(t *testing.T) {
+	db, config := db(t)
+	firstTransaction.Status = models.PendingState
+	db.Save(firstTransaction)
+
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
+	ctx = context.WithValue(ctx, payerKey, nil)
+
+	params := &PaymentParams{
+		Amount:      1,
+		Currency:    firstTransaction.Currency,
+		StripeToken: "123",
+	}
+
+	body, _ := json.Marshal(params)
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+
+	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+
+	validateError(t, 400, w)
+}
+
+func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRecorder, *gorm.DB) {
+	db, config := db(t)
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
+	ctx = context.WithValue(ctx, payerKey, nil)
+
+	body, _ := json.Marshal(params)
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+
+	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+	return w, db
+}
+
+func TestPaymentsRefundSuccess(t *testing.T) {
+	db, config := db(t)
+	provider := &memProvider{}
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
+	ctx = context.WithValue(ctx, payerKey, provider)
+
+	params := &PaymentParams{
+		Amount:      1,
+		Currency:    firstTransaction.Currency,
+		StripeToken: "123",
+	}
+	body, _ := json.Marshal(params)
+	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+
+	rsp := new(models.Transaction)
+	extractPayload(t, 200, w, rsp)
+
+	stored := &models.Transaction{ID: rsp.ID}
+	db.First(stored)
+
+	for _, payment := range []*models.Transaction{stored, rsp} {
+		assert.NotEmpty(t, payment.ID)
+		assert.Equal(t, testUser.ID, payment.UserID)
+		assert.EqualValues(t, 1, payment.Amount)
+		assert.Equal(t, "usd", payment.Currency)
+		assert.Empty(t, payment.FailureCode)
+		assert.Empty(t, payment.FailureDescription)
+		assert.Equal(t, models.RefundTransactionType, payment.Type)
+		assert.Equal(t, models.PaidState, payment.Status)
+	}
+}
 
 // ------------------------------------------------------------------------------------------------
 // Validators
@@ -242,7 +366,6 @@ func validateTransaction(t *testing.T, expected *models.Transaction, actual *mod
 	assert.Equal(expected.ProcessorID, actual.ProcessorID)
 	assert.Equal(expected.UserID, actual.UserID)
 	assert.Equal(expected.Amount, actual.Amount)
-	assert.Equal(expected.AmountReversed, actual.AmountReversed)
 	assert.Equal(expected.Currency, actual.Currency)
 	assert.Equal(expected.FailureCode, actual.FailureCode)
 	assert.Equal(expected.FailureDescription, actual.FailureDescription)
@@ -263,4 +386,29 @@ func validateAllTransactions(t *testing.T, trans []models.Transaction) {
 			assert.Fail(t, "Unknown transaction: "+tran.ID)
 		}
 	}
+}
+
+type memProvider struct {
+	refundCalls []refundCall
+}
+
+type refundCall struct {
+	amount uint64
+	id     string
+}
+
+func (mp *memProvider) charge(amount uint64, currency, token string) (string, error) {
+	return "", errors.New("Shouldn't have called this")
+}
+
+func (mp *memProvider) refund(amount uint64, id string) (string, error) {
+	if mp.refundCalls == nil {
+		mp.refundCalls = []refundCall{}
+	}
+	mp.refundCalls = append(mp.refundCalls, refundCall{
+		amount: amount,
+		id:     id,
+	})
+
+	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil
 }
