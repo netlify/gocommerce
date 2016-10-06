@@ -11,12 +11,13 @@ import (
 
 const PendingState = "pending"
 const PaidState = "paid"
+const FailedState = "failed"
 
-// NUMBER|STRING|BOOL are the different types supported in custom data for orders
+// NumberType | StringType | BoolType are the different types supported in custom data for orders
 const (
-	NUMBER = iota
-	STRING
-	BOOL
+	NumberType = iota
+	StringType
+	BoolType
 )
 
 type Order struct {
@@ -81,11 +82,11 @@ func (OrderData) TableName() string {
 // Value returns the value of the data field
 func (d *OrderData) Value() interface{} {
 	switch d.Type {
-	case STRING:
+	case StringType:
 		return d.StringValue
-	case NUMBER:
+	case NumberType:
 		return d.NumericValue
-	case BOOL:
+	case BoolType:
 		return d.BoolValue
 	}
 	return nil
@@ -105,11 +106,11 @@ func orderDataToMap(data []OrderData) map[string]interface{} {
 	result := map[string]interface{}{}
 	for _, field := range data {
 		switch field.Type {
-		case NUMBER:
+		case NumberType:
 			result[field.Key] = field.NumericValue
-		case STRING:
+		case StringType:
 			result[field.Key] = field.StringValue
-		case BOOL:
+		case BoolType:
 			result[field.Key] = field.BoolValue
 		}
 	}
@@ -159,13 +160,13 @@ func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) er
 		switch v := value.(type) {
 		case string:
 			data.StringValue = v
-			data.Type = STRING
+			data.Type = StringType
 		case float64:
 			data.NumericValue = v
-			data.Type = NUMBER
+			data.Type = NumberType
 		case bool:
 			data.BoolValue = v
-			data.Type = BOOL
+			data.Type = BoolType
 		default:
 			tx.Rollback()
 			return &InvalidDataType{key}

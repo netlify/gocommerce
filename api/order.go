@@ -97,7 +97,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	result := query.Find(&orders)
 	if result.Error != nil {
 		log.WithError(err).Warn("Error while querying database")
-		internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+		internalServerError(w, "Error during database query: %v", result.Error)
 		return
 	}
 
@@ -124,7 +124,7 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			notFoundError(w, "Order not found")
 		} else {
 			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			internalServerError(w, "Error during database query: %v", result.Error)
 		}
 		return
 	}
@@ -144,6 +144,8 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 // OrderCreate endpoint
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := getLogger(ctx)
+	c := closer{w: w}
+	defer c.close()
 
 	params := &OrderParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
@@ -168,40 +170,38 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		"currency": params.Currency,
 	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
+	c.tx = tx
 
 	order.Email = params.Email
 	httpError := setOrderEmail(tx, order, claims, log)
 	if httpError != nil {
-		tx.Rollback()
-		log.WithError(err).Info("Failed to set the order email from the token")
-		sendJSON(w, httpError.Code, err)
+		log.WithError(httpError).Info("Failed to set the order email from the token")
+		c.httpError = httpError
 		return
 	}
 
 	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
-		tx.Rollback()
-		sendJSON(w, httpError.Code, httpError)
+		c.httpError = httpError
 		return
 	}
 	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	shipping, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
-		tx.Rollback()
-		sendJSON(w, httpError.Code, httpError)
+		c.httpError = httpError
 		return
 	}
 	if shipping == nil {
-		badRequestError(w, "Shipping Address Required")
+		c.httpError = badRequestError(w, "Shipping Address Required")
 		return
 	}
 	order.ShippingAddressID = shipping.ID
 
 	billing, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
 	if httpError != nil {
-		sendJSON(w, httpError.Code, httpError)
+		c.httpError = httpError
 		return
 	}
 	if billing != nil {
@@ -213,13 +213,11 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if params.VATNumber != "" {
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {
-			tx.Rollback()
-			internalServerError(w, fmt.Sprintf("Error verifying VAT number %v", err))
+			c.httpError = internalServerError(w, "Error verifying VAT number %v", err)
 			return
 		}
 		if !valid {
-			tx.Rollback()
-			badRequestError(w, fmt.Sprintf("Vat number %v is not valid", order.VATNumber))
+			c.httpError = badRequestError(w, "Vat number %v is not valid", order.VATNumber)
 			return
 		}
 		order.VATNumber = params.VATNumber
@@ -227,8 +225,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	if params.Data != nil {
 		if err := order.UpdateOrderData(tx, &params.Data); err != nil {
-			tx.Rollback()
-			badRequestError(w, fmt.Sprintf("Bad order metadata %v", err))
+			c.httpError = badRequestError(w, "Bad order metadata %v", err)
 			return
 		}
 	}
@@ -238,6 +235,184 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	log.Infof("Successfully created order %s", order.ID)
 	sendJSON(w, 201, order)
+}
+
+// OrderUpdate will allow an ADMIN only to update the details of a record
+// it is also important to note that it will not let modification of an order if the
+// order is no longer pending.
+// Addresses can be made by posting a new one directly, OR by referencing one by ID. If
+// both are provided, the one that is made by ID will win out and the other will be ignored.
+// There are also blocks to changing certain fields after the state has been locked
+func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	orderID := kami.Param(ctx, "id")
+	log := getLogger(ctx).WithField("order_id", orderID)
+	cl := closer{w: w}
+	defer cl.close()
+
+	if !isAdmin(ctx) {
+		log.Warn("Illegal access attempted")
+		cl.httpError = unauthorizedError(w, "Admin privileges are required")
+		return
+	}
+
+	orderParams := new(OrderParams)
+	err := json.NewDecoder(r.Body).Decode(orderParams)
+	if err != nil {
+		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
+		cl.httpError = badRequestError(w, "Could not read Order Parameters: %v", err)
+		return
+	}
+
+	// verify that the order exists
+	existingOrder := new(models.Order)
+
+	rsp := orderQuery(a.db).First(existingOrder, "id = ?", orderID)
+	if rsp.RecordNotFound() {
+		log.Warn("Update attempted to order that doesn't exist")
+		cl.httpError = notFoundError(w, "Failed to find order with id '%s'", orderID)
+		return
+	}
+	if rsp.Error != nil {
+		log.WithError(rsp.Error).Warnf("Failed to query for id '%s'", orderID)
+		cl.httpError = internalServerError(w, "Error while querying for order")
+		return
+	}
+
+	if existingOrder.State != models.PendingState {
+		log.Warn("Tried to update order that is no longer pending")
+		cl.httpError = badRequestError(w, "Order is no longer pending - can't update details")
+		return
+	}
+
+	alreadyPaid := existingOrder.PaymentState == models.PaidState
+	alreadyShipped := existingOrder.FulfillmentState == models.PaidState
+
+	//
+	// handle the simple fields
+	//
+	if orderParams.SessionID != "" {
+		log.Debugf("Updating session id from '%s' to '%s'", existingOrder.SessionID, orderParams.SessionID)
+		existingOrder.SessionID = orderParams.SessionID
+	}
+	if orderParams.Email != "" {
+		log.Debugf("Updating email from '%s' to '%s'", existingOrder.Email, orderParams.Email)
+		existingOrder.Email = orderParams.Email
+	}
+
+	if orderParams.Currency != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the currency after the order has been paid")
+			cl.httpError = badRequestError(w, "Can't update the currency after payment has been processed")
+			return
+		}
+		log.Debugf("Updating currency from '%v' to '%v'", existingOrder.Currency, orderParams.Currency)
+		existingOrder.Currency = orderParams.Currency
+
+	}
+	if orderParams.VATNumber != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the VAT number after the order has been paid")
+			cl.httpError = badRequestError(w, "Can't update the VAT number after payment has been processed")
+			return
+		}
+
+		log.Debugf("Updating vat number from '%v' to '%v'", existingOrder.VATNumber, orderParams.VATNumber)
+		existingOrder.VATNumber = orderParams.VATNumber
+	}
+
+	tx := a.db.Begin()
+	cl.tx = tx
+
+	//
+	// handle the addresses
+	//
+	if orderParams.BillingAddress != nil || orderParams.BillingAddressID != "" {
+		if alreadyPaid {
+			log.Warn("Tried to update the billing address after payment")
+			cl.httpError = badRequestError(w, "Can't update the billing address of an order that has already been paid")
+			return
+		}
+		log.Debugf("Updating order's billing address")
+
+		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.BillingAddress, orderParams.BillingAddressID)
+		if httpErr != nil {
+			log.WithError(httpErr).Warn("Failed to update the billing address")
+			cl.httpError = httpErr
+			return
+		}
+		old := existingOrder.BillingAddressID
+		existingOrder.BillingAddress = *addr
+		log.WithFields(logrus.Fields{
+			"address_id":     addr.ID,
+			"old_address_id": old,
+		}).Debugf("Updated the billing address id to %s", addr.ID)
+	}
+
+	if orderParams.ShippingAddress != nil || orderParams.ShippingAddressID != "" {
+		if alreadyShipped {
+			log.Warn("Tried to update the shipping address after it has shipped")
+			cl.httpError = badRequestError(w, "Can't update the shipping address of an order that has been shipped")
+			return
+		}
+
+		log.Debugf("Updating order's shipping address")
+
+		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.ShippingAddress, orderParams.ShippingAddressID)
+		if httpErr != nil {
+			log.WithError(httpErr).Warn("Failed to update the shipping address")
+			cl.httpError = httpErr
+			return
+		}
+
+		old := existingOrder.ShippingAddressID
+		existingOrder.ShippingAddress = *addr
+		log.WithFields(logrus.Fields{
+			"address_id":     addr.ID,
+			"old_address_id": old,
+		}).Debugf("Updated the shipping address id to %s", addr.ID)
+	}
+
+	if orderParams.Data != nil {
+		err := existingOrder.UpdateOrderData(tx, &orderParams.Data)
+		if err != nil {
+			log.WithError(err).Warn("Failed to update order data: " + err.Error())
+			if _, ok := err.(*models.InvalidDataType); ok {
+				cl.httpError = badRequestError(w, "Bad type: "+err.Error())
+			} else {
+				cl.httpError = internalServerError(w, "Problem while saving the extra data")
+			}
+			return
+		}
+	}
+
+	//
+	// handle the line items
+	//
+	updatedItems := make(map[string]*OrderLineItem)
+	for _, item := range orderParams.LineItems {
+		updatedItems[item.SKU] = item
+	}
+
+	for _, item := range existingOrder.LineItems {
+		if update, exists := updatedItems[item.SKU]; exists {
+			item.Quantity = update.Quantity
+			if update.Path != "" {
+				item.Path = update.Path
+			}
+		}
+	}
+
+	log.Info("Saving order updates")
+	if rsp := tx.Save(existingOrder); rsp.Error != nil {
+		log.WithError(err).Warn("Problem while saving order updates")
+		cl.httpError = internalServerError(w, "Error saving order updates")
+	}
+	if rsp := tx.Commit(); rsp.Error != nil {
+		log.WithError(err).Warn("Problem while saving order updates")
+		cl.httpError = internalServerError(w, "Error saving order updates")
+	}
+
+	sendJSON(w, 200, existingOrder)
 }
 
 func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
@@ -414,4 +589,19 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 
 func orderQuery(db *gorm.DB) *gorm.DB {
 	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress").Preload("Data")
+}
+
+type closer struct {
+	w         http.ResponseWriter
+	httpError *HTTPError
+	tx        *gorm.DB
+}
+
+func (c closer) close() {
+	if c.httpError != nil {
+		sendJSON(c.w, c.httpError.Code, c.httpError)
+		if c.tx != nil {
+			c.tx.Rollback()
+		}
+	}
 }

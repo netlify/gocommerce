@@ -3,3 +3,5 @@ gorm.db
 netlify-commerce
 
 vendor/
+.idea
+*.iml

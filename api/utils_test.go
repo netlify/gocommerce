@@ -38,7 +38,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func db(t *testing.T) *gorm.DB {
+func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
 		panic(err)
@@ -58,15 +58,16 @@ func db(t *testing.T) *gorm.DB {
 	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
 	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", testUser.ID)
 
-	return db
+	return db, config
 }
 
-func testContext(token *jwt.Token, config *conf.Configuration) context.Context {
+func testContext(token *jwt.Token, config *conf.Configuration, adminFlag bool) context.Context {
 	ctx := context.Background()
 	ctx = withConfig(ctx, config)
 	ctx = withRequestID(ctx, "test-request")
 	ctx = withLogger(ctx, testLogger)
 	ctx = withStartTime(ctx, time.Now())
+	ctx = withAdminFlag(ctx, adminFlag)
 	return withToken(ctx, token)
 }
 
@@ -76,16 +77,11 @@ func testConfig() *conf.Configuration {
 	return config
 }
 
-func testToken(id, email string, groups *[]string) *jwt.Token {
+func testToken(id, email string) *jwt.Token {
 	claims := &JWTClaims{
 		ID:     id,
 		Email:  email,
 		Groups: []string{},
-	}
-	if groups != nil {
-		for _, g := range *groups {
-			claims.Groups = append(claims.Groups, g)
-		}
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return t
@@ -125,7 +121,11 @@ func loadTestData(db *gorm.DB) {
 	}
 
 	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
+	firstOrder.UserID = testUser.ID
 	firstTransaction = models.NewTransaction(firstOrder)
+	firstTransaction.ProcessorID = "stripe"
+	firstTransaction.Amount = 100
+	firstTransaction.Status = models.PaidState
 	firstLineItem = models.LineItem{
 		ID:          11,
 		OrderID:     firstOrder.ID,
@@ -139,6 +139,7 @@ func loadTestData(db *gorm.DB) {
 	}
 
 	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
+	secondOrder.UserID = testUser.ID
 	secondTransaction = models.NewTransaction(secondOrder)
 	secondLineItem1 = models.LineItem{
 		ID:          21,
@@ -186,6 +187,20 @@ func loadTestData(db *gorm.DB) {
 	db.Create(&secondLineItem2)
 	db.Create(secondTransaction)
 	db.Create(secondOrder)
+}
+
+func getTestAddress() *models.Address {
+	return &models.Address{
+		ID: "spidermans-house",
+		AddressRequest: models.AddressRequest{
+			LastName:  "parker",
+			FirstName: "Peter",
+			Address1:  "123 spidey lane",
+			Country:   "marvel-land",
+			City:      "new york",
+			Zip:       "10007",
+		},
+	}
 }
 
 // ------------------------------------------------------------------------------------------------

@@ -40,6 +40,7 @@ type JWTClaims struct {
 
 func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
 	log := getLogger(ctx)
+	config := getConfig(ctx)
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
 		log.Info("Making unauthenticated request")
@@ -57,7 +58,7 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		if token.Header["alg"] != jwt.SigningMethodHS256.Name {
 			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(getConfig(ctx).JWT.Secret), nil
+		return []byte(config.JWT.Secret), nil
 	})
 	if err != nil {
 		log.Infof("Invalid token: %v", err)
@@ -73,12 +74,22 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return nil
 	}
 
+	isAdmin := false
+	for _, g := range claims.Groups {
+		if g == config.JWT.AdminGroupName {
+			isAdmin = true
+			break
+		}
+	}
 	log = log.WithFields(logrus.Fields{
 		"claims_id":     claims.ID,
 		"claims_email":  claims.Email,
 		"claims_groups": claims.Groups,
+		"is_admin":      isAdmin,
 	})
+
 	log.Info("successfully parsed claims")
+	ctx = withAdminFlag(ctx, isAdmin)
 	ctx = withLogger(ctx, log)
 
 	return withToken(ctx, token)
@@ -100,12 +111,27 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 	// endpoints
 	mux.Get("/", api.Index)
+
 	mux.Get("/orders", api.OrderList)
 	mux.Post("/orders", api.OrderCreate)
 	mux.Get("/orders/:id", api.OrderView)
-	mux.Get("/orders/:order_id/payments", api.PaymentList)
+	mux.Post("/orders/:id", api.OrderUpdate)
+	mux.Get("/orders/:order_id/payments", api.PaymentListForOrder)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
+
+	mux.Get("/users/", api.UserList)
+	mux.Get("/users/:user_id", api.UserView)
+	mux.Get("/users/:user_id/payments", api.PaymentListForUser)
+	mux.Delete("/users/:user_id", api.UserDelete)
+	mux.Get("/users/:user_id/addresses", api.AddressList)
+	mux.Get("/users/:user_id/addresses/:addr_id", api.AddressView)
+	mux.Delete("/users/:user_id/addresses/:addr_id", api.AddressDelete)
+
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
+
+	mux.Get("/payments", api.PaymentList)
+	mux.Get("/payments/:pay_id", api.PaymentView)
+	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
