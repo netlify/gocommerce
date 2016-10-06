@@ -40,12 +40,12 @@ func TestConfigWithOverrides(t *testing.T) {
 	assert.Nil(t, err)
 
 	// override some values
-	os.Setenv("GCOM_SITE_URL", "http://env.com")
-	os.Setenv("GCOM_JWT_SECRET", "env-jwt-secret")
-	os.Setenv("GCOM_DB_DRIVER", "env-db-driver")
-	os.Setenv("GCOM_API_PORT", "456456")
-	os.Setenv("GCOM_MAILER_USER", "env-mailer-user")
-	os.Setenv("GCOM_PAYMENT_STRIPE_SECRET_KEY", "env-stripe-secret")
+	os.Setenv("NETLIFY_COMMERCE_SITE_URL", "http://env.com")
+	os.Setenv("NETLIFY_COMMERCE_JWT_SECRET", "env-jwt-secret")
+	os.Setenv("NETLIFY_COMMERCE_DB_DRIVER", "env-db-driver")
+	os.Setenv("NETLIFY_COMMERCE_API_PORT", "456456")
+	os.Setenv("NETLIFY_COMMERCE_MAILER_USER", "env-mailer-user")
+	os.Setenv("NETLIFY_COMMERCE_PAYMENT_STRIPE_SECRET_KEY", "env-stripe-secret")
 
 	config, err := Load(fname)
 	assert.Nil(t, err)
