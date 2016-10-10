@@ -19,7 +19,10 @@ import (
 	"github.com/netlify/netlify-commerce/mailer"
 )
 
-var bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
+var (
+	defaultVersion = "unknown version"
+	bearerRegexp   = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
+)
 
 // API is the main REST API
 type API struct {
@@ -101,8 +104,12 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-// NewAPI instantiates a new REST API
-func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer, version string) *API {
+func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
+	return NewAPIWithVersion(config, db, mailer, defaultVersion)
+}
+
+// NewAPIWithVersion instantiates a new REST API
+func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer, version string) *API {
 	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}, version: version}
 
 	mux := kami.New()

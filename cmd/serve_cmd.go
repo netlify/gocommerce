@@ -28,7 +28,7 @@ func serve(config *conf.Configuration) {
 
 	mailer := mailer.NewMailer(config)
 
-	api := api.NewAPI(config, db.Debug(), mailer, Version)
+	api := api.NewAPIWithVersion(config, db.Debug(), mailer, Version)
 
 	stripe.Key = config.Payment.Stripe.SecretKey
 
