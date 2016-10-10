@@ -20,7 +20,7 @@ var rootCmd = cobra.Command{
 // NewRoot will add flags and subcommands to the different commands
 func RootCmd() *cobra.Command {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "The configuration file")
-	rootCmd.AddCommand(&serveCmd, &migrateCmd)
+	rootCmd.AddCommand(&serveCmd, &migrateCmd, &versionCmd)
 	return &rootCmd
 }
 

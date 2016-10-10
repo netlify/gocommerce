@@ -29,6 +29,7 @@ type API struct {
 	mailer     *mailer.Mailer
 	httpClient *http.Client
 	log        *logrus.Entry
+	version    string
 }
 
 type JWTClaims struct {
@@ -101,8 +102,8 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 }
 
 // NewAPI instantiates a new REST API
-func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}}
+func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer, version string) *API {
+	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}, version: version}
 
 	mux := kami.New()
 	mux.Use("/", api.populateContext)
