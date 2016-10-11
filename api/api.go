@@ -110,7 +110,13 @@ func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API
 
 // NewAPIWithVersion instantiates a new REST API
 func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer, version string) *API {
-	api := &API{config: config, db: db, mailer: mailer, httpClient: &http.Client{}, version: version}
+	api := &API{
+		log:        logrus.WithField("component", "api"),
+		config:     config,
+		db:         db,
+		mailer:     mailer,
+		httpClient: &http.Client{},
+		version:    version}
 
 	mux := kami.New()
 	mux.Use("/", api.populateContext)
