@@ -6,6 +6,9 @@ import (
 	"strconv"
 	"strings"
 
+	"bufio"
+
+	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
@@ -30,7 +33,10 @@ type Configuration struct {
 		Host string `mapstructure:"host" json:"host"`
 		Port int    `mapstructure:"port" json:"port"`
 	} `mapstructure:"api" json:"api"`
-
+	LogConf struct {
+		Level string `mapstructure:"level"`
+		File  string `mapstructure:"file"`
+	} `mapstucture:"log_conf"`
 	Mailer struct {
 		Host           string `mapstructure:"host" json:"host"`
 		Port           int    `mapstructure:"port" json:"port"`
@@ -83,7 +89,40 @@ func Load(configFile string) (*Configuration, error) {
 		return nil, errors.Wrap(err, "populate config")
 	}
 
+	if err := configureLogging(config); err != nil {
+		return nil, errors.Wrap(err, "configure logging")
+	}
+
 	return validateConfig(config)
+}
+
+func configureLogging(config *Configuration) error {
+	// always use the full timestamp
+	logrus.SetFormatter(&logrus.TextFormatter{
+		FullTimestamp:    true,
+		DisableTimestamp: false,
+	})
+
+	// use a file if you want
+	if config.LogConf.File != "" {
+		f, errOpen := os.OpenFile(config.LogConf.File, os.O_RDWR|os.O_APPEND, 0660)
+		if errOpen != nil {
+			return errOpen
+		}
+		logrus.SetOutput(bufio.NewWriter(f))
+		logrus.Infof("Set output file to %s", config.LogConf.File)
+	}
+
+	if config.LogConf.Level != "" {
+		level, err := logrus.ParseLevel(strings.ToUpper(config.LogConf.Level))
+		if err != nil {
+			return err
+		}
+		logrus.SetLevel(level)
+		logrus.Debug("Set log level to: " + logrus.GetLevel().String())
+	}
+
+	return nil
 }
 
 func validateConfig(config *Configuration) (*Configuration, error) {
