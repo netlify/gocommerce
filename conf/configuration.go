@@ -36,7 +36,7 @@ type Configuration struct {
 	LogConf struct {
 		Level string `mapstructure:"level"`
 		File  string `mapstructure:"file"`
-	} `mapstucture:"log_conf"`
+	} `mapstructure:"log_conf"`
 	Mailer struct {
 		Host           string `mapstructure:"host" json:"host"`
 		Port           int    `mapstructure:"port" json:"port"`
