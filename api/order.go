@@ -181,6 +181,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+		log.WithError(httpError).Error("Failed to create order line items")
 		cleanup(tx, w, httpError)
 		return
 	}
