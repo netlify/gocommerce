@@ -10,6 +10,8 @@ import (
 	"github.com/netlify/netlify-commerce/models"
 	"github.com/spf13/cobra"
 	stripe "github.com/stripe/stripe-go"
+
+	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
 )
 
 var serveCmd = cobra.Command{
@@ -26,9 +28,25 @@ func serve(config *conf.Configuration) {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
 
+	var ppEnv string
+	if config.Payment.Paypal.Env == "production" {
+		ppEnv = paypalsdk.APIBaseLive
+	} else {
+		ppEnv = paypalsdk.APIBaseSandBox
+	}
+
+	paypal, err := paypalsdk.NewClient(
+		config.Payment.Paypal.ClientID,
+		config.Payment.Paypal.Secret,
+		ppEnv,
+	)
+	if err != nil {
+		logrus.Fatalf("Error configuring paypal: %+v", err)
+	}
+
 	mailer := mailer.NewMailer(config)
 
-	api := api.NewAPIWithVersion(config, db.Debug(), mailer, Version)
+	api := api.NewAPIWithVersion(config, db.Debug(), paypal, mailer, Version)
 
 	stripe.Key = config.Payment.Stripe.SecretKey
 

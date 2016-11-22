@@ -22,13 +22,15 @@ const MaxConcurrentLookups = 10
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
-	Amount      uint64 `json:"amount"`
-	Currency    string `json:"currency"`
-	StripeToken string `json:"stripe_token"`
+	Amount       uint64 `json:"amount"`
+	Currency     string `json:"currency"`
+	StripeToken  string `json:"stripe_token"`
+	PaypalID     string `json:"paypal_payment_id"`
+	PaypalUserID string `json:"paypal_user_id"`
 }
 
 type paymentProvider interface {
-	charge(amount uint64, currency, token string) (string, error)
+	charge(amount uint64, currency, token, userToken string) (string, error)
 	refund(amount uint64, id string) (string, error)
 }
 
@@ -100,8 +102,8 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	if params.StripeToken == "" {
-		badRequestError(w, "Payments requires a stripe_token")
+	if params.StripeToken == "" && (params.PaypalID == "" || params.PaypalUserID == "") {
+		badRequestError(w, "Payments requires a stripe_token or a paypal_payment_id and paypal_user_id pair")
 		return
 	}
 
@@ -158,10 +160,16 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
 		return
 	}
-	stripeID, err := getCharger(ctx).charge(params.Amount, params.Currency, params.StripeToken)
-
 	tr := models.NewTransaction(order)
-	tr.ProcessorID = stripeID
+	var processorID string
+	if params.StripeToken != "" {
+		processorID, err = getCharger(ctx).charge(params.Amount, params.Currency, params.StripeToken, "")
+	} else if params.PaypalID != "" {
+		processorID, err = getCharger(ctx).charge(params.Amount, params.Currency, params.PaypalID, params.PaypalUserID)
+	}
+
+	tr.ProcessorID = processorID
+
 	if err != nil {
 		tr.FailureCode = "500"
 		tr.FailureDescription = err.Error()
@@ -396,7 +404,7 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 type stripeProvider struct {
 }
 
-func (stripeProvider) charge(amount uint64, currency, token string) (string, error) {
+func (stripeProvider) charge(amount uint64, currency, token, userToken string) (string, error) {
 	ch, err := charge.New(&stripe.ChargeParams{
 		Amount:   amount,
 		Source:   &stripe.SourceParams{Token: token},

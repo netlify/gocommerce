@@ -1,5 +1,5 @@
-hash: 32b5dc0bd7b1ecdffd204eb8223346efa39c68ea771549ba9bd7b2b5e9ea489e
-updated: 2016-09-26T13:27:06.402094312-07:00
+hash: d138257e3fadca18c9ce54680cbfc8b1f82543098a2dfc1f63a9308e9769c951
+updated: 2016-11-22T13:33:35.426276808-08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e
@@ -44,6 +44,8 @@ imports:
   version: 50761b0867bd1d9d069276790bcd4a3bccf2324a
   subpackages:
   - oid
+- name: github.com/logpacker/PayPal-Go-SDK
+  version: 5eab9b94ed6a2550652d85834cc166dcc7416c89
 - name: github.com/magiconair/properties
   version: 0723e352fa358f9322c938cc2dadda874e9151a9
 - name: github.com/mattes/vat
@@ -59,7 +61,7 @@ imports:
 - name: github.com/pelletier/go-toml
   version: 31055c2ff0bb0c7f9095aec0d220aed21108121e
 - name: github.com/pkg/errors
-  version: 17b591df37844cde689f4d5813e5cea0927d8dd2
+  version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/pkg/sftp
   version: 8197a2e580736b78d704be0fc47b2324c0591a32
 - name: github.com/PuerkitoBio/goquery
@@ -70,6 +72,8 @@ imports:
   version: ed27b6fd65218132ee50cd95f38474a3d8a2cd12
 - name: github.com/Sirupsen/logrus
   version: 3ec0642a7fb6488f65b06f9040adc67e3990296a
+  subpackages:
+  - hooks/test
 - name: github.com/spf13/afero
   version: 20500e2abd0d1f4564a499e83d11d6c73cd58c27
   subpackages:
@@ -90,6 +94,7 @@ imports:
   subpackages:
   - charge
   - orderitem
+  - refund
 - name: github.com/zenazn/goji
   version: 4d7077956293261309684d3cf1af673f773c6819
   subpackages:
@@ -137,11 +142,11 @@ imports:
   version: 31c299268d302dd0aa9a0dcf765a3d58971ac83f
 testImports:
 - name: github.com/davecgh/go-spew
-  version: 6d212800a42e8ab5c146b8ace3490ee17e5225f9
+  version: 2df174808ee097f90d259e432cc04442cf60be21
   subpackages:
   - spew
 - name: github.com/pmezard/go-difflib
-  version: 792786c7400a136282c1664665ae0a8db921c6c2
+  version: d8ed2627bdf02c080bf22230dbb337003b7aba2d
   subpackages:
   - difflib
 - name: github.com/stretchr/testify
