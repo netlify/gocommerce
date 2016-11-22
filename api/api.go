@@ -154,6 +154,8 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Post("/paypal", api.PaypalCreatePayment)
 	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
 
+	mux.Post("/claim", api.ClaimOrders)
+
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},

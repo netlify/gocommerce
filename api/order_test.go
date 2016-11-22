@@ -528,6 +528,91 @@ func TestOrderUpdateWithBadData(t *testing.T) {
 }
 
 // -------------------------------------------------------------------------------------------------------------------
+// CLAIMS
+// -------------------------------------------------------------------------------------------------------------------
+
+func TestClaimOrders(t *testing.T) {
+	db, config := db(t)
+
+	firstOrder.Email = "villian@wayneindustries.com"
+	firstOrder.UserID = ""
+	if rsp := db.Save(firstOrder); rsp.Error != nil {
+		assert.FailNow(t, "Failed to update email: %v", rsp.Error)
+	}
+
+	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
+
+	api := NewAPI(config, db, nil)
+	api.ClaimOrders(ctx, recorder, req)
+
+	assert.Equal(t, http.StatusNoContent, recorder.Code)
+
+	// validate the DB
+	dbOrders := []models.Order{}
+	if rsp := db.Where("email = ?", "villian@wayneindustries.com").Find(&dbOrders); rsp.Error != nil {
+		assert.FailNow(t, "Failed to query DB: "+rsp.Error.Error())
+	}
+
+	assert.Len(t, dbOrders, 1)
+	assert.Equal(t, "villian@wayneindustries.com", dbOrders[0].Email)
+	assert.Equal(t, "villian", dbOrders[0].UserID)
+}
+
+func TestClaimOrdersNoEmail(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(testToken("villian", ""), config, false)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
+
+	api := NewAPI(config, db, nil)
+	api.ClaimOrders(ctx, recorder, req)
+
+	validateError(t, http.StatusBadRequest, recorder)
+}
+
+func TestClaimOrdersNoID(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(testToken("", "villian@wayneindustries.com"), config, false)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
+
+	api := NewAPI(config, db, nil)
+	api.ClaimOrders(ctx, recorder, req)
+
+	validateError(t, http.StatusBadRequest, recorder)
+}
+
+func TestClaimOrdersMultipleTimes(t *testing.T) {
+	db, config := db(t)
+
+	firstOrder.Email = "villian@wayneindustries.com"
+	firstOrder.UserID = ""
+	if rsp := db.Save(firstOrder); rsp.Error != nil {
+		assert.FailNow(t, "Failed to update email: %v", rsp.Error)
+	}
+
+	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
+
+	api := NewAPI(config, db, nil)
+	api.ClaimOrders(ctx, recorder, req)
+
+	assert.Equal(t, http.StatusNoContent, recorder.Code)
+
+	// run it again
+	recorder = httptest.NewRecorder()
+	api.ClaimOrders(ctx, recorder, req)
+	assert.Equal(t, http.StatusNoContent, recorder.Code)
+}
+
+// -------------------------------------------------------------------------------------------------------------------
 // HELPERS
 // -------------------------------------------------------------------------------------------------------------------
 

@@ -54,6 +54,79 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
+// ClaimOrders will look for any
+func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := getLogger(ctx)
+
+	claims := getClaims(ctx)
+	if claims == nil {
+		unauthorizedError(w, "Claiming an order requires a token")
+		log.Info("request made with no claims")
+		return
+	}
+
+	if claims.Email == "" {
+		badRequestError(w, "Must provide an email in the token to claim orders")
+		log.Info("Claim request made with missing email")
+		return
+	}
+
+	if claims.ID == "" {
+		badRequestError(w, "Must provide a ID in the token to claim orders")
+		log.Info("Claim request made with missing the ID")
+		return
+	}
+
+	log = log.WithFields(logrus.Fields{
+		"user_id":    claims.ID,
+		"user_email": claims.Email,
+	})
+
+	// now find all the order associated with that email
+	query := orderQuery(a.db)
+	query = query.Where(&models.Order{
+		UserID: "",
+		Email:  claims.Email,
+	})
+
+	orders := []models.Order{}
+	if res := query.Find(&orders); res.Error != nil {
+		internalServerError(w, "Failed to query for orders with email: %s", claims.Email)
+		log.WithError(res.Error).Warn("Failed to make query for orders")
+		return
+	}
+
+	tx := a.db.Begin()
+
+	// create the user
+	user := models.User{Email: claims.Email, ID: claims.ID}
+	if res := tx.FirstOrCreate(&user); res.Error != nil {
+		internalServerError(w, "Failed to create user with ID %s", claims.ID)
+		log.WithError(res.Error).Warnf("Failed to creat new user: %+v", user)
+		tx.Rollback()
+		return
+	}
+
+	for _, o := range orders {
+		o.UserID = user.ID
+		if res := tx.Save(&o); res.Error != nil {
+			internalServerError(w, "Failed to update an order with user ID %s", user.ID)
+			log.WithError(res.Error).WithField("order_id", o.ID).Warn("Failed to save order")
+			tx.Rollback()
+			return
+		}
+	}
+
+	if rsp := tx.Commit(); rsp.Error != nil {
+		internalServerError(w, "To update all the orders")
+		log.WithError(rsp.Error).Warn("Failed to close transaction")
+		return
+	}
+
+	log.Info("Finished updating ")
+	sendJSON(w, http.StatusNoContent, "")
+}
+
 // OrderList can query based on
 //  - orders since        &from=iso8601      - default = 0
 //  - orders before       &to=iso8601        - default = now
