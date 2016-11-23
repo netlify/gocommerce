@@ -20,6 +20,11 @@ const (
 	payerKey     = "payer_interface"
 )
 
+type ChargerType string
+
+const PaypalChargerType ChargerType = "paypal"
+const StripeChargerType ChargerType = "stripe"
+
 func withStartTime(ctx context.Context, when time.Time) context.Context {
 	return context.WithValue(ctx, startKey, &when)
 }
@@ -40,11 +45,16 @@ func withRequestID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, requestIDKey, id)
 }
 
-func getCharger(ctx context.Context) paymentProvider {
-	obj := ctx.Value(payerKey)
+func withPayer(ctx context.Context, chType ChargerType, pp paymentProvider) context.Context {
+	return context.WithValue(ctx, payerKey+chType, pp)
+}
+
+func getCharger(ctx context.Context, chType ChargerType) paymentProvider {
+	obj := ctx.Value(payerKey + chType)
 	if obj == nil {
-		return new(stripeProvider)
+		return nil
 	}
+
 	return obj.(paymentProvider)
 }
 

@@ -161,13 +161,15 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 	tr := models.NewTransaction(order)
-	var processorID string
+
+	chType := StripeChargerType
 	if params.StripeToken != "" {
-		processorID, err = getCharger(ctx).charge(params.Amount, params.Currency, params.StripeToken, "")
+		chType = StripeChargerType
 	} else if params.PaypalID != "" {
-		processorID, err = getCharger(ctx).charge(params.Amount, params.Currency, params.PaypalID, params.PaypalUserID)
+		chType = PaypalChargerType
 	}
 
+	processorID, err := getCharger(ctx, chType).charge(params.Amount, params.Currency, params.StripeToken, "")
 	tr.ProcessorID = processorID
 
 	if err != nil {
@@ -275,7 +277,8 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	a.db.Create(m)
 	log := getLogger(ctx)
 	log.Debug("Starting refund to stripe")
-	stripeID, err := getCharger(ctx).refund(params.Amount, trans.ProcessorID)
+	// TODO ~ refund via paypal
+	stripeID, err := getCharger(ctx, StripeChargerType).refund(params.Amount, trans.ProcessorID)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
 		m.FailureCode = "500"
@@ -428,4 +431,16 @@ func (stripeProvider) refund(amount uint64, id string) (string, error) {
 	}
 
 	return r.ID, err
+}
+
+type paypalProvider struct {
+}
+
+func (paypalProvider) charge(amount uint64, currency, token, userToken string) (string, error) {
+	// TODO
+	return "", nil
+}
+
+func (paypalProvider) refund(amount uint64, id string) (string, error) {
+	return "", nil
 }
