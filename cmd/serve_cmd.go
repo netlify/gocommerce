@@ -43,6 +43,10 @@ func serve(config *conf.Configuration) {
 	if err != nil {
 		logrus.Fatalf("Error configuring paypal: %+v", err)
 	}
+	_, err = paypal.GetAccessToken()
+	if err != nil {
+		logrus.Fatalf("Error authorizing with paypal: %+v", err)
+	}
 
 	mailer := mailer.NewMailer(config)
 

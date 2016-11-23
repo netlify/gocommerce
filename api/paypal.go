@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/guregu/kami"
 	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
 )
 
@@ -28,5 +29,11 @@ func (a *API) PaypalCreatePayment(ctx context.Context, w http.ResponseWriter, r 
 // PaypalGetPayment retrieves information on an authorized paypal payment, including
 // the shipping address
 func (a *API) PaypalGetPayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	payment, err := a.paypal.GetPayment(kami.Param(ctx, "payment_id"))
+	if err != nil {
+		internalServerError(w, fmt.Sprintf("Error fetching paypal payment: %v", err))
+		return
+	}
 
+	sendJSON(w, 200, payment)
 }

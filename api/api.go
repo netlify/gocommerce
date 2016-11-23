@@ -117,6 +117,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 		log:        logrus.WithField("component", "api"),
 		config:     config,
 		db:         db,
+		paypal:     paypal,
 		mailer:     mailer,
 		httpClient: &http.Client{},
 		version:    version}
