@@ -147,6 +147,11 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, mailer *mailer.M
 	mux.Get("/payments/:pay_id", api.PaymentView)
 	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
 
+	mux.Post("/discounts", api.DiscountCreate)
+	mux.Get("/discounts", api.DiscountList)
+	mux.Get("/discounts/:discount_id", api.DiscountView)
+	mux.Delete("/discounts/:discount_id", api.DiscountDelete)
+
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},

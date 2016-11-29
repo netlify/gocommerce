@@ -250,9 +250,10 @@ func validateAddress(t *testing.T, expected models.Address, actual models.Addres
 // ------------------------------------------------------------------------------------------------
 func extractPayload(t *testing.T, code int, recorder *httptest.ResponseRecorder, what interface{}) {
 	if recorder.Code == code {
-		err := json.NewDecoder(recorder.Body).Decode(what)
+		bs := recorder.Body.Bytes()
+		err := json.Unmarshal(bs, what)
 		if !assert.NoError(t, err) {
-			assert.FailNow(t, "Failed to extract body")
+			assert.FailNow(t, "Failed to extract body from: '"+string(bs)+"'")
 		}
 	} else {
 		assert.FailNow(t, "Unexpected code: ", code)

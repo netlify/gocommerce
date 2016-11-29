@@ -53,12 +53,15 @@ func tableName(defaultName string) string {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	db = db.AutoMigrate(Address{},
+	db = db.AutoMigrate(
+		Address{},
 		LineItem{},
 		Order{},
 		OrderData{},
 		OrderNote{},
 		Transaction{},
-		User{})
+		User{},
+		Discount{},
+	)
 	return db.Error
 }
