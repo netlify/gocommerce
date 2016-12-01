@@ -32,7 +32,7 @@ func TestPaymentsOrderForAllAsOwner(t *testing.T) {
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
 
-	NewAPI(config, db, nil).PaymentListForOrder(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForOrder(ctx, w, r)
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
@@ -52,7 +52,7 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
 
-	NewAPI(config, db, nil).PaymentListForOrder(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForOrder(ctx, w, r)
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
@@ -78,7 +78,7 @@ func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentListForOrder(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForOrder(ctx, w, r)
 
 	// should get a 401 ~ claims are required
 	validateError(t, 401, w)
@@ -95,7 +95,7 @@ func TestPaymentsUserForAllAsUser(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
@@ -110,7 +110,7 @@ func TestPaymentsUserForAllAsAdmin(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
@@ -126,7 +126,7 @@ func TestPaymentsUserForAllAsAnon(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ claims are required
 	validateError(t, 401, w)
@@ -140,7 +140,7 @@ func TestPaymentsUserForAllAsStranger(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentListForUser(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
@@ -155,7 +155,7 @@ func TestPaymentsListAllAsNonAdmin(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, nil, nil).PaymentList(ctx, w, r)
+	NewAPI(config, nil, nil, nil).PaymentList(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
@@ -168,7 +168,7 @@ func TestPaymentsListWithParams(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something?processor_id=stripe", nil)
-	NewAPI(config, db, nil).PaymentList(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
@@ -184,7 +184,7 @@ func TestPaymentsListNoParams(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentList(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
@@ -198,7 +198,7 @@ func TestPaymentsViewAsNonAdmin(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, nil, nil).PaymentView(ctx, w, r)
+	NewAPI(config, nil, nil, nil).PaymentView(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
@@ -212,7 +212,7 @@ func TestPaymentsView(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentView(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentView(ctx, w, r)
 
 	trans := new(models.Transaction)
 	extractPayload(t, 200, w, trans)
@@ -228,7 +228,7 @@ func TestPaymentsViewMissingPayment(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil).PaymentView(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentView(ctx, w, r)
 
 	validateError(t, 404, w)
 }
@@ -277,7 +277,7 @@ func TestPaymentsRefundUnknownPayment(t *testing.T) {
 	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentRefund(ctx, w, r)
 
 	validateError(t, 404, w)
 }
@@ -301,7 +301,7 @@ func TestPaymentsRefundUnpaid(t *testing.T) {
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 
-	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentRefund(ctx, w, r)
 
 	validateError(t, 400, w)
 }
@@ -316,7 +316,7 @@ func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRe
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 
-	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentRefund(ctx, w, r)
 	return w, db
 }
 
@@ -335,7 +335,7 @@ func TestPaymentsRefundSuccess(t *testing.T) {
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
 	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	NewAPI(config, db, nil).PaymentRefund(ctx, w, r)
+	NewAPI(config, db, nil, nil).PaymentRefund(ctx, w, r)
 
 	rsp := new(models.Transaction)
 	extractPayload(t, 200, w, rsp)
