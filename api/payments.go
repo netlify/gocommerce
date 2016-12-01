@@ -9,6 +9,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
+	"github.com/logpacker/PayPal-Go-SDK"
 	"github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
 	"github.com/stripe/stripe-go/refund"
@@ -22,13 +23,15 @@ const MaxConcurrentLookups = 10
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
-	Amount      uint64 `json:"amount"`
-	Currency    string `json:"currency"`
-	StripeToken string `json:"stripe_token"`
+	Amount       uint64 `json:"amount"`
+	Currency     string `json:"currency"`
+	StripeToken  string `json:"stripe_token"`
+	PaypalID     string `json:"paypal_payment_id"`
+	PaypalUserID string `json:"paypal_user_id"`
 }
 
 type paymentProvider interface {
-	charge(amount uint64, currency, token string) (string, error)
+	charge(amount uint64, currency, token, userToken string) (string, error)
 	refund(amount uint64, id string) (string, error)
 }
 
@@ -100,8 +103,8 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	if params.StripeToken == "" {
-		badRequestError(w, "Payments requires a stripe_token")
+	if params.StripeToken == "" && (params.PaypalID == "" || params.PaypalUserID == "") {
+		badRequestError(w, "Payments requires a stripe_token or a paypal_payment_id and paypal_user_id pair")
 		return
 	}
 
@@ -158,10 +161,23 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
 		return
 	}
-	stripeID, err := getCharger(ctx).charge(params.Amount, params.Currency, params.StripeToken)
-
 	tr := models.NewTransaction(order)
-	tr.ProcessorID = stripeID
+
+	chType := StripeChargerType
+	var paymentToken string
+	var paymentUser string
+	if params.StripeToken != "" {
+		chType = StripeChargerType
+		paymentToken = params.StripeToken
+	} else if params.PaypalID != "" {
+		chType = PaypalChargerType
+		paymentToken = params.PaypalID
+		paymentUser = params.PaypalUserID
+	}
+
+	processorID, err := getCharger(ctx, chType).charge(params.Amount, params.Currency, paymentToken, paymentUser)
+	tr.ProcessorID = processorID
+
 	if err != nil {
 		tr.FailureCode = "500"
 		tr.FailureDescription = err.Error()
@@ -267,7 +283,8 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	a.db.Create(m)
 	log := getLogger(ctx)
 	log.Debug("Starting refund to stripe")
-	stripeID, err := getCharger(ctx).refund(params.Amount, trans.ProcessorID)
+	// TODO ~ refund via paypal
+	stripeID, err := getCharger(ctx, StripeChargerType).refund(params.Amount, trans.ProcessorID)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
 		m.FailureCode = "500"
@@ -396,7 +413,7 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 type stripeProvider struct {
 }
 
-func (stripeProvider) charge(amount uint64, currency, token string) (string, error) {
+func (stripeProvider) charge(amount uint64, currency, token, userToken string) (string, error) {
 	ch, err := charge.New(&stripe.ChargeParams{
 		Amount:   amount,
 		Source:   &stripe.SourceParams{Token: token},
@@ -420,4 +437,40 @@ func (stripeProvider) refund(amount uint64, id string) (string, error) {
 	}
 
 	return r.ID, err
+}
+
+type paypalProvider struct {
+	paypal *paypalsdk.Client
+}
+
+func (p *paypalProvider) charge(amount uint64, currency, paymentID, payerID string) (string, error) {
+	payment, err := p.paypal.GetPayment(paymentID)
+	if err != nil {
+		return "", err
+	}
+	if len(payment.Transactions) != 1 {
+		return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
+	}
+
+	fmt.Printf("Transactions: %v", payment.Transactions[0])
+	if payment.Transactions[0].Amount == nil {
+		return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
+	}
+
+	transactionValue := fmt.Sprintf("%.2f", float64(amount)/100)
+
+	if transactionValue != payment.Transactions[0].Amount.Total || payment.Transactions[0].Amount.Currency != currency {
+		return "", fmt.Errorf("The Amount in the transaction doesn't match the amount for the order: %v", payment.Transactions[0].Amount)
+	}
+
+	executeResult, err := p.paypal.ExecuteApprovedPayment(paymentID, payerID)
+	if err != nil {
+		return "", err
+	}
+
+	return executeResult.ID, nil
+}
+
+func (paypalProvider) refund(amount uint64, id string) (string, error) {
+	return "", nil
 }

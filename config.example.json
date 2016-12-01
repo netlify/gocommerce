@@ -25,6 +25,10 @@
     "stripe": {
       "secret_key": "Your secret key"
     },
-    "paypal": {}
+    "paypal": {
+      "client_id": "Your client id",
+      "secret": "Your secret",
+      "env": "sandbox"
+    }
   }
 }

@@ -27,6 +27,7 @@ import:
 - package: github.com/mattes/vat
 - package: github.com/pkg/errors
   version: ^0.7.1
+- package: github.com/logpacker/PayPal-Go-SDK
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3

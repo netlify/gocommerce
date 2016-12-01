@@ -54,6 +54,9 @@ type Configuration struct {
 			SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 		} `mapstructure:"stripe" json:"stripe"`
 		Paypal struct {
+			ClientID string `mapstructure:"client_id" json:"client_id"`
+			Secret   string `mapstructure:"secret" json:"secret"`
+			Env      string `mapstructure:"env" json:"env"`
 		} `mapstructure:"paypal" json:"paypal"`
 	} `mapstructure:"payment" json:"payment"`
 }

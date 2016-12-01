@@ -22,7 +22,7 @@ func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).UserList(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserList(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
 
@@ -43,7 +43,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
 	recorder := httptest.NewRecorder()
 
-	NewAPI(config, db, nil).UserList(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserList(ctx, recorder, req)
 
 	users := []models.User{}
 	extractPayload(t, 200, recorder, &users)
@@ -64,7 +64,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
-	NewAPI(config, db, nil).UserList(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserList(ctx, recorder, req)
 
 	users := []models.User{}
 	extractPayload(t, 200, recorder, &users)
@@ -109,7 +109,7 @@ func TestUsersQueryForUserAsUser(t *testing.T) {
 	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.UserView(ctx, recorder, req)
 	user := new(models.User)
 	extractPayload(t, 200, recorder, user)
@@ -125,7 +125,7 @@ func TestUsersQueryForUserAsStranger(t *testing.T) {
 	ctx := testContext(testToken("magical-unicorn", ""), config, false)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.UserView(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
@@ -138,7 +138,7 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
-	NewAPI(config, db, nil).UserView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserView(ctx, recorder, req)
 
 	user := new(models.User)
 	extractPayload(t, 200, recorder, user)
@@ -155,7 +155,7 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
-	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), testUser.ID)
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil, nil), testUser.ID)
 	assert.Equal(t, 2, len(addrs))
 	for _, a := range addrs {
 		assert.Nil(t, a.Validate())
@@ -173,7 +173,7 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
 	db, config := db(t)
 	ctx := testContext(testToken(testUser.ID, ""), config, false)
-	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), testUser.ID)
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil, nil), testUser.ID)
 	assert.Equal(t, 1, len(addrs))
 	validateAddress(t, testAddress, addrs[0])
 }
@@ -185,7 +185,7 @@ func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).AddressList(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).AddressList(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
 
@@ -199,7 +199,7 @@ func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
 	defer db.Unscoped().Delete(u)
 
 	ctx := testContext(testToken(u.ID, ""), config, false)
-	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil), u.ID)
+	addrs := queryForAddresses(t, ctx, NewAPI(config, db, nil, nil), u.ID)
 	assert.Equal(t, 0, len(addrs))
 }
 
@@ -210,7 +210,7 @@ func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).AddressList(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).AddressList(ctx, recorder, req)
 	validateError(t, 404, recorder)
 }
 
@@ -222,7 +222,7 @@ func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).AddressView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).AddressView(ctx, recorder, req)
 
 	addr := new(models.Address)
 	extractPayload(t, 200, recorder, addr)
@@ -237,7 +237,7 @@ func TestUsersDeleteNonExistentUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).UserDelete(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserDelete(ctx, recorder, req)
 	assert.Equal(t, 200, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 }
@@ -278,7 +278,7 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).UserDelete(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).UserDelete(ctx, recorder, req)
 	assert.Equal(t, 200, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
@@ -309,7 +309,7 @@ func TestDeleteUserAddress(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("DELETE", urlWithUserID, nil)
 
-	NewAPI(config, db, nil).AddressDelete(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).AddressDelete(ctx, recorder, req)
 	assert.Equal(t, 200, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
@@ -329,7 +329,7 @@ func TestCreateAnAddress(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
 
-	NewAPI(config, db, nil).CreateNewAddress(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).CreateNewAddress(ctx, recorder, req)
 
 	assert.Equal(t, 200, recorder.Code)
 
@@ -359,7 +359,7 @@ func TestCreateInvalidAddress(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
 
-	NewAPI(config, db, nil).CreateNewAddress(ctx, recorder, req)
+	NewAPI(config, db, nil, nil).CreateNewAddress(ctx, recorder, req)
 
 	validateError(t, 400, recorder)
 }

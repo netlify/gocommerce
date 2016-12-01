@@ -17,6 +17,8 @@ import (
 
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
+
+	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
 )
 
 var (
@@ -28,6 +30,7 @@ var (
 type API struct {
 	handler    http.Handler
 	db         *gorm.DB
+	paypal     *paypalsdk.Client
 	config     *conf.Configuration
 	mailer     *mailer.Mailer
 	httpClient *http.Client
@@ -104,16 +107,17 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func NewAPI(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer) *API {
-	return NewAPIWithVersion(config, db, mailer, defaultVersion)
+func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer) *API {
+	return NewAPIWithVersion(config, db, paypal, mailer, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API
-func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, mailer *mailer.Mailer, version string) *API {
+func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, version string) *API {
 	api := &API{
 		log:        logrus.WithField("component", "api"),
 		config:     config,
 		db:         db,
+		paypal:     paypal,
 		mailer:     mailer,
 		httpClient: &http.Client{},
 		version:    version}
@@ -146,6 +150,9 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, mailer *mailer.M
 	mux.Get("/payments", api.PaymentList)
 	mux.Get("/payments/:pay_id", api.PaymentView)
 	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
+
+	mux.Post("/paypal", api.PaypalCreatePayment)
+	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
@@ -181,6 +188,8 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = withLogger(ctx, log)
 	ctx = withConfig(ctx, a.config)
 	ctx = withStartTime(ctx, time.Now())
+	ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
+	ctx = withPayer(ctx, StripeChargerType, &stripeProvider{})
 
 	log.Info("request started")
 	return ctx
