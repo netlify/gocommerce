@@ -325,7 +325,7 @@ func TestPaymentsRefundSuccess(t *testing.T) {
 	provider := &memProvider{}
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = context.WithValue(ctx, payerKey, provider)
+	ctx = withPayer(ctx, StripeChargerType, provider)
 
 	params := &PaymentParams{
 		Amount:      1,
@@ -397,7 +397,7 @@ type refundCall struct {
 	id     string
 }
 
-func (mp *memProvider) charge(amount uint64, currency, token string) (string, error) {
+func (mp *memProvider) charge(amount uint64, currency, token, payerID string) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
