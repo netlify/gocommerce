@@ -188,8 +188,8 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = withLogger(ctx, log)
 	ctx = withConfig(ctx, a.config)
 	ctx = withStartTime(ctx, time.Now())
-	//ctx = withPayer(ctx, PaypalChargerType, paypalProvider{a.paypal}) TODO
-	ctx = withPayer(ctx, StripeChargerType, stripeProvider{})
+	ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
+	ctx = withPayer(ctx, StripeChargerType, &stripeProvider{})
 
 	log.Info("request started")
 	return ctx
