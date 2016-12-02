@@ -545,7 +545,7 @@ func TestClaimOrders(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
@@ -568,7 +568,7 @@ func TestClaimOrdersNoEmail(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	validateError(t, http.StatusBadRequest, recorder)
@@ -581,7 +581,7 @@ func TestClaimOrdersNoID(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	validateError(t, http.StatusBadRequest, recorder)
@@ -601,7 +601,7 @@ func TestClaimOrdersMultipleTimes(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil)
+	api := NewAPI(config, db, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
