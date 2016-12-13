@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"time"
 
@@ -180,16 +181,18 @@ func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) er
 	return nil
 }
 
-func (o *Order) CalculateTotal(settings *SiteSettings) {
+func (o *Order) CalculateTotal(settings *SiteSettings) error {
 	// Calculate taxes/shipping here
 	var taxes uint64
 	if o.VATNumber == "" {
 		for _, item := range o.LineItems {
-			taxes += taxFor(item, settings.Taxes, o.BillingAddress.Country)
+			taxes += taxFor(item, settings.Taxes, o.ShippingAddress.Country)
 		}
 	}
 
+	o.Taxes = taxes
 	o.Total = o.SubTotal + taxes
+	return nil
 }
 
 func inList(list []string, candidate string) bool {
@@ -205,8 +208,10 @@ func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
 	if item.VAT != 0 {
 		return item.Price * item.Quantity * (item.VAT / 100)
 	}
+	fmt.Printf("Checking taxes for %v in %v (%v)\n", item.SKU, country, len(taxes))
 	if len(taxes) > 0 && country != "" {
 		for _, tax := range taxes {
+			fmt.Printf("Checking if tax matches %v: %v", tax.ProductTypes, item.Type)
 			if inList(tax.ProductTypes, item.Type) && inList(tax.Countries, country) {
 				result := float64(item.Price) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
 				return uint64(rint(result))

@@ -253,13 +253,6 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
-	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
-		log.WithError(httpError).Error("Failed to create order line items")
-		cleanup(tx, w, httpError)
-		return
-	}
-	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
-
 	shipping, httpError := a.processAddress(tx, order, "Shipping Address", params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
 		cleanup(tx, w, httpError)
@@ -269,6 +262,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		cleanup(tx, w, badRequestError(w, "Shipping Address Required"))
 		return
 	}
+	order.ShippingAddress = *shipping
 	order.ShippingAddressID = shipping.ID
 
 	billing, httpError := a.processAddress(tx, order, "Billing Address", params.BillingAddress, params.BillingAddressID)
@@ -277,8 +271,10 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 	if billing != nil {
+		order.BillingAddress = *billing
 		order.BillingAddressID = billing.ID
 	} else {
+		order.BillingAddress = *shipping
 		order.BillingAddressID = shipping.ID
 	}
 
@@ -301,6 +297,14 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
+
+	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+		log.WithError(httpError).Error("Failed to create order line items")
+		cleanup(tx, w, httpError)
+		return
+	}
+
+	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	tx.Create(order)
 	tx.Commit()
@@ -589,7 +593,35 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		}
 	}
 
+	settings, err := a.loadSettings(ctx)
+	if err != nil {
+		return &HTTPError{Code: 500, Message: err.Error()}
+	}
+
+	if err := order.CalculateTotal(settings); err != nil {
+		return &HTTPError{Code: 500, Message: err.Error()}
+	}
+
 	return nil
+}
+
+func (a *API) loadSettings(ctx context.Context) (*models.SiteSettings, error) {
+	config := getConfig(ctx)
+
+	settings := &models.SiteSettings{}
+	resp, err := a.httpClient.Get(config.SiteURL + "/netlify-commerce/settings.json")
+	if err != nil {
+		return nil, fmt.Errorf("Error loading site settings: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		decoder := json.NewDecoder(resp.Body)
+		if err := decoder.Decode(settings); err != nil {
+			return nil, fmt.Errorf("Error parsing site settings: %v", err)
+		}
+	}
+
+	return settings, nil
 }
 
 func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, *HTTPError) {
