@@ -638,17 +638,30 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return err
 	}
 
-	metaTag := doc.Find("#netlify-commerce-product").First()
+	metaTag := doc.Find(".netlify-commerce-product")
 	if metaTag.Length() == 0 {
 		return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
 	}
-	meta := &models.LineItemMetadata{}
-	err = json.Unmarshal([]byte(metaTag.Text()), meta)
-	if err != nil {
-		return err
+	metaProducts := []*models.LineItemMetadata{}
+	metaTag.Each(func(_ int, tag *goquery.Selection) {
+		meta := &models.LineItemMetadata{}
+		err = json.Unmarshal([]byte(tag.Text()), meta)
+		if err == nil {
+			metaProducts = append(metaProducts, meta)
+		}
+	})
+
+	if len(metaProducts) == 1 && item.SKU == "" {
+		item.SKU = metaProducts[0].Sku
 	}
 
-	return item.Process(order, meta)
+	for _, meta := range metaProducts {
+		if meta.Sku == item.SKU {
+			return item.Process(order, meta)
+		}
+	}
+
+	return fmt.Errorf("Line item SKU %v didn't match product SKU from path: %v", item.SKU, metaProducts[0].Sku)
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {

@@ -30,7 +30,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 				<html>
 				<head><title>Test Product</title></head>
 				<body>
-					<script id="netlify-commerce-product">
+					<script class="netlify-commerce-product">
 					{"sku": "product-1", "title": "Product 1", "prices": [
 						{"amount": "9.99", "currency": "USD"}
 					]}
