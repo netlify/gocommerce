@@ -18,7 +18,7 @@ import (
 )
 
 type OrderLineItem struct {
-	SKU      string `json:sku`
+	SKU      string `json:"sku"`
 	Path     string `json:"path"`
 	Quantity uint64 `json:"quantity"`
 }
