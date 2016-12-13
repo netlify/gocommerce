@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/guregu/kami"
@@ -14,6 +15,62 @@ import (
 
 	"github.com/netlify/netlify-commerce/models"
 )
+
+// ------------------------------------------------------------------------------------------------
+// CREATE
+// ------------------------------------------------------------------------------------------------
+func TestOrderCreationWithSimpleOrder(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(nil, config, false)
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/test-product":
+			fmt.Fprintln(w, `<!doctype html>
+				<html>
+				<head><title>Test Product</title></head>
+				<body>
+					<script id="netlify-commerce-product">
+					{"sku": "product-1", "title": "Product 1", "prices": [
+						{"amount": "9.99", "currency": "USD"}
+					]}
+					</script>
+				</body>
+				</html>`)
+		case "/netlify-commerce/settings.json":
+			fmt.Fprintln(w, `{
+			  "taxes": [
+					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
+					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
+				]
+			}`)
+		}
+	}))
+
+	config.SiteURL = ts.URL
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
+		"email": "info@example.com",
+		"shipping_address": {
+			"first_name": "Test", "last_name": "User",
+			"address1": "610 22nd Street",
+			"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+		},
+		"line_items": [{"path": "/test-product", "quantity": 1}]
+	}`))
+	api := NewAPI(config, db, nil, nil)
+
+	api.OrderCreate(ctx, recorder, req)
+
+	order := &models.Order{}
+	extractPayload(t, 201, recorder, order)
+
+	fmt.Printf("Orders is: %v", order)
+
+	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
+	//assert.Equal(t, 999, order.Total, "Total should be 999, was %v", order.Total)
+}
 
 // ------------------------------------------------------------------------------------------------
 // LIST
