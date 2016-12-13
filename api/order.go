@@ -675,13 +675,20 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
 	}
 	metaProducts := []*models.LineItemMetadata{}
+	var parsingErr error
 	metaTag.Each(func(_ int, tag *goquery.Selection) {
+		if parsingErr != nil {
+			return
+		}
 		meta := &models.LineItemMetadata{}
-		err = json.Unmarshal([]byte(tag.Text()), meta)
-		if err == nil {
+		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
+		if parsingErr == nil {
 			metaProducts = append(metaProducts, meta)
 		}
 	})
+	if parsingErr != nil {
+		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
+	}
 
 	if len(metaProducts) == 1 && item.SKU == "" {
 		item.SKU = metaProducts[0].Sku
@@ -693,7 +700,7 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		}
 	}
 
-	return fmt.Errorf("Line item SKU %v didn't match product SKU from path: %v", item.SKU, metaProducts[0].Sku)
+	return fmt.Errorf("No product SKU from path matched: %v", item.SKU)
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {

@@ -67,8 +67,6 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 	order := &models.Order{}
 	extractPayload(t, 201, recorder, order)
 
-	fmt.Printf("Order: %v\n", order.ShippingAddress)
-
 	var total uint64
 	total = 999
 	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
@@ -146,9 +144,9 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 				<body>
 					<script class="netlify-commerce-product">
 					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-						{"amount": "9.99", "currency": "USD", items: [
+						{"amount": "9.99", "currency": "USD", "items": [
 							{"amount": "7.00", "type": "Book"},
-							{"amount": "2.99", "type": "E-Book"},
+							{"amount": "2.99", "type": "E-Book"}
 						]}
 					]}
 					</script>

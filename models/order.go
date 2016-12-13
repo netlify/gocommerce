@@ -2,7 +2,6 @@ package models
 
 import (
 	"encoding/json"
-	"fmt"
 	"math"
 	"time"
 
@@ -205,13 +204,23 @@ func inList(list []string, candidate string) bool {
 }
 
 func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
+	if len(item.PriceItems) > 0 {
+		var tax uint64
+		for _, i := range item.PriceItems {
+			tax += taxFor(&LineItem{
+				Price:    i.Amount,
+				Type:     i.Type,
+				VAT:      i.VAT,
+				Quantity: item.Quantity,
+			}, taxes, country)
+		}
+		return tax
+	}
 	if item.VAT != 0 {
 		return item.Price * item.Quantity * (item.VAT / 100)
 	}
-	fmt.Printf("Checking taxes for %v in %v (%v)\n", item.SKU, country, len(taxes))
 	if len(taxes) > 0 && country != "" {
 		for _, tax := range taxes {
-			fmt.Printf("Checking if tax matches %v: %v", tax.ProductTypes, item.Type)
 			if inList(tax.ProductTypes, item.Type) && inList(tax.Countries, country) {
 				result := float64(item.Price) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
 				return uint64(rint(result))

@@ -435,7 +435,6 @@ func (p *paypalProvider) charge(amount uint64, currency, paymentID, payerID stri
 		return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
 	}
 
-	fmt.Printf("Transactions: %v", payment.Transactions[0])
 	if payment.Transactions[0].Amount == nil {
 		return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
 	}
