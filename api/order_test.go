@@ -6,14 +6,113 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/models"
 )
+
+// ------------------------------------------------------------------------------------------------
+// CREATE
+// ------------------------------------------------------------------------------------------------
+func TestOrderCreationWithSimpleOrder(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(nil, config, false)
+
+	startTestSite(config)
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
+		"email": "info@example.com",
+		"shipping_address": {
+			"first_name": "Test", "last_name": "User",
+			"address1": "610 22nd Street",
+			"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+		},
+		"line_items": [{"path": "/simple-product", "quantity": 1}]
+	}`))
+	api := NewAPI(config, db, nil, nil)
+
+	api.OrderCreate(ctx, recorder, req)
+
+	order := &models.Order{}
+	extractPayload(t, 201, recorder, order)
+
+	var total uint64
+	total = 999
+	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
+	assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 999, was %v", order.Total))
+}
+
+func TestOrderCreationWithTaxes(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(nil, config, false)
+
+	startTestSite(config)
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
+		"email": "info@example.com",
+		"shipping_address": {
+			"first_name": "Test", "last_name": "User",
+			"address1": "Branengebranen",
+			"city": "Berlin", "country": "Germany", "zip": "94107"
+		},
+		"line_items": [{"path": "/simple-product", "quantity": 1}]
+	}`))
+	api := NewAPI(config, db, nil, nil)
+
+	api.OrderCreate(ctx, recorder, req)
+
+	order := &models.Order{}
+	extractPayload(t, 201, recorder, order)
+
+	var total uint64
+	total = 1069
+	var taxes uint64
+	taxes = 70
+	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
+	assert.Equal(t, "Germany", order.ShippingAddress.Country)
+	assert.Equal(t, "Germany", order.BillingAddress.Country)
+	assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1069, was %v", order.Total))
+	assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 70, was %v", order.Total))
+}
+
+func TestOrderCreationForBundleWithTaxes(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(nil, config, false)
+	startTestSite(config)
+
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
+		"email": "info@example.com",
+		"shipping_address": {
+			"first_name": "Test", "last_name": "User",
+			"address1": "Branengebranen",
+			"city": "Berlin", "country": "Germany", "zip": "94107"
+		},
+		"line_items": [{"path": "/bundle-product", "quantity": 1}]
+	}`))
+	api := NewAPI(config, db, nil, nil)
+
+	api.OrderCreate(ctx, recorder, req)
+
+	order := &models.Order{}
+	extractPayload(t, 201, recorder, order)
+
+	var total uint64
+	total = 1105
+	var taxes uint64
+	taxes = 106
+	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
+	assert.Equal(t, "Germany", order.ShippingAddress.Country)
+	assert.Equal(t, "Germany", order.BillingAddress.Country)
+	assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1105, was %v", order.Total))
+	assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Total))
+}
 
 // ------------------------------------------------------------------------------------------------
 // LIST
@@ -717,4 +816,47 @@ func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, c
 		assert.Equal(claims.ID, order.UserID)
 		assert.Equal(expectedOrderEmail, order.Email)
 	}
+}
+
+func startTestSite(config *conf.Configuration) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple-product":
+			fmt.Fprintln(w, `<!doctype html>
+				<html>
+				<head><title>Test Product</title></head>
+				<body>
+					<script class="netlify-commerce-product">
+					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+						{"amount": "9.99", "currency": "USD"}
+					]}
+					</script>
+				</body>
+				</html>`)
+		case "/bundle-product":
+			fmt.Fprintln(w, `<!doctype html>
+				<html>
+				<head><title>Test Product</title></head>
+				<body>
+					<script class="netlify-commerce-product">
+					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+						{"amount": "9.99", "currency": "USD", "items": [
+							{"amount": "7.00", "type": "Book"},
+							{"amount": "2.99", "type": "E-Book"}
+						]}
+					]}
+					</script>
+				</body>
+				</html>`)
+		case "/netlify-commerce/settings.json":
+			fmt.Fprintln(w, `{
+				"taxes": [
+					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
+					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
+				]
+			}`)
+		}
+	}))
+
+	config.SiteURL = ts.URL
 }

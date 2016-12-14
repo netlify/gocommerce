@@ -340,23 +340,6 @@ func requireAdmin(ctx context.Context, paramKey string) (*logrus.Entry, string, 
 }
 
 func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint64) error {
-	config := getConfig(ctx)
-
-	settings := &models.SiteSettings{}
-	resp, err := a.httpClient.Get(config.SiteURL + "/netlify-commerce/settings.json")
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 200 {
-		decoder := json.NewDecoder(resp.Body)
-		if err := decoder.Decode(settings); err != nil {
-			return err
-		}
-	}
-
-	order.CalculateTotal(settings)
-
 	if order.Total != amount {
 		return fmt.Errorf("Amount calculated for order didn't match amount to charge. %v vs %v", order.Total, amount)
 	}
@@ -452,7 +435,6 @@ func (p *paypalProvider) charge(amount uint64, currency, paymentID, payerID stri
 		return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
 	}
 
-	fmt.Printf("Transactions: %v", payment.Transactions[0])
 	if payment.Transactions[0].Amount == nil {
 		return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
 	}

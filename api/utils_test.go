@@ -255,6 +255,6 @@ func extractPayload(t *testing.T, code int, recorder *httptest.ResponseRecorder,
 			assert.FailNow(t, "Failed to extract body")
 		}
 	} else {
-		assert.FailNow(t, "Unexpected code: ", code)
+		assert.FailNow(t, fmt.Sprintf("Unexpected code: %v - expected: %v", recorder.Code, code))
 	}
 }

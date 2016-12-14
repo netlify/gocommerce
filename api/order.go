@@ -18,7 +18,7 @@ import (
 )
 
 type OrderLineItem struct {
-	SKU      string `json:sku`
+	SKU      string `json:"sku"`
 	Path     string `json:"path"`
 	Quantity uint64 `json:"quantity"`
 }
@@ -253,14 +253,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
-	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
-		log.WithError(httpError).Error("Failed to create order line items")
-		cleanup(tx, w, httpError)
-		return
-	}
-	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
-
-	shipping, httpError := a.processAddress(tx, order, params.ShippingAddress, params.ShippingAddressID)
+	shipping, httpError := a.processAddress(tx, order, "Shipping Address", params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
 		cleanup(tx, w, httpError)
 		return
@@ -269,16 +262,19 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		cleanup(tx, w, badRequestError(w, "Shipping Address Required"))
 		return
 	}
+	order.ShippingAddress = *shipping
 	order.ShippingAddressID = shipping.ID
 
-	billing, httpError := a.processAddress(tx, order, params.BillingAddress, params.BillingAddressID)
+	billing, httpError := a.processAddress(tx, order, "Billing Address", params.BillingAddress, params.BillingAddressID)
 	if httpError != nil {
 		cleanup(tx, w, httpError)
 		return
 	}
 	if billing != nil {
+		order.BillingAddress = *billing
 		order.BillingAddressID = billing.ID
 	} else {
+		order.BillingAddress = *shipping
 		order.BillingAddressID = shipping.ID
 	}
 
@@ -301,6 +297,14 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			return
 		}
 	}
+
+	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+		log.WithError(httpError).Error("Failed to create order line items")
+		cleanup(tx, w, httpError)
+		return
+	}
+
+	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	tx.Create(order)
 	tx.Commit()
@@ -403,7 +407,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 		log.Debugf("Updating order's billing address")
 
-		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.BillingAddress, orderParams.BillingAddressID)
+		addr, httpErr := a.processAddress(tx, existingOrder, "Billing Address", orderParams.BillingAddress, orderParams.BillingAddressID)
 		if httpErr != nil {
 
 			log.WithError(httpErr).Warn("Failed to update the billing address")
@@ -427,7 +431,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		log.Debugf("Updating order's shipping address")
 
-		addr, httpErr := a.processAddress(tx, existingOrder, orderParams.ShippingAddress, orderParams.ShippingAddressID)
+		addr, httpErr := a.processAddress(tx, existingOrder, "Shipping Address", orderParams.ShippingAddress, orderParams.ShippingAddressID)
 		if httpErr != nil {
 			log.WithError(httpErr).Warn("Failed to update the shipping address")
 			cleanup(tx, w, httpErr)
@@ -589,10 +593,36 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		}
 	}
 
+	settings, err := a.loadSettings(ctx)
+	if err != nil {
+		return &HTTPError{Code: 500, Message: err.Error()}
+	}
+
+	order.CalculateTotal(settings)
+
 	return nil
 }
 
-func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.Address, id string) (*models.Address, *HTTPError) {
+func (a *API) loadSettings(ctx context.Context) (*models.SiteSettings, error) {
+	config := getConfig(ctx)
+
+	settings := &models.SiteSettings{}
+	resp, err := a.httpClient.Get(config.SiteURL + "/netlify-commerce/settings.json")
+	if err != nil {
+		return nil, fmt.Errorf("Error loading site settings: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == 200 {
+		decoder := json.NewDecoder(resp.Body)
+		if err := decoder.Decode(settings); err != nil {
+			return nil, fmt.Errorf("Error parsing site settings: %v", err)
+		}
+	}
+
+	return settings, nil
+}
+
+func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, *HTTPError) {
 	if address == nil && id == "" {
 		return nil, nil
 	}
@@ -600,11 +630,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.A
 	if id != "" {
 		loadedAddress := new(models.Address)
 		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
-			return nil, httpError(400, "Bad address id: %v, %v", id, result.Error)
+			return nil, httpError(400, "Bad %v id: %v, %v", name, id, result.Error)
 		}
 
 		if order.UserID != loadedAddress.UserID {
-			return nil, httpError(400, "Can't update the order to an address that doesn't belong to the user")
+			return nil, httpError(400, "Can't update the order to an %v that doesn't belong to the user", name)
 		}
 
 		if loadedAddress.UserID == "" {
@@ -616,7 +646,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, address *models.A
 
 	// it is a new address we're  making
 	if err := address.Validate(); err != nil {
-		return nil, httpError(400, "Failed to validate address: "+err.Error())
+		return nil, httpError(400, "Failed to validate %v: %v", name, err.Error())
 	}
 
 	// is a valid id that doesn't already belong to a user
@@ -638,21 +668,37 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return err
 	}
 
-	metaTag := doc.Find("#netlify-commerce-product").First()
+	metaTag := doc.Find(".netlify-commerce-product")
 	if metaTag.Length() == 0 {
-		metaTag = doc.Find("#gocommerce-product").First() // Keep the code backwards compatible
+		return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
+	}
+	metaProducts := []*models.LineItemMetadata{}
+	var parsingErr error
+	metaTag.Each(func(_ int, tag *goquery.Selection) {
+		if parsingErr != nil {
+			return
+		}
+		meta := &models.LineItemMetadata{}
+		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
+		if parsingErr == nil {
+			metaProducts = append(metaProducts, meta)
+		}
+	})
+	if parsingErr != nil {
+		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
+	}
 
-		if metaTag.Length() == 0 {
-			return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
+	if len(metaProducts) == 1 && item.SKU == "" {
+		item.SKU = metaProducts[0].Sku
+	}
+
+	for _, meta := range metaProducts {
+		if meta.Sku == item.SKU {
+			return item.Process(order, meta)
 		}
 	}
-	meta := &models.LineItemMetadata{}
-	err = json.Unmarshal([]byte(metaTag.Text()), meta)
-	if err != nil {
-		return err
-	}
 
-	return item.Process(order, meta)
+	return fmt.Errorf("No product SKU from path matched: %v", item.SKU)
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {

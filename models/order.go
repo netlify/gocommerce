@@ -185,10 +185,11 @@ func (o *Order) CalculateTotal(settings *SiteSettings) {
 	var taxes uint64
 	if o.VATNumber == "" {
 		for _, item := range o.LineItems {
-			taxes += taxFor(item, settings.Taxes, o.BillingAddress.Country)
+			taxes += taxFor(item, settings.Taxes, o.ShippingAddress.Country)
 		}
 	}
 
+	o.Taxes = taxes
 	o.Total = o.SubTotal + taxes
 }
 
@@ -202,6 +203,18 @@ func inList(list []string, candidate string) bool {
 }
 
 func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
+	if len(item.PriceItems) > 0 {
+		var tax uint64
+		for _, i := range item.PriceItems {
+			tax += taxFor(&LineItem{
+				Price:    i.Amount,
+				Type:     i.Type,
+				VAT:      i.VAT,
+				Quantity: item.Quantity,
+			}, taxes, country)
+		}
+		return tax
+	}
 	if item.VAT != 0 {
 		return item.Price * item.Quantity * (item.VAT / 100)
 	}

@@ -17,11 +17,20 @@ type LineItem struct {
 
 	Path string `json:"path"`
 
-	Price    uint64 `json:"price"`
-	Quantity uint64 `json:"quantity"`
+	Price      uint64 `json:"price"`
+	PriceItems []PriceItem
+	Quantity   uint64 `json:"quantity"`
 
 	CreatedAt time.Time  `json:"-"`
 	DeletedAt *time.Time `json:"-"`
+}
+
+type PriceItem struct {
+	ID int64 `json:"id"`
+
+	Amount uint64 `json:"amount"`
+	Type   string `json:"type"`
+	VAT    uint64 `json:"vat"`
 }
 
 func (LineItem) TableName() string {
@@ -29,9 +38,18 @@ func (LineItem) TableName() string {
 }
 
 type PriceMetadata struct {
-	Amount   string `json:"amount"`
-	Currency string `json:"currency"`
-	VAT      string `json:"vat"`
+	Amount   string          `json:"amount"`
+	Currency string          `json:"currency"`
+	VAT      string          `json:"vat"`
+	Items    []PriceMetaItem `json:"items"`
+
+	cents uint64
+}
+
+type PriceMetaItem struct {
+	Amount string `json:"amount"`
+	Type   string `json:"type"`
+	VAT    uint64 `json:"vat"`
 }
 
 type LineItemMetadata struct {
@@ -54,17 +72,28 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 }
 
 func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error {
+	lowestPrice := PriceMetadata{}
 	for _, price := range prices {
 		if price.Currency == currency {
 			amount, err := strconv.ParseFloat(price.Amount, 64)
 			if err != nil {
 				return err
 			}
-			cents := uint64(amount * 100)
-			if i.Price == 0 || cents < i.Price {
-				i.Price = cents
+			price.cents = uint64(amount * 100)
+			if lowestPrice.cents == 0 || price.cents < lowestPrice.cents {
+				lowestPrice = price
 			}
 		}
 	}
+	i.Price = lowestPrice.cents
+	i.PriceItems = make([]PriceItem, len(lowestPrice.Items))
+	for index, item := range lowestPrice.Items {
+		amount, err := strconv.ParseFloat(item.Amount, 64)
+		if err != nil {
+			return err
+		}
+		i.PriceItems[index] = PriceItem{Amount: uint64(amount * 100), Type: item.Type, VAT: item.VAT}
+	}
+
 	return nil
 }
