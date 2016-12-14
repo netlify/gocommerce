@@ -180,7 +180,7 @@ func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) er
 	return nil
 }
 
-func (o *Order) CalculateTotal(settings *SiteSettings) error {
+func (o *Order) CalculateTotal(settings *SiteSettings) {
 	// Calculate taxes/shipping here
 	var taxes uint64
 	if o.VATNumber == "" {
@@ -191,7 +191,6 @@ func (o *Order) CalculateTotal(settings *SiteSettings) error {
 
 	o.Taxes = taxes
 	o.Total = o.SubTotal + taxes
-	return nil
 }
 
 func inList(list []string, candidate string) bool {
