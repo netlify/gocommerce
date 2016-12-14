@@ -13,6 +13,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/models"
 )
 
@@ -21,35 +22,9 @@ import (
 // ------------------------------------------------------------------------------------------------
 func TestOrderCreationWithSimpleOrder(t *testing.T) {
 	db, config := db(t)
-	config.LogConf.Level = "DEBUG"
 	ctx := testContext(nil, config, false)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/test-product":
-			fmt.Fprintln(w, `<!doctype html>
-				<html>
-				<head><title>Test Product</title></head>
-				<body>
-					<script class="netlify-commerce-product">
-					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-						{"amount": "9.99", "currency": "USD"}
-					]}
-					</script>
-				</body>
-				</html>`)
-		case "/netlify-commerce/settings.json":
-			fmt.Fprintln(w, `{
-			  "taxes": [
-					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
-					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
-				]
-			}`)
-		}
-	}))
-
-	config.SiteURL = ts.URL
-
+	startTestSite(config)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
 		"email": "info@example.com",
@@ -58,7 +33,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 			"address1": "610 22nd Street",
 			"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
 		},
-		"line_items": [{"path": "/test-product", "quantity": 1}]
+		"line_items": [{"path": "/simple-product", "quantity": 1}]
 	}`))
 	api := NewAPI(config, db, nil, nil)
 
@@ -77,32 +52,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 	db, config := db(t)
 	ctx := testContext(nil, config, false)
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/test-product":
-			fmt.Fprintln(w, `<!doctype html>
-				<html>
-				<head><title>Test Product</title></head>
-				<body>
-					<script class="netlify-commerce-product">
-					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-						{"amount": "9.99", "currency": "USD"}
-					]}
-					</script>
-				</body>
-				</html>`)
-		case "/netlify-commerce/settings.json":
-			fmt.Fprintln(w, `{
-			  "taxes": [
-					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
-					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
-				]
-			}`)
-		}
-	}))
-
-	config.SiteURL = ts.URL
-
+	startTestSite(config)
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
 		"email": "info@example.com",
@@ -111,7 +61,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 			"address1": "Branengebranen",
 			"city": "Berlin", "country": "Germany", "zip": "94107"
 		},
-		"line_items": [{"path": "/test-product", "quantity": 1}]
+		"line_items": [{"path": "/simple-product", "quantity": 1}]
 	}`))
 	api := NewAPI(config, db, nil, nil)
 
@@ -134,35 +84,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 	db, config := db(t)
 	ctx := testContext(nil, config, false)
-
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/test-product":
-			fmt.Fprintln(w, `<!doctype html>
-				<html>
-				<head><title>Test Product</title></head>
-				<body>
-					<script class="netlify-commerce-product">
-					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-						{"amount": "9.99", "currency": "USD", "items": [
-							{"amount": "7.00", "type": "Book"},
-							{"amount": "2.99", "type": "E-Book"}
-						]}
-					]}
-					</script>
-				</body>
-				</html>`)
-		case "/netlify-commerce/settings.json":
-			fmt.Fprintln(w, `{
-			  "taxes": [
-					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
-					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
-				]
-			}`)
-		}
-	}))
-
-	config.SiteURL = ts.URL
+	startTestSite(config)
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", "https://not-real", strings.NewReader(`{
@@ -172,7 +94,7 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 			"address1": "Branengebranen",
 			"city": "Berlin", "country": "Germany", "zip": "94107"
 		},
-		"line_items": [{"path": "/test-product", "quantity": 1}]
+		"line_items": [{"path": "/bundle-product", "quantity": 1}]
 	}`))
 	api := NewAPI(config, db, nil, nil)
 
@@ -894,4 +816,47 @@ func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, c
 		assert.Equal(claims.ID, order.UserID)
 		assert.Equal(expectedOrderEmail, order.Email)
 	}
+}
+
+func startTestSite(config *conf.Configuration) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/simple-product":
+			fmt.Fprintln(w, `<!doctype html>
+				<html>
+				<head><title>Test Product</title></head>
+				<body>
+					<script class="netlify-commerce-product">
+					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+						{"amount": "9.99", "currency": "USD"}
+					]}
+					</script>
+				</body>
+				</html>`)
+		case "/bundle-product":
+			fmt.Fprintln(w, `<!doctype html>
+				<html>
+				<head><title>Test Product</title></head>
+				<body>
+					<script class="netlify-commerce-product">
+					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+						{"amount": "9.99", "currency": "USD", "items": [
+							{"amount": "7.00", "type": "Book"},
+							{"amount": "2.99", "type": "E-Book"}
+						]}
+					]}
+					</script>
+				</body>
+				</html>`)
+		case "/netlify-commerce/settings.json":
+			fmt.Fprintln(w, `{
+				"taxes": [
+					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},
+					{"percentage": 7, "product_types": ["Book"], "countries": ["Germany"]}
+				]
+			}`)
+		}
+	}))
+
+	config.SiteURL = ts.URL
 }
