@@ -39,9 +39,10 @@ type API struct {
 }
 
 type JWTClaims struct {
-	ID     string   `json:"id"`
-	Email  string   `json:"email"`
-	Groups []string `json:"groups"`
+	ID           string                 `json:"id"`
+	Email        string                 `json:"email"`
+	AppMetaData  map[string]interface{} `json:"app_metadata"`
+	UserMetaData map[string]interface{} `json:"user_metadata"`
 	*jwt.StandardClaims
 }
 
@@ -82,17 +83,26 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	isAdmin := false
-	for _, g := range claims.Groups {
-		if g == config.JWT.AdminGroupName {
-			isAdmin = true
-			break
+	roles, ok := claims.AppMetaData["roles"]
+	if ok {
+		fmt.Printf("Got roles: %v\n", roles)
+		roleStrings, _ := roles.([]interface{})
+		fmt.Printf("Iterating over roleStrings %v\n", roleStrings)
+		for _, data := range roleStrings {
+			role, _ := data.(string)
+			fmt.Printf("Comparing role %v to %v", role, config.JWT.AdminGroupName)
+			if role == config.JWT.AdminGroupName {
+				isAdmin = true
+				break
+			}
 		}
 	}
+
 	log = log.WithFields(logrus.Fields{
-		"claims_id":     claims.ID,
-		"claims_email":  claims.Email,
-		"claims_groups": claims.Groups,
-		"is_admin":      isAdmin,
+		"claims_id":    claims.ID,
+		"claims_email": claims.Email,
+		"roles":        roles,
+		"is_admin":     isAdmin,
 	})
 
 	log.Info("successfully parsed claims")

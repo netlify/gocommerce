@@ -96,6 +96,10 @@ func Load(configFile string) (*Configuration, error) {
 		return nil, errors.Wrap(err, "configure logging")
 	}
 
+	if config.JWT.AdminGroupName == "" {
+		config.JWT.AdminGroupName = "admin"
+	}
+
 	return validateConfig(config)
 }
 

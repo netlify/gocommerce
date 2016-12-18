@@ -131,6 +131,11 @@ func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Re
 //  - orders since        &from=iso8601      - default = 0
 //  - orders before       &to=iso8601        - default = now
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
+// And you can filter on
+//  - fullfilment_state=pending   - only orders pending shipping
+//  - payment_state=pending       - only payd orders
+//  - type=book  - filter on product type
+
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := getLogger(ctx)
 
@@ -163,7 +168,9 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	query = query.Where("user_id = ?", id)
+	if id != "all" {
+		query = query.Where("user_id = ?", id)
+	}
 	log.WithField("query_user_id", id).Debug("URL parsed and query perpared")
 
 	var orders []models.Order
