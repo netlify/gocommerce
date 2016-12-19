@@ -154,6 +154,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/users/:user_id/addresses", api.AddressList)
 	mux.Get("/users/:user_id/addresses/:addr_id", api.AddressView)
 	mux.Delete("/users/:user_id/addresses/:addr_id", api.AddressDelete)
+	mux.Get("/users/:user_id/orders", api.OrderList)
 
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
 
@@ -173,6 +174,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	})
 
 	api.handler = corsHandler.Handler(mux)
+
 	return api
 }
 

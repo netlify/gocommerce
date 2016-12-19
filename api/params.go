@@ -4,10 +4,20 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jinzhu/gorm"
 )
+
+var sortFields = map[string]string{
+	"created_at": "created_at",
+	"updated_at": "updated_at",
+	"email":      "email",
+	"taxes":      "taxes",
+	"subtotal":   "subtotal",
+	"total":      "total",
+}
 
 func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	query = addFilters(query, params, []string{
@@ -48,16 +58,35 @@ func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	return parseTimeQueryParams(query, params)
 }
 
+func sortField(value string) string {
+	field, _ := sortFields[value]
+	return field
+}
+
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	if values, exists := params["sort"]; exists {
-		switch values[0] {
-		case "desc":
-			query = query.Order("created_at DESC")
-		case "asc":
-			query = query.Order("created_at ASC")
-		default:
-			return nil, fmt.Errorf("bad value for 'sort' parameter: only 'asc' or 'desc' are accepted")
+		for _, value := range values {
+			parts := strings.Split(value, " ")
+			field := sortField(parts[0])
+			if field == "" {
+				return nil, fmt.Errorf("bad field for sort '%v'", field)
+			}
+			dir := "asc"
+			if len(parts) == 2 {
+				switch strings.ToLower(parts[1]) {
+				case "asc":
+					dir = "asc"
+				case "desc":
+					dir = "desc"
+				default:
+					return nil, fmt.Errorf("bad direction for sort '%v', only 'asc' and 'desc' allowed", parts[1])
+				}
+			}
+			query = query.Order(field + " " + dir)
 		}
+	} else {
+		fmt.Println("Sorting by created_at desc")
+		query = query.Order("created_at desc")
 	}
 
 	return parseTimeQueryParams(query, params)

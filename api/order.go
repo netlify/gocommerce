@@ -158,12 +158,13 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	// handle the admin info
 	id := claims.ID
-	if values, exists := params["user_id"]; exists {
+	userID := kami.Param(ctx, "user_id")
+	if userID != "" {
 		if isAdmin(ctx) {
-			id = values[0]
+			id = userID
 			log.WithField("admin_id", claims.ID).Debugf("Making admin request for user %s by %s", id, claims.ID)
 		} else {
-			log.Warnf("Request for user id %s as user %s - but not an admin", values[0], id)
+			log.Warnf("Request for user id %s as user %s - but not an admin", userID, id)
 			badRequestError(w, "Can't request user id if you're not that user, or an admin")
 			return
 		}
