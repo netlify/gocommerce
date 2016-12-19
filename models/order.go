@@ -41,6 +41,8 @@ type Order struct {
 	FulfillmentState string `json:"fulfillment_state"`
 	State            string `json:"state"`
 
+	PaymentProcessor string `json:"payment_processor"`
+
 	Transactions []*Transaction `json:"transactions"`
 	Notes        []*OrderNote   `json:"notes"`
 

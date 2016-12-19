@@ -169,10 +169,12 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	if params.StripeToken != "" {
 		chType = StripeChargerType
 		paymentToken = params.StripeToken
+		order.PaymentProcessor = "stripe"
 	} else if params.PaypalID != "" {
 		chType = PaypalChargerType
 		paymentToken = params.PaypalID
 		paymentUser = params.PaypalUserID
+		order.PaymentProcessor = "paypal"
 	}
 
 	processorID, err := getCharger(ctx, chType).charge(params.Amount, params.Currency, paymentToken, paymentUser)

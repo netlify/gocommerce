@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"time"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
@@ -40,11 +41,26 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	log.Debug("Parsed url params")
 
 	var users []models.User
-	results := query.Find(&users)
-	if results.Error != nil {
-		log.WithError(results.Error).Warn("Error while querying the database")
+	rows, err := query.Joins("JOIN orders ON users.id = orders.user_id").Select("users.id, users.email, users.created_at, users.updated_at, count(orders.id) as order_count").Group("users.id").Find(&users).Rows()
+	if err != nil {
+		log.WithError(err).Warn("Error while querying the database")
 		internalServerError(w, "Failed to execute request")
 		return
+	}
+	defer rows.Close()
+	i := 0
+	for rows.Next() {
+		var id, email string
+		var created_at, updated_at time.Time
+		var order_count int64
+		err := rows.Scan(&id, &email, &created_at, &updated_at, &order_count)
+		if err != nil {
+			log.WithError(err).Warn("Error while querying the database")
+			internalServerError(w, "Failed to execute request")
+			return
+		}
+		users[i].OrderCount = order_count
+		i++
 	}
 
 	numUsers := len(users)
@@ -79,6 +95,9 @@ func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	if user.DeletedAt != nil {
 		notFoundError(w, "Couldn't find a record for "+userID)
 	}
+
+	orders := []models.Order{}
+	a.db.Where("user_id = ?", user.ID).Find(&orders).Count(&user.OrderCount)
 
 	sendJSON(w, 200, user)
 }
