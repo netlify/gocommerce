@@ -41,6 +41,8 @@ type OrderParams struct {
 	LineItems []*OrderLineItem `json:"line_items"`
 
 	Currency string `json:"currency"`
+
+	FulfillmentState string `json:"fulfillment_state"`
 }
 
 type verificationError struct {
@@ -315,6 +317,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	tx.Create(order)
+	models.LogEvent(tx, order.UserID, order.ID, models.EventCreated, nil)
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
@@ -330,6 +333,8 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	orderID := kami.Param(ctx, "id")
 	log := getLogger(ctx).WithField("order_id", orderID)
+	claims := getClaims(ctx)
+	changes := []string{}
 
 	if !isAdmin(ctx) {
 		log.Warn("Illegal access attempted")
@@ -360,14 +365,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if existingOrder.State != models.PendingState {
-		log.Warn("Tried to update order that is no longer pending")
-		cleanup(nil, w, badRequestError(w, "Order is no longer pending - can't update details"))
-		return
-	}
-
 	alreadyPaid := existingOrder.PaymentState == models.PaidState
-	alreadyShipped := existingOrder.FulfillmentState == models.PaidState
 
 	//
 	// handle the simple fields
@@ -375,10 +373,12 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if orderParams.SessionID != "" {
 		log.Debugf("Updating session id from '%s' to '%s'", existingOrder.SessionID, orderParams.SessionID)
 		existingOrder.SessionID = orderParams.SessionID
+		changes = append(changes, "session_id")
 	}
 	if orderParams.Email != "" {
 		log.Debugf("Updating email from '%s' to '%s'", existingOrder.Email, orderParams.Email)
 		existingOrder.Email = orderParams.Email
+		changes = append(changes, "email")
 	}
 
 	if orderParams.Currency != "" {
@@ -389,7 +389,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 		log.Debugf("Updating currency from '%v' to '%v'", existingOrder.Currency, orderParams.Currency)
 		existingOrder.Currency = orderParams.Currency
-
+		changes = append(changes, "currency")
 	}
 	if orderParams.VATNumber != "" {
 		if alreadyPaid {
@@ -400,6 +400,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 		log.Debugf("Updating vat number from '%v' to '%v'", existingOrder.VATNumber, orderParams.VATNumber)
 		existingOrder.VATNumber = orderParams.VATNumber
+		changes = append(changes, "vatnumber")
 	}
 
 	tx := a.db.Begin()
@@ -408,11 +409,6 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	// handle the addresses
 	//
 	if orderParams.BillingAddress != nil || orderParams.BillingAddressID != "" {
-		if alreadyPaid {
-			log.Warn("Tried to update the billing address after payment")
-			cleanup(tx, w, badRequestError(w, "Can't update the billing address of an order that has already been paid"))
-			return
-		}
 		log.Debugf("Updating order's billing address")
 
 		addr, httpErr := a.processAddress(tx, existingOrder, "Billing Address", orderParams.BillingAddress, orderParams.BillingAddressID)
@@ -428,15 +424,10 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			"address_id":     addr.ID,
 			"old_address_id": old,
 		}).Debugf("Updated the billing address id to %s", addr.ID)
+		changes = append(changes, "billing_address")
 	}
 
 	if orderParams.ShippingAddress != nil || orderParams.ShippingAddressID != "" {
-		if alreadyShipped {
-			log.Warn("Tried to update the shipping address after it has shipped")
-			cleanup(tx, w, badRequestError(w, "Can't update the shipping address of an order that has been shipped"))
-			return
-		}
-
 		log.Debugf("Updating order's shipping address")
 
 		addr, httpErr := a.processAddress(tx, existingOrder, "Shipping Address", orderParams.ShippingAddress, orderParams.ShippingAddressID)
@@ -452,6 +443,22 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			"address_id":     addr.ID,
 			"old_address_id": old,
 		}).Debugf("Updated the shipping address id to %s", addr.ID)
+		changes = append(changes, "shipping_address")
+	}
+
+	if orderParams.FulfillmentState != "" {
+		_, ok := map[string]bool{
+			"pending":  true,
+			"shipping": true,
+			"shipped":  true,
+		}[orderParams.FulfillmentState]
+		if !ok {
+			log.WithError(err).Warn("Failed to update order data: " + err.Error())
+			cleanup(tx, w, badRequestError(w, "Bad fulfillment state: "+orderParams.FulfillmentState))
+			return
+		}
+		existingOrder.FulfillmentState = orderParams.FulfillmentState
+		changes = append(changes, "fulfillment_state")
 	}
 
 	if orderParams.Data != nil {
@@ -465,6 +472,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			}
 			return
 		}
+		changes = append(changes, "data")
 	}
 
 	//
@@ -484,11 +492,17 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		}
 	}
 
+	if len(updatedItems) > 0 {
+		changes = append(changes, "line_items")
+	}
+
 	log.Info("Saving order updates")
 	if rsp := tx.Save(existingOrder); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while saving order updates")
 		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
 	}
+
+	models.LogEvent(tx, claims.ID, existingOrder.ID, models.EventUpdated, changes)
 	if rsp := tx.Commit(); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while saving order updates")
 		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
