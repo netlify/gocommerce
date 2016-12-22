@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/netlify/netlify-commerce/models"
 )
 
 var sortFields = map[string]string{
@@ -20,7 +21,7 @@ var sortFields = map[string]string{
 }
 
 func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	query = addFilters(query, params, []string{
+	query = addFilters(query, models.Transaction{}.TableName(), params, []string{
 		"processor_id",
 		"user_id",
 		"order_id",
@@ -46,7 +47,7 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 }
 
 func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	query = addFilters(query, params, []string{
+	query = addFilters(query, models.User{}.TableName(), params, []string{
 		"id",
 		"email",
 	})
@@ -123,10 +124,10 @@ func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	return query, nil
 }
 
-func addFilters(query *gorm.DB, params url.Values, availableFilters []string) *gorm.DB {
+func addFilters(query *gorm.DB, table string, params url.Values, availableFilters []string) *gorm.DB {
 	for _, filter := range availableFilters {
 		if values, exists := params[filter]; exists {
-			query = query.Where(filter+" = ?", values[0])
+			query = query.Where(table+"."+filter+" = ?", values[0])
 		}
 	}
 	return query

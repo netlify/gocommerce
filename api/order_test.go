@@ -151,6 +151,7 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	db, config := db(t)
 
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
+	ctx = kami.SetParam(ctx, "user_id", "all")
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
@@ -192,6 +193,7 @@ func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	db, config := db(t)
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
+	ctx = kami.SetParam(ctx, "user_id", "all")
 
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
@@ -495,39 +497,6 @@ func TestOrderUpdateAddress_NewAddress(t *testing.T) {
 	defer db.Unscoped().Delete(savedAddr)
 
 	validateAddress(t, *paramsAddress, *savedAddr)
-}
-
-func TestOrderUpdatePaymentInfoAfterPaid(t *testing.T) {
-	db, _ := db(t)
-	defer db.Save(firstOrder)
-	db.Model(firstOrder).Update("payment_state", "paid")
-
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
-		Currency: "monopoly",
-	})
-	validateError(t, 400, recorder)
-}
-
-func TestOrderUpdateBillingAddressAfterPaid(t *testing.T) {
-	db, _ := db(t)
-	defer db.Model(firstOrder).Update("payment_state", "pending")
-	db.Model(firstOrder).Update("payment_state", "paid")
-
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
-		BillingAddressID: testAddress.ID,
-	})
-	validateError(t, 400, recorder)
-}
-
-func TestOrderUpdateShippingAfterShipped(t *testing.T) {
-	db, _ := db(t)
-	defer db.Model(firstOrder).Update("fulfillment_state", "pending")
-	db.Model(firstOrder).Update("fulfillment_state", "paid")
-
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
-		ShippingAddressID: testAddress.ID,
-	})
-	validateError(t, 400, recorder)
 }
 
 func TestOrderUpdateAsNonAdmin(t *testing.T) {

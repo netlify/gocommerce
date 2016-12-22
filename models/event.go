@@ -22,6 +22,10 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+func (Event) TableName() string {
+	return tableName("events")
+}
+
 type EventType string
 
 const (

@@ -41,7 +41,13 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	log.Debug("Parsed url params")
 
 	var users []models.User
-	rows, err := query.Joins("JOIN orders ON users.id = orders.user_id").Select("users.id, users.email, users.created_at, users.updated_at, count(orders.id) as order_count").Group("users.id").Find(&users).Rows()
+	orderTable := models.Order{}.TableName()
+	userTable := models.User{}.TableName()
+	query = query.
+		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = orders.user_id").
+		Select(userTable + ".id, " + userTable + ".email, " + userTable + ".created_at, " + userTable + ".updated_at, count(orders.id) as order_count").
+		Group(userTable + ".id")
+	rows, err := query.Find(&users).Rows()
 	if err != nil {
 		log.WithError(err).Warn("Error while querying the database")
 		internalServerError(w, "Failed to execute request")

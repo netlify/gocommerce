@@ -500,12 +500,14 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	if rsp := tx.Save(existingOrder); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while saving order updates")
 		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
+		return
 	}
 
 	models.LogEvent(tx, claims.ID, existingOrder.ID, models.EventUpdated, changes)
 	if rsp := tx.Commit(); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while saving order updates")
 		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
+		return
 	}
 
 	sendJSON(w, 200, existingOrder)

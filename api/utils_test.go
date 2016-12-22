@@ -56,7 +56,7 @@ func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
 
 	loadTestData(db)
 	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
-	urlWithUserID = fmt.Sprintf("https://not-real?user_id=%s", testUser.ID)
+	urlWithUserID = fmt.Sprintf("https://not-real/users/%s/orders", testUser.ID)
 
 	return db, config
 }
@@ -79,9 +79,8 @@ func testConfig() *conf.Configuration {
 
 func testToken(id, email string) *jwt.Token {
 	claims := &JWTClaims{
-		ID:     id,
-		Email:  email,
-		Groups: []string{},
+		ID:    id,
+		Email: email,
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return t
