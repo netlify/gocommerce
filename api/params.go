@@ -65,6 +65,30 @@ func sortField(value string) string {
 }
 
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	if tax := params.Get("tax"); tax != "" {
+		if tax == "yes" || tax == "true" {
+			query = query.Where("taxes > 0")
+		} else {
+			query = query.Where("taxes = 0")
+		}
+	}
+
+	if billingCountries := params.Get("billing_countries"); billingCountries != "" {
+		addressTable := models.Address{}.TableName()
+		orderTable := models.Order{}.TableName()
+		statement := "JOIN " + addressTable + " as billing_address on billing_address.id = " +
+			orderTable + ".billing_address_id AND " + "billing_address.country in (?)"
+		query = query.Joins(statement, strings.Split(billingCountries, ","))
+	}
+
+	if shippingCountries := params.Get("shipping_countries"); shippingCountries != "" {
+		addressTable := models.Address{}.TableName()
+		orderTable := models.Order{}.TableName()
+		statement := "JOIN " + addressTable + " as shipping_address on shipping_address.id = " +
+			orderTable + ".shipping_address_id AND " + "shipping_address.country in (?)"
+		query = query.Joins(statement, strings.Split(shippingCountries, ","))
+	}
+
 	if values, exists := params["sort"]; exists {
 		for _, value := range values {
 			parts := strings.Split(value, " ")
