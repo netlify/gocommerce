@@ -85,12 +85,9 @@ func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	isAdmin := false
 	roles, ok := claims.AppMetaData["roles"]
 	if ok {
-		fmt.Printf("Got roles: %v\n", roles)
 		roleStrings, _ := roles.([]interface{})
-		fmt.Printf("Iterating over roleStrings %v\n", roleStrings)
 		for _, data := range roleStrings {
 			role, _ := data.(string)
-			fmt.Printf("Comparing role %v to %v", role, config.JWT.AdminGroupName)
 			if role == config.JWT.AdminGroupName {
 				isAdmin = true
 				break

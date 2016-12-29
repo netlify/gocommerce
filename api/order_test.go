@@ -177,10 +177,11 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	}
 }
 
-func TestOrderQueryForAllOrdersAsStranger(t *testing.T) {
+func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	db, config := db(t)
 
 	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
+
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 

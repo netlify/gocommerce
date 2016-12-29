@@ -177,6 +177,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	log.WithField("query_user_id", id).Debug("URL parsed and query perpared")
 
 	var orders []models.Order
+	query.LogMode(true)
 	result := query.Find(&orders)
 	if result.Error != nil {
 		log.WithError(err).Warn("Error while querying database")
@@ -505,8 +506,8 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	models.LogEvent(tx, claims.ID, existingOrder.ID, models.EventUpdated, changes)
 	if rsp := tx.Commit(); rsp.Error != nil {
-		log.WithError(err).Warn("Problem while saving order updates")
-		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
+		log.WithError(err).Warn("Problem while committing order updates")
+		cleanup(tx, w, internalServerError(w, "Error committing order updates"))
 		return
 	}
 

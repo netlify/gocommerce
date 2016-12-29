@@ -42,7 +42,6 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
 	recorder := httptest.NewRecorder()
-
 	NewAPI(config, db, nil, nil).UserList(ctx, recorder, req)
 
 	users := []models.User{}

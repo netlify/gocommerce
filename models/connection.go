@@ -59,6 +59,8 @@ func AutoMigrate(db *gorm.DB) error {
 		OrderData{},
 		OrderNote{},
 		Transaction{},
-		User{})
+		User{},
+		Event{},
+	)
 	return db.Error
 }
