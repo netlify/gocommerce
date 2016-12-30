@@ -47,7 +47,14 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = orders.user_id").
 		Select(userTable + ".id, " + userTable + ".email, " + userTable + ".created_at, " + userTable + ".updated_at, count(orders.id) as order_count").
 		Group(userTable + ".id")
-	rows, err := query.Find(&users).Rows()
+
+	offset, limit, err := paginate(w, r, query.Model(&models.User{}))
+	if err != nil {
+		badRequestError(w, "Bad Pagination Parameters: %v", err)
+		return
+	}
+
+	rows, err := query.Offset(offset).Limit(limit).Find(&users).Rows()
 	if err != nil {
 		log.WithError(err).Warn("Error while querying the database")
 		internalServerError(w, "Failed to execute request")

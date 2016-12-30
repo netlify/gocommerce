@@ -130,20 +130,20 @@ func parseLimitQueryParam(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 }
 
 func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	if values, exists := params["from"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
+	if value := params.Get("from"); value != "" {
+		ts, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
 		}
-		query = query.Where("created_at >= ?", date)
+		query = query.Where("created_at >= ?", time.Unix(ts, 0))
 	}
 
-	if values, exists := params["to"]; exists {
-		date, err := time.Parse(time.RFC3339, values[0])
+	if value := params.Get("to"); value != "" {
+		ts, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
 		}
-		query = query.Where("created_at <= ?", date)
+		query = query.Where("created_at <= ?", time.Unix(ts, 0))
 	}
 	return query, nil
 }

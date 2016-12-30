@@ -176,9 +176,15 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 	log.WithField("query_user_id", id).Debug("URL parsed and query perpared")
 
+	offset, limit, err := paginate(w, r, query.Model(&models.Order{}))
+	if err != nil {
+		badRequestError(w, "Bad Pagination Parameters: %v", err)
+		return
+	}
+
 	var orders []models.Order
 	query.LogMode(true)
-	result := query.Find(&orders)
+	result := query.Offset(offset).Limit(limit).Find(&orders)
 	if result.Error != nil {
 		log.WithError(err).Warn("Error while querying database")
 		internalServerError(w, "Error during database query: %v", result.Error)

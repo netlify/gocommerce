@@ -144,7 +144,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/orders/:order_id/payments", api.PaymentListForOrder)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
 
-	mux.Get("/users/", api.UserList)
+	mux.Get("/users", api.UserList)
 	mux.Get("/users/:user_id", api.UserView)
 	mux.Get("/users/:user_id/payments", api.PaymentListForUser)
 	mux.Delete("/users/:user_id", api.UserDelete)
@@ -162,11 +162,14 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Post("/paypal", api.PaypalCreatePayment)
 	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
 
+	mux.Get("/reports/sales", api.SalesReport)
+
 	mux.Post("/claim", api.ClaimOrders)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders:   []string{"Link", "X-Total-Count"},
 		AllowCredentials: true,
 	})
 
