@@ -129,21 +129,37 @@ func parseLimitQueryParam(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	return query, nil
 }
 
-func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+func getTimeQueryParams(params url.Values) (from *time.Time, to *time.Time, err error) {
 	if value := params.Get("from"); value != "" {
 		ts, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("bad value for 'from' parameter: %s", err)
+			return from, to, fmt.Errorf("bad value for 'from' parameter: %s", err)
 		}
-		query = query.Where("created_at >= ?", time.Unix(ts, 0))
+		t := time.Unix(ts, 0)
+		from = &t
 	}
 
 	if value := params.Get("to"); value != "" {
 		ts, err := strconv.ParseInt(value, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("bad value for 'to' parameter: %s", err)
+			return from, to, fmt.Errorf("bad value for 'to' parameter: %s", err)
 		}
-		query = query.Where("created_at <= ?", time.Unix(ts, 0))
+		t := time.Unix(ts, 0)
+		to = &t
+	}
+	return
+}
+
+func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	from, to, err := getTimeQueryParams(params)
+	if err != nil {
+		return nil, err
+	}
+	if from != nil {
+		query = query.Where("created_at >= ?", from)
+	}
+	if to != nil {
+		query = query.Where("created_at <= ?", to)
 	}
 	return query, nil
 }

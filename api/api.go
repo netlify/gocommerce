@@ -163,6 +163,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
 
 	mux.Get("/reports/sales", api.SalesReport)
+	mux.Get("/reports/products", api.ProductsReport)
 
 	mux.Post("/claim", api.ClaimOrders)
 
