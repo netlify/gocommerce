@@ -72,10 +72,10 @@ func (a *API) ProductsReport(ctx context.Context, w http.ResponseWriter, r *http
 		return
 	}
 	if from != nil {
-		query = query.Where(ordersTable+".created_at >= ?", from)
+		query = query.Where("orders.created_at >= ?", from)
 	}
 	if to != nil {
-		query.Where(ordersTable+".created_at <= ?", to)
+		query.Where("orders.created_at <= ?", to)
 	}
 
 	rows, err := query.Rows()
