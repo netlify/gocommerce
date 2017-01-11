@@ -624,6 +624,12 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		}
 	}
 
+	for _, download := range order.Downloads {
+		if err := tx.Create(&download).Error; err != nil {
+			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating download item: %v", err)}
+		}
+	}
+
 	settings, err := a.loadSettings(ctx)
 	if err != nil {
 		return &HTTPError{Code: 500, Message: err.Error()}

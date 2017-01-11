@@ -16,7 +16,7 @@ func TestTraceWrapper(t *testing.T) {
 	l, hook := test.NewNullLogger()
 	testConfig := new(conf.Configuration)
 
-	api := NewAPI(testConfig, nil, nil, nil)
+	api := NewAPI(testConfig, nil, nil, nil, nil)
 	api.log = logrus.NewEntry(l)
 
 	server := httptest.NewServer(api.handler)

@@ -3,6 +3,8 @@ package models
 import (
 	"strconv"
 	"time"
+
+	"github.com/pborman/uuid"
 )
 
 type LineItem struct {
@@ -59,6 +61,8 @@ type LineItemMetadata struct {
 	VAT         uint64          `json:"vat"`
 	Prices      []PriceMetadata `json:"prices"`
 	Type        string          `json:"type"`
+
+	Downloads []Download `json:"downloads"`
 }
 
 func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
@@ -67,6 +71,22 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 	i.Description = meta.Description
 	i.VAT = meta.VAT
 	i.Type = meta.Type
+
+	for _, download := range meta.Downloads {
+		alreadyCreated := false
+		for _, d := range order.Downloads {
+			if d.URL == download.URL {
+				alreadyCreated = true
+				break
+			}
+		}
+		if alreadyCreated {
+			continue
+		}
+		download.ID = uuid.NewRandom().String()
+		download.Title = i.Title
+		order.Downloads = append(order.Downloads, download)
+	}
 
 	return i.calculatePrice(meta.Prices, order.Currency)
 }

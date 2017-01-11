@@ -32,6 +32,8 @@ type Order struct {
 
 	LineItems []*LineItem `json:"line_items"`
 
+	Downloads []Download `json:"downloads"`
+
 	Currency string `json:"currency"`
 	Taxes    uint64 `json:"taxes"`
 	Shipping uint64 `json:"shipping"`

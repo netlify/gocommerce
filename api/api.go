@@ -15,6 +15,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/zenazn/goji/web/mutil"
 
+	"github.com/netlify/netlify-commerce/assetstores"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
 
@@ -35,6 +36,7 @@ type API struct {
 	mailer     *mailer.Mailer
 	httpClient *http.Client
 	log        *logrus.Entry
+	assets     assetstores.Store
 	version    string
 }
 
@@ -114,12 +116,12 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer) *API {
-	return NewAPIWithVersion(config, db, paypal, mailer, defaultVersion)
+func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, store assetstores.Store) *API {
+	return NewAPIWithVersion(config, db, paypal, mailer, store, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API
-func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, version string) *API {
+func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, assets assetstores.Store, version string) *API {
 	api := &API{
 		log:        logrus.WithField("component", "api"),
 		config:     config,
@@ -152,6 +154,8 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/users/:user_id/addresses/:addr_id", api.AddressView)
 	mux.Delete("/users/:user_id/addresses/:addr_id", api.AddressDelete)
 	mux.Get("/users/:user_id/orders", api.OrderList)
+
+	mux.Get("/downloads/:id", api.DownloadURL)
 
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
 

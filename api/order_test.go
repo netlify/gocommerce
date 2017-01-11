@@ -35,7 +35,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 		},
 		"line_items": [{"path": "/simple-product", "quantity": 1}]
 	}`))
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 
 	api.OrderCreate(ctx, recorder, req)
 
@@ -63,7 +63,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 		},
 		"line_items": [{"path": "/simple-product", "quantity": 1}]
 	}`))
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 
 	api.OrderCreate(ctx, recorder, req)
 
@@ -96,7 +96,7 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 		},
 		"line_items": [{"path": "/bundle-product", "quantity": 1}]
 	}`))
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 
 	api.OrderCreate(ctx, recorder, req)
 
@@ -124,7 +124,7 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderList(ctx, recorder, req)
 
 	orders := []models.Order{}
@@ -155,7 +155,7 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderList(ctx, recorder, req)
 	orders := []models.Order{}
 	extractPayload(t, 200, recorder, &orders)
@@ -185,7 +185,7 @@ func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real", nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(t, 200, recorder.Code)
 	assert.Equal(t, "[]\n", recorder.Body.String())
@@ -199,7 +199,7 @@ func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(t, 400, recorder.Code)
 	validateError(t, 400, recorder)
@@ -212,7 +212,7 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlWithUserID, nil)
 
-	api := NewAPI(config, nil, nil, nil)
+	api := NewAPI(config, nil, nil, nil, nil)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(t, 401, recorder.Code)
 	validateError(t, 401, recorder)
@@ -232,7 +232,7 @@ func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
 
-	NewAPI(config, db, nil, nil).OrderView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil, nil).OrderView(ctx, recorder, req)
 	order := new(models.Order)
 	extractPayload(t, 200, recorder, order)
 	validateOrder(t, firstOrder, order)
@@ -250,7 +250,7 @@ func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
 
-	NewAPI(config, db, nil, nil).OrderView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil, nil).OrderView(ctx, recorder, req)
 	order := new(models.Order)
 	extractPayload(t, 200, recorder, order)
 	validateOrder(t, firstOrder, order)
@@ -268,7 +268,7 @@ func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", urlForFirstOrder, nil)
 
-	NewAPI(config, db, nil, nil).OrderView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil, nil).OrderView(ctx, recorder, req)
 	assert.Equal(t, 401, recorder.Code)
 	validateError(t, 401, recorder)
 }
@@ -283,7 +283,7 @@ func TestOrderQueryForAMissingOrder(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "https://not-real/does-not-exist", nil)
 
-	NewAPI(config, db, nil, nil).OrderView(ctx, recorder, req)
+	NewAPI(config, db, nil, nil, nil).OrderView(ctx, recorder, req)
 	validateError(t, 404, recorder)
 }
 
@@ -298,7 +298,7 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 	req, _ := http.NewRequest("GET", "https://not-real/does-not-exist", nil)
 
 	// use nil for DB b/c it should *NEVER* be called
-	NewAPI(config, nil, nil, nil).OrderView(ctx, recorder, req)
+	NewAPI(config, nil, nil, nil, nil).OrderView(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
 
@@ -518,7 +518,7 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlWithUserID, bytes.NewReader(updateBody))
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderUpdate(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
@@ -541,7 +541,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, bytes.NewReader(updateBody))
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.OrderUpdate(ctx, recorder, req)
 	validateError(t, 401, recorder)
 }
@@ -614,7 +614,7 @@ func TestClaimOrders(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
@@ -637,7 +637,7 @@ func TestClaimOrdersNoEmail(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	validateError(t, http.StatusBadRequest, recorder)
@@ -650,7 +650,7 @@ func TestClaimOrdersNoID(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	validateError(t, http.StatusBadRequest, recorder)
@@ -670,7 +670,7 @@ func TestClaimOrdersMultipleTimes(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", urlForFirstOrder, nil)
 
-	api := NewAPI(config, db, nil, nil)
+	api := NewAPI(config, db, nil, nil, nil)
 	api.ClaimOrders(ctx, recorder, req)
 
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
@@ -698,7 +698,7 @@ func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *OrderPara
 	recorder := httptest.NewRecorder()
 	req, _ := http.NewRequest("POST", fmt.Sprintf("https://not-real/%s", order.ID), bytes.NewReader(updateBody))
 
-	NewAPI(config, db, nil, nil).OrderUpdate(ctx, recorder, req)
+	NewAPI(config, db, nil, nil, nil).OrderUpdate(ctx, recorder, req)
 	return recorder
 }
 

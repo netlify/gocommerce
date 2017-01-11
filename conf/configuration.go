@@ -59,6 +59,11 @@ type Configuration struct {
 			Env      string `mapstructure:"env" json:"env"`
 		} `mapstructure:"paypal" json:"paypal"`
 	} `mapstructure:"payment" json:"payment"`
+
+	Downloads struct {
+		Provider     string `mapstructure:"provider" json:"provider"`
+		NetlifyToken string `mapstructure:"netlify_token" json:"netlify_token"`
+	}
 }
 
 // Load will construct the config from the file `config.json`

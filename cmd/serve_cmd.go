@@ -5,6 +5,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/netlify/netlify-commerce/api"
+	"github.com/netlify/netlify-commerce/assetstores"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/mailer"
 	"github.com/netlify/netlify-commerce/models"
@@ -50,7 +51,12 @@ func serve(config *conf.Configuration) {
 
 	mailer := mailer.NewMailer(config)
 
-	api := api.NewAPIWithVersion(config, db.Debug(), paypal, mailer, Version)
+	store, err := assetstores.NewStore(config)
+	if err != nil {
+		logrus.Fatalf("Error initializing asset store: %+v", err)
+	}
+
+	api := api.NewAPIWithVersion(config, db.Debug(), paypal, mailer, store, Version)
 
 	stripe.Key = config.Payment.Stripe.SecretKey
 
