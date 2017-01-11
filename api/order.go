@@ -739,7 +739,13 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {
-	return db.Preload("LineItems").Preload("ShippingAddress").Preload("BillingAddress").Preload("Data").Preload("Transactions")
+	return db.
+		Preload("LineItems").
+		Preload("Downloads").
+		Preload("ShippingAddress").
+		Preload("BillingAddress").
+		Preload("Data").
+		Preload("Transactions")
 }
 
 func cleanup(tx *gorm.DB, w http.ResponseWriter, e *HTTPError) {
