@@ -1,14 +1,13 @@
 package assetstores
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"regexp"
+	"net/url"
 )
-
-const NETLIFY_URL = "https://api.netlify.com/api/v1"
 
 type NetlifyProvider struct {
 	client *http.Client
@@ -30,21 +29,18 @@ type NetlifySignature struct {
 	URL string `json:"url"`
 }
 
-var (
-	urlRegExp = regexp.MustCompile(`cloud.netlifyusercontent.com/assets/([^/]+)/([^/]+)/`)
-)
-
-func (n *NetlifyProvider) SignURL(url string) (string, error) {
-	matches := urlRegExp.FindStringSubmatch(url)
-	if len(matches) != 3 {
-		return "", errors.New("URL didn't match a Netlify asset URL")
+func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
+	url, err := url.Parse(downloadURL)
+	if err != nil {
+		return "", err
+	}
+	if url.Host != "api.netlify.com" {
+		return "", errors.New("Download URL didn't match Netlify API")
 	}
 
-	apiURL := NETLIFY_URL + "/sites/" + matches[1] + "/assets/" + matches[2] + "/public_signature"
-	req, err := http.NewRequest("GET", apiURL, nil)
+	req, err := http.NewRequest("GET", url.String(), nil)
 	req.Header.Add("Authorization", "Bearer "+n.token)
 
-	fmt.Printf("Getting signed url: %v\n", apiURL)
 	resp, err := n.client.Do(req)
 	defer func() {
 		if resp.Body != nil {
@@ -55,7 +51,9 @@ func (n *NetlifyProvider) SignURL(url string) (string, error) {
 		return "", err
 	}
 	if resp.StatusCode != 200 {
-		return "", errors.New("Error generating signature")
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(resp.Body)
+		return "", fmt.Errorf("Error generating signature: %v", buf.String())
 	}
 	signature := &NetlifySignature{}
 	if err := json.NewDecoder(resp.Body).Decode(signature); err != nil {
