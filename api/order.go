@@ -28,6 +28,8 @@ type OrderParams struct {
 
 	Email string `json:"email"`
 
+	IP string `json:"ip"`
+
 	ShippingAddressID string          `json:"shipping_address_id"`
 	ShippingAddress   *models.Address `json:"shipping_address"`
 
@@ -183,7 +185,6 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	var orders []models.Order
-	query.LogMode(true)
 	result := query.Offset(offset).Limit(limit).Find(&orders)
 	if result.Error != nil {
 		log.WithError(err).Warn("Error while querying database")
@@ -261,6 +262,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	//c.tx = tx
 
 	order.Email = params.Email
+	order.IP = r.RemoteAddr
 	httpError := setOrderEmail(tx, order, claims, log)
 	if httpError != nil {
 		log.WithError(httpError).Info("Failed to set the order email from the token")
@@ -324,7 +326,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
 
 	tx.Create(order)
-	models.LogEvent(tx, order.UserID, order.ID, models.EventCreated, nil)
+	models.LogEvent(tx, r.RemoteAddr, order.UserID, order.ID, models.EventCreated, nil)
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
@@ -510,7 +512,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	models.LogEvent(tx, claims.ID, existingOrder.ID, models.EventUpdated, changes)
+	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
 	if rsp := tx.Commit(); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while committing order updates")
 		cleanup(tx, w, internalServerError(w, "Error committing order updates"))

@@ -129,6 +129,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 		paypal:     paypal,
 		mailer:     mailer,
 		httpClient: &http.Client{},
+		assets:     assets,
 		version:    version}
 
 	mux := kami.New()
@@ -156,6 +157,8 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/users/:user_id/orders", api.OrderList)
 
 	mux.Get("/downloads/:id", api.DownloadURL)
+	mux.Get("/downloads", api.DownloadList)
+	mux.Get("/orders/:order_id/downloads", api.DownloadList)
 
 	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
 

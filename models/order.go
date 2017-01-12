@@ -24,6 +24,8 @@ const (
 type Order struct {
 	ID string `json:"id"`
 
+	IP string `json:"ip"`
+
 	User      *User  `json:"user,omitempty"`
 	UserID    string `json:"user_id,omitempty"`
 	SessionID string `json:"-"`

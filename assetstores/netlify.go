@@ -3,6 +3,7 @@ package assetstores
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 )
@@ -43,6 +44,7 @@ func (n *NetlifyProvider) SignURL(url string) (string, error) {
 	req, err := http.NewRequest("GET", apiURL, nil)
 	req.Header.Add("Authorization", "Bearer "+n.token)
 
+	fmt.Printf("Getting signed url: %v\n", apiURL)
 	resp, err := n.client.Do(req)
 	defer func() {
 		if resp.Body != nil {
@@ -52,10 +54,14 @@ func (n *NetlifyProvider) SignURL(url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if resp.StatusCode != 200 {
+		return "", errors.New("Error generating signature")
+	}
 	signature := &NetlifySignature{}
 	if err := json.NewDecoder(resp.Body).Decode(signature); err != nil {
 		return "", err
 	}
+	fmt.Printf("Got signature %v\n", signature)
 
 	return signature.URL, nil
 }

@@ -1,6 +1,10 @@
 package models
 
-import "github.com/netlify/netlify-commerce/assetstores"
+import (
+	"time"
+
+	"github.com/netlify/netlify-commerce/assetstores"
+)
 
 type Download struct {
 	ID string `json:"id"`
@@ -9,10 +13,15 @@ type Download struct {
 	LineItemID int64  `json:"line_item_id"`
 
 	Title  string `json:"title"`
+	SKU    string `json:"sku"`
 	Format string `json:"format"`
 	URL    string `json:"url"`
 
 	DownloadCount uint64 `json:"downloads"`
+
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"-",sql:"index"`
 }
 
 func (Download) TableName() string {

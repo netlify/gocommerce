@@ -85,6 +85,7 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 		}
 		download.ID = uuid.NewRandom().String()
 		download.Title = i.Title
+		download.SKU = i.SKU
 		order.Downloads = append(order.Downloads, download)
 	}
 

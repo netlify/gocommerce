@@ -8,7 +8,9 @@ import (
 )
 
 type Event struct {
-	ID uint64
+	ID uint64 `json:"id"`
+
+	IP string `json:"ip"`
 
 	User   *User  `json:"user,omitempty"`
 	UserID string `json:"user_id,omitempty"`
@@ -35,8 +37,9 @@ const (
 )
 
 // LogEvent logs a new event
-func LogEvent(db *gorm.DB, userID, orderID string, eventType EventType, changes []string) {
+func LogEvent(db *gorm.DB, ip, userID, orderID string, eventType EventType, changes []string) {
 	event := &Event{
+		IP:      ip,
 		UserID:  userID,
 		OrderID: orderID,
 		Type:    string(eventType),
