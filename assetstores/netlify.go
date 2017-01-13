@@ -37,6 +37,7 @@ func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
 	if url.Host != "api.netlify.com" {
 		return "", errors.New("Download URL didn't match Netlify API")
 	}
+	url.Scheme = "https"
 
 	req, err := http.NewRequest("GET", url.String(), nil)
 	req.Header.Add("Authorization", "Bearer "+n.token)
