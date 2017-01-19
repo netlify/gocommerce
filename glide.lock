@@ -1,5 +1,5 @@
-hash: d138257e3fadca18c9ce54680cbfc8b1f82543098a2dfc1f63a9308e9769c951
-updated: 2016-11-22T13:33:35.426276808-08:00
+hash: 6a5059229d067de40b0a147abd4641d429d197c3662a82e5c56c873d050f3452
+updated: 2017-01-18T23:30:42.701781234-08:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 1c31af6f6c1a7b101ed05aacc7d8a738b43ae86e
@@ -54,6 +54,8 @@ imports:
   version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
   version: ca63d7c062ee3c9f34db231e352b60012b4fd0c1
+- name: github.com/netlify/mailme
+  version: 3b136431fdebea1d886bbd1a30b23c43e2d8b4d0
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-buffruneio
