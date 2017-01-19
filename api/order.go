@@ -47,6 +47,10 @@ type OrderParams struct {
 	FulfillmentState string `json:"fulfillment_state"`
 }
 
+type ReceiptParams struct {
+	Email string `json:"email"`
+}
+
 type verificationError struct {
 	err   error
 	mutex sync.Mutex
@@ -58,7 +62,7 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
-// ClaimOrders will look for any
+// ClaimOrders will look for any orders with no user id belonging to an email and claim them
 func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := getLogger(ctx)
 
@@ -129,6 +133,54 @@ func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	log.Info("Finished updating ")
 	sendJSON(w, http.StatusNoContent, "")
+}
+
+func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	id := kami.Param(ctx, "order_id")
+	log := getLogger(ctx)
+	claims := getClaims(ctx)
+
+	params := &ReceiptParams{}
+	jsonDecoder := json.NewDecoder(r.Body)
+	err := jsonDecoder.Decode(params)
+	if err != nil {
+		log.WithError(err).Infof("Failed to deserialize receipt params: %s", err.Error())
+		badRequestError(w, "Could not read receipt params: %v", err)
+		return
+	}
+
+	order := &models.Order{}
+	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
+		if result.RecordNotFound() {
+			log.Debug("Requested record that doesn't exist")
+			notFoundError(w, "Order not found")
+		} else {
+			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+			internalServerError(w, "Error during database query: %v", result.Error)
+		}
+		return
+	}
+
+	if order.UserID != "" {
+		if claims == nil || (order.UserID != claims.ID && !isAdmin(ctx)) {
+			unauthorizedError(w, "Order History Requires Authentication")
+			log.Info("request made with no claims")
+			return
+		}
+	}
+
+	if params.Email != "" {
+		order.Email = params.Email
+	}
+
+	for _, transaction := range order.Transactions {
+		if transaction.Type == models.ChargeTransactionType {
+			transaction.Order = order
+			a.mailer.OrderConfirmationMail(transaction)
+		}
+	}
+
+	sendJSON(w, 200, map[string]string{})
 }
 
 // OrderList can query based on

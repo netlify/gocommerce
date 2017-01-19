@@ -146,6 +146,7 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Put("/orders/:id", api.OrderUpdate)
 	mux.Get("/orders/:order_id/payments", api.PaymentListForOrder)
 	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
+	mux.Post("/orders/:order_id/receipt", api.ResendOrderReceipt)
 
 	mux.Get("/users", api.UserList)
 	mux.Get("/users/:user_id", api.UserView)
