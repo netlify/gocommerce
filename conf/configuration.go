@@ -38,15 +38,19 @@ type Configuration struct {
 		File  string `mapstructure:"file"`
 	} `mapstructure:"log_conf"`
 	Mailer struct {
-		Host           string `mapstructure:"host" json:"host"`
-		Port           int    `mapstructure:"port" json:"port"`
-		User           string `mapstructure:"user" json:"user"`
-		Pass           string `mapstructure:"pass" json:"pass"`
-		TemplateFolder string `mapstructure:"template_folder" json:"template_folder"`
-		AdminEmail     string `mapstructure:"admin_email" json:"admin_email"`
-		MailSubjects   struct {
-			OrderConfirmationMail string `mapstructure:"confirmation" json:"confirmation"`
+		Host       string `mapstructure:"host" json:"host"`
+		Port       int    `mapstructure:"port" json:"port"`
+		User       string `mapstructure:"user" json:"user"`
+		Pass       string `mapstructure:"pass" json:"pass"`
+		AdminEmail string `mapstructure:"admin_email" json:"admin_email"`
+		Subjects   struct {
+			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
+			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
 		} `mapstructure:"mail_subjects" json:"mail_subjects"`
+		Templates struct {
+			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
+			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
+		}
 	} `mapstructure:"mailer" json:"mailer"`
 
 	Payment struct {

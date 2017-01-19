@@ -199,8 +199,14 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tx.Save(order)
 	tx.Commit()
 
-	go a.mailer.OrderConfirmationMail(tr)
-	go a.mailer.OrderReceivedMail(tr)
+	go func() {
+		err1 := a.mailer.OrderConfirmationMail(tr)
+		err2 := a.mailer.OrderReceivedMail(tr)
+
+		if err1 != nil || err2 != nil {
+			a.log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
+		}
+	}()
 
 	sendJSON(w, 200, tr)
 }

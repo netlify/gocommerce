@@ -18,6 +18,7 @@ import:
   version: v1.0
 - package: github.com/spf13/cobra
 - package: github.com/spf13/viper
+- package: github.com/netlify/mailme
 - package: github.com/stripe/stripe-go
   version: v16.3.1
   subpackages:

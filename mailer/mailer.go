@@ -2,23 +2,18 @@ package mailer
 
 import (
 	"fmt"
+	"log"
+	"time"
 
-	gomail "gopkg.in/gomail.v2"
-
+	"github.com/netlify/mailme"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/models"
 )
 
 // Mailer will send mail and use templates from the site for easy mail styling
 type Mailer struct {
-	SiteURL        string
-	TemplateFolder string
-	Host           string
-	Port           int
-	User           string
-	Pass           string
-	AdminEmail     string
-	MailSubjects   MailSubjects
+	Config         *conf.Configuration
+	TemplateMailer *mailme.Mailer
 }
 
 // MailSubjects holds the subject lines for the emails
@@ -30,60 +25,101 @@ type MailSubjects struct {
 func NewMailer(conf *conf.Configuration) *Mailer {
 	mailConf := conf.Mailer
 	return &Mailer{
-		SiteURL:        conf.SiteURL,
-		TemplateFolder: mailConf.TemplateFolder,
-		Host:           mailConf.Host,
-		Port:           mailConf.Port,
-		User:           mailConf.User,
-		Pass:           mailConf.Pass,
-		AdminEmail:     mailConf.AdminEmail,
-		MailSubjects: MailSubjects{
-			OrderConfirmationMail: mailConf.MailSubjects.OrderConfirmationMail,
+		Config: conf,
+		TemplateMailer: &mailme.Mailer{
+			BaseURL: conf.SiteURL,
+			From:    conf.Mailer.AdminEmail,
+			Host:    mailConf.Host,
+			Port:    mailConf.Port,
+			User:    mailConf.User,
+			Pass:    mailConf.Pass,
+			FuncMap: map[string]interface{}{
+				"dateFormat":     dateFormat,
+				"price":          price,
+				"hasProductType": hasProductType,
+			},
 		},
 	}
 }
 
-func price(amount uint64) string {
-	return fmt.Sprintf("$%.2f", float64(amount)/100)
+func dateFormat(layout string, date time.Time) string {
+	return date.Format(layout)
 }
+
+func price(amount uint64, currency string) string {
+	switch currency {
+	case "USD":
+		return fmt.Sprintf("$%.2f", float64(amount)/100)
+	case "EUR":
+		return fmt.Sprintf("%.2f€", float64(amount)/100)
+	default:
+		return fmt.Sprintf("%.2f %v", float64(amount)/100, currency)
+	}
+}
+
+func hasProductType(order *models.Order, productType string) bool {
+	for _, item := range order.LineItems {
+		if item.Type == productType {
+			return true
+		}
+	}
+	return false
+}
+
+const defaultConfirmationTemplate = `<h2>Thank you for your order!</h2>
+
+<ul>
+{{ range .Order.LineItems }}
+<li>{{ .Title }} <strong>{{ .Quantity }} x {{ .Price }}</strong></li>
+{{ end }}
+</ul>
+
+<p>Total amount: <strong>{{ .Order.Total }}</strong></p>
+`
 
 // OrderConfirmationMail sends an order confirmation to the user
 func (m *Mailer) OrderConfirmationMail(transaction *models.Transaction) error {
-	body := "<h2>Thank your for your order!</h2>\n<p><ul>"
-
-	for _, item := range transaction.Order.LineItems {
-		body += "<li>" + item.Title + " <strong>" + price(item.Price*item.Quantity) + "</strong></li>"
-	}
-
-	body += "</ul><p>Total amount: <strong>" + price(transaction.Order.Total) + "</strong></p>"
-
-	mail := gomail.NewMessage()
-	mail.SetHeader("From", m.AdminEmail)
-	mail.SetHeader("To", transaction.Order.Email)
-	mail.SetHeader("BCC", m.AdminEmail)
-	mail.SetHeader("Subject", m.MailSubjects.OrderConfirmationMail)
-	mail.SetBody("text/html", body)
-	dial := gomail.NewPlainDialer(m.Host, m.Port, m.User, m.Pass)
-	return dial.DialAndSend(mail)
+	log.Printf("Sending order confirmation to %v with template %v", transaction.Order.Email, m.Config.Mailer.Templates.OrderConfirmation)
+	return m.TemplateMailer.Mail(
+		transaction.Order.Email,
+		withDefault(m.Config.Mailer.Subjects.OrderConfirmation, "Order Confirmation"),
+		m.Config.Mailer.Templates.OrderConfirmation,
+		defaultConfirmationTemplate,
+		map[string]interface{}{
+			"Order":       transaction.Order,
+			"Transaction": transaction,
+		},
+	)
 }
+
+const defaultReceivedTemplate = `<h2>Order Received From {{ .Order.Email }}</h2>
+
+<ul>
+{{ range .Order.LineItems }}
+<li>{{ .Title }} <strong>{{ .Quantity }} x {{ .Price }}</strong></li>
+{{ end }}
+</ul>
+
+<p>Total amount: <strong>{{ .Order.Total }}</strong></p>
+`
 
 // OrderReceivedMail sends a notification to the shop admin
 func (m *Mailer) OrderReceivedMail(transaction *models.Transaction) error {
-	body := "<h2>New Order from " + transaction.Order.Email + "</h2>\n<p><ul>"
+	return m.TemplateMailer.Mail(
+		m.Config.Mailer.AdminEmail,
+		withDefault(m.Config.Mailer.Subjects.OrderReceived, "Order Received From {{ .Order.Email }}"),
+		m.Config.Mailer.Templates.OrderReceived,
+		defaultReceivedTemplate,
+		map[string]interface{}{
+			"Order":       transaction.Order,
+			"Transaction": transaction,
+		},
+	)
+}
 
-	for _, item := range transaction.Order.LineItems {
-		body += "<li>" + item.Title + " <strong>" + price(item.Price*item.Quantity) + "</strong></li>"
+func withDefault(value string, defaultValue string) string {
+	if value == "" {
+		return defaultValue
 	}
-
-	body += "</ul><p>Total amount: <strong>" + price(transaction.Order.Total) + "</strong></p>"
-
-	mail := gomail.NewMessage()
-	mail.SetHeader("From", m.AdminEmail)
-	mail.SetHeader("To", m.AdminEmail)
-	mail.SetHeader("BCC", m.AdminEmail)
-	mail.SetHeader("Reply-To", transaction.Order.Email)
-	mail.SetHeader("Subject", "New order from "+transaction.Order.Email)
-	mail.SetBody("text/html", body)
-	dial := gomail.NewPlainDialer(m.Host, m.Port, m.User, m.Pass)
-	return dial.DialAndSend(mail)
+	return value
 }
