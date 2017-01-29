@@ -33,7 +33,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 			"address1": "610 22nd Street",
 			"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
 		},
-		"line_items": [{"path": "/simple-product", "quantity": 1}]
+		"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
 	}`))
 	api := NewAPI(config, db, nil, nil, nil)
 
@@ -46,6 +46,18 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 	total = 999
 	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 	assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 999, was %v", order.Total))
+	if len(order.LineItems) != 1 {
+		t.Errorf("Expected one item, got %v", len(order.LineItems))
+	}
+	meta := order.LineItems[0].MetaData
+	if meta == nil {
+		t.Error("Expected meta data for line item")
+	}
+
+	_, ok := meta["attendees"]
+	if !ok {
+		t.Error("Line item should have attendees")
+	}
 }
 
 func TestOrderCreationWithTaxes(t *testing.T) {

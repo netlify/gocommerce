@@ -18,9 +18,10 @@ import (
 )
 
 type OrderLineItem struct {
-	SKU      string `json:"sku"`
-	Path     string `json:"path"`
-	Quantity uint64 `json:"quantity"`
+	SKU      string                 `json:"sku"`
+	Path     string                 `json:"path"`
+	Quantity uint64                 `json:"quantity"`
+	MetaData map[string]interface{} `json:"meta"`
 }
 
 type OrderParams struct {
@@ -646,7 +647,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
 	for _, item := range items {
-		lineItem := &models.LineItem{SKU: item.SKU, Quantity: item.Quantity, Path: item.Path, OrderID: order.ID}
+		lineItem := &models.LineItem{SKU: item.SKU, Quantity: item.Quantity, MetaData: item.MetaData, Path: item.Path, OrderID: order.ID}
 		order.LineItems = append(order.LineItems, lineItem)
 		sem <- 1
 		wg.Add(1)

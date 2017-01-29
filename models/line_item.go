@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"strconv"
 	"time"
 
@@ -23,6 +24,9 @@ type LineItem struct {
 	PriceItems []PriceItem
 	Quantity   uint64 `json:"quantity"`
 
+	MetaData    map[string]interface{} `sql:"-",json:"meta"`
+	RawMetaData string                 `json:"-"`
+
 	CreatedAt time.Time  `json:"-"`
 	DeletedAt *time.Time `json:"-"`
 }
@@ -37,6 +41,22 @@ type PriceItem struct {
 
 func (LineItem) TableName() string {
 	return tableName("line_items")
+}
+
+func (l *LineItem) BeforeUpdate() (err error) {
+	//fmt.Printf("Persisting line item: %v\n", l.MetaData)
+	data, err := json.Marshal(l.MetaData)
+	if err == nil {
+		l.RawMetaData = string(data)
+	}
+	return err
+}
+
+func (l *LineItem) AfterFind() (err error) {
+	if l.RawMetaData != "" {
+		return json.Unmarshal([]byte(l.RawMetaData), &l.MetaData)
+	}
+	return err
 }
 
 type PriceMetadata struct {

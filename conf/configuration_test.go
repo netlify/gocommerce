@@ -21,7 +21,6 @@ func TestConfigWithOverrides(t *testing.T) {
 	original.Mailer.Port = 789789
 	original.Mailer.User = "mailer-user"
 	original.Mailer.Pass = "mailer-pass"
-	original.Mailer.TemplateFolder = "tf"
 	original.Mailer.AdminEmail = "admin-email"
 	original.Payment.Stripe.SecretKey = "stripe-secret"
 
@@ -57,7 +56,6 @@ func TestConfigWithOverrides(t *testing.T) {
 	assert.Equal(t, config.Mailer.Host, original.Mailer.Host)
 	assert.Equal(t, config.Mailer.Port, original.Mailer.Port)
 	assert.Equal(t, config.Mailer.Pass, original.Mailer.Pass)
-	assert.Equal(t, config.Mailer.TemplateFolder, original.Mailer.TemplateFolder)
 	assert.Equal(t, config.Mailer.AdminEmail, original.Mailer.AdminEmail)
 
 	// check we got the overrides
