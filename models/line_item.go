@@ -20,11 +20,11 @@ type LineItem struct {
 
 	Path string `json:"path"`
 
-	Price      uint64 `json:"price"`
-	PriceItems []PriceItem
-	Quantity   uint64 `json:"quantity"`
+	Price      uint64      `json:"price"`
+	PriceItems []PriceItem `json:"price_items"`
+	Quantity   uint64      `json:"quantity"`
 
-	MetaData    map[string]interface{} `sql:"-",json:"meta"`
+	MetaData    map[string]interface{} `sql:"-" json:"meta"`
 	RawMetaData string                 `json:"-"`
 
 	CreatedAt time.Time  `json:"-"`
