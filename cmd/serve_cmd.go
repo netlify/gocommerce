@@ -62,5 +62,8 @@ func serve(config *conf.Configuration) {
 
 	l := fmt.Sprintf("%v:%v", config.API.Host, config.API.Port)
 	logrus.Infof("Netlify Commerce API started on: %s", l)
+
+	models.RunHooks(db, logrus.WithField("component", "hooks"))
+
 	api.ListenAndServe(l)
 }

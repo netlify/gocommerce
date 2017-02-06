@@ -197,6 +197,12 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 	order.PaymentState = models.PaidState
 	tx.Save(order)
+
+	if a.config.Webhooks.Payment != "" {
+		hook := models.NewHook("payment", a.config.Webhooks.Payment, order)
+		tx.Save(hook)
+	}
+
 	tx.Commit()
 
 	go func() {
@@ -288,7 +294,8 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		Status:   models.PendingState,
 	}
 
-	a.db.Create(m)
+	tx := a.db.Begin()
+	tx.Create(m)
 	log := getLogger(ctx)
 	log.Debug("Starting refund to stripe")
 	// TODO ~ refund via paypal
@@ -304,7 +311,12 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	log.Infof("Finished transaction with stripe: %s", m.ProcessorID)
-	a.db.Save(m)
+	tx.Save(m)
+	if a.config.Webhooks.Refund != "" {
+		hook := models.NewHook("refund", a.config.Webhooks.Refund, m)
+		tx.Save(hook)
+	}
+	tx.Commit()
 	sendJSON(w, http.StatusOK, m)
 }
 

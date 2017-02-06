@@ -57,6 +57,7 @@ func AutoMigrate(db *gorm.DB) error {
 		LineItem{},
 		AddonItem{},
 		PriceItem{},
+		Hook{},
 		Download{},
 		Order{},
 		OrderNote{},

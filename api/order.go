@@ -379,6 +379,10 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	tx.Create(order)
 	models.LogEvent(tx, r.RemoteAddr, order.UserID, order.ID, models.EventCreated, nil)
+	if a.config.Webhooks.Order != "" {
+		hook := models.NewHook("order", a.config.Webhooks.Order, order)
+		tx.Save(hook)
+	}
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
