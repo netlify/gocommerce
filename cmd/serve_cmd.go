@@ -29,6 +29,11 @@ func serve(config *conf.Configuration) {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
 
+	bgDB, err := models.Connect(config)
+	if err != nil {
+		logrus.Fatalf("Error opening database: %+v", err)
+	}
+
 	var ppEnv string
 	if config.Payment.Paypal.Env == "production" {
 		ppEnv = paypalsdk.APIBaseLive
@@ -63,7 +68,7 @@ func serve(config *conf.Configuration) {
 	l := fmt.Sprintf("%v:%v", config.API.Host, config.API.Port)
 	logrus.Infof("Netlify Commerce API started on: %s", l)
 
-	models.RunHooks(db, logrus.WithField("component", "hooks"), config.Webhooks.Secret)
+	models.RunHooks(bgDB, logrus.WithField("component", "hooks"), config.Webhooks.Secret)
 
 	api.ListenAndServe(l)
 }

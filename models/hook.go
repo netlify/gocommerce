@@ -133,11 +133,14 @@ func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
 		client := &http.Client{}
 		for {
 			hooks := []*Hook{}
-			db.Table(table).
+			tx := db.Begin()
+
+			tx.Table(table).
 				Where("done = 0 AND (locked_at IS NULL OR locked_at < ?) AND (run_after IS NULL OR run_after < ?)", time.Now().Add(-5*time.Minute), time.Now()).
 				Updates(map[string]interface{}{"locked_at": time.Now(), "locked_by": id})
 
-			db.Where("locked_by = ?", id).Find(&hooks)
+			tx.Where("locked_by = ?", id).Find(&hooks)
+			tx.Commit()
 
 			for _, hook := range hooks {
 				sem <- true
@@ -145,11 +148,13 @@ func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
 					resp, err := hook.Trigger(client, log, secret)
 					hook.LockedAt = nil
 					hook.LockedBy = nil
+					tx := db.Begin()
 					if err != nil || !(resp.StatusCode >= 200 && resp.StatusCode < 300) {
-						hook.handleError(db, log, resp, err)
+						hook.handleError(tx, log, resp, err)
 					} else {
-						hook.handleSuccess(db, log, resp)
+						hook.handleSuccess(tx, log, resp)
 					}
+					tx.Commit()
 					<-sem
 				}(hook)
 			}
