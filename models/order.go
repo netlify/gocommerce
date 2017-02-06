@@ -5,7 +5,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 )
 
@@ -59,7 +58,8 @@ type Order struct {
 
 	VATNumber string `json:"vatnumber"`
 
-	Data []OrderData `json:"-"`
+	MetaData    map[string]interface{} `sql:"-" json:"meta"`
+	RawMetaData string                 `json:"-"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -70,70 +70,19 @@ func (Order) TableName() string {
 	return tableName("orders")
 }
 
-// OrderData is the custom data on an Order
-type OrderData struct {
-	OrderID string `gorm:"primary_key"`
-	Key     string `gorm:"primary_key"`
-
-	Type int
-
-	NumericValue float64
-	StringValue  string
-	BoolValue    bool
-}
-
-func (OrderData) TableName() string {
-	return tableName("orders_data")
-}
-
-// Value returns the value of the data field
-func (d *OrderData) Value() interface{} {
-	switch d.Type {
-	case StringType:
-		return d.StringValue
-	case NumberType:
-		return d.NumericValue
-	case BoolType:
-		return d.BoolValue
+func (o *Order) AfterFind() (err error) {
+	if o.RawMetaData != "" {
+		return json.Unmarshal([]byte(o.RawMetaData), &o.MetaData)
 	}
-	return nil
+	return err
 }
 
-// InvalidDataType is an error returned when trying to set an invalid datatype for
-// a user data key
-type InvalidDataType struct {
-	Key string
-}
-
-func (i *InvalidDataType) Error() string {
-	return "Invalid datatype for data field " + i.Key + " only strings, numbers and bools allowed"
-}
-
-func orderDataToMap(data []OrderData) map[string]interface{} {
-	result := map[string]interface{}{}
-	for _, field := range data {
-		switch field.Type {
-		case NumberType:
-			result[field.Key] = field.NumericValue
-		case StringType:
-			result[field.Key] = field.StringValue
-		case BoolType:
-			result[field.Key] = field.BoolValue
-		}
+func (o *Order) BeforeUpdate() (err error) {
+	data, err := json.Marshal(o.MetaData)
+	if err == nil {
+		o.RawMetaData = string(data)
 	}
-	return result
-}
-
-// MarshalJSON is a custom JSON marshaller for Users
-func (o *Order) MarshalJSON() ([]byte, error) {
-	type Alias Order
-	return json.Marshal(&struct {
-		*Alias
-		Data map[string]interface{} `json:"data"`
-	}{
-		Alias: (*Alias)(o),
-		Data:  orderDataToMap(o.Data),
-	})
+	return err
 }
 
 func NewOrder(sessionID, email, currency string) *Order {
@@ -147,44 +96,6 @@ func NewOrder(sessionID, email, currency string) *Order {
 	order.FulfillmentState = PendingState
 	order.State = PendingState
 	return order
-}
-
-// UpdateOrderData updates all user data from a map of updates
-func (o *Order) UpdateOrderData(tx *gorm.DB, updates *map[string]interface{}) error {
-	for key, value := range *updates {
-		data := &OrderData{}
-		result := tx.First(data, "order_id = ? and key = ?", o.ID, key)
-		data.OrderID = o.ID
-		data.Key = key
-		if result.Error != nil && !result.RecordNotFound() {
-			tx.Rollback()
-			return result.Error
-		}
-		if value == nil {
-			tx.Delete(data)
-			continue
-		}
-		switch v := value.(type) {
-		case string:
-			data.StringValue = v
-			data.Type = StringType
-		case float64:
-			data.NumericValue = v
-			data.Type = NumberType
-		case bool:
-			data.BoolValue = v
-			data.Type = BoolType
-		default:
-			tx.Rollback()
-			return &InvalidDataType{key}
-		}
-		if result.RecordNotFound() {
-			tx.Create(data)
-		} else {
-			tx.Save(data)
-		}
-	}
-	return nil
 }
 
 func (o *Order) CalculateTotal(settings *SiteSettings) {
@@ -210,6 +121,7 @@ func inList(list []string, candidate string) bool {
 }
 
 func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
+	// Note - we're not handling products with PricItems and Addons right now
 	if len(item.PriceItems) > 0 {
 		var tax uint64
 		for _, i := range item.PriceItems {
@@ -223,12 +135,12 @@ func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
 		return tax
 	}
 	if item.VAT != 0 {
-		return item.Price * item.Quantity * (item.VAT / 100)
+		return (item.Price + item.AddonPrice) * item.Quantity * (item.VAT / 100)
 	}
 	if len(taxes) > 0 && country != "" {
 		for _, tax := range taxes {
 			if inList(tax.ProductTypes, item.Type) && inList(tax.Countries, country) {
-				result := float64(item.Price) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
+				result := float64(item.Price+item.AddonPrice) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
 				return uint64(rint(result))
 			}
 		}

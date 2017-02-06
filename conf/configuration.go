@@ -67,7 +67,14 @@ type Configuration struct {
 	Downloads struct {
 		Provider     string `mapstructure:"provider" json:"provider"`
 		NetlifyToken string `mapstructure:"netlify_token" json:"netlify_token"`
-	}
+	} `mapstructure:"downloads" json:"downloads"`
+
+	Webhooks struct {
+		Order   string `mapstructure:"order" json:"order"`
+		Payment string `mapstructure:"payment" json:"payment"`
+		Update  string `mapstructure:"update" json:"update"`
+		Refund  string `mapstructure:"refund" json:"refund"`
+	} `mapstructure:"webhooks" json:"webhooks"`
 }
 
 // Load will construct the config from the file `config.json`

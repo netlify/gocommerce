@@ -561,51 +561,19 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 func TestOrderUpdateWithNewData(t *testing.T) {
 	db, _ := db(t)
 	assert := assert.New(t)
-	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.OrderData{})
-
 	op := &OrderParams{
-		Data: map[string]interface{}{
-			"thing":       1,
+		MetaData: map[string]interface{}{
+			"thing":       float64(1),
 			"red":         "fish",
 			"other thing": 3.4,
 			"exists":      true,
 		},
 	}
 	recorder := runUpdate(t, db, firstOrder, op)
-	extractPayload(t, 200, recorder, new(models.Order))
+	order := &models.Order{}
+	extractPayload(t, 200, recorder, order)
 
-	datas := []models.OrderData{}
-	db.Where("order_id = ?", firstOrder.ID).Find(&datas)
-	assert.Len(datas, 4)
-	for _, datum := range datas {
-		switch datum.Key {
-		case "thing":
-			assert.Equal(models.NumberType, datum.Type)
-			assert.EqualValues(1, datum.NumericValue)
-		case "red":
-			assert.Equal(models.StringType, datum.Type)
-			assert.Equal("fish", datum.StringValue)
-		case "other thing":
-			assert.Equal(models.NumberType, datum.Type)
-			assert.EqualValues(3.4, datum.NumericValue)
-		case "exists":
-			assert.Equal(models.BoolType, datum.Type)
-			assert.Equal(true, datum.BoolValue)
-		}
-	}
-}
-
-func TestOrderUpdateWithBadData(t *testing.T) {
-	db, _ := db(t)
-	defer db.Where("order_id = ?", firstOrder.ID).Delete(&models.OrderData{})
-
-	op := &OrderParams{
-		Data: map[string]interface{}{
-			"array": []int{4},
-		},
-	}
-	recorder := runUpdate(t, db, firstOrder, op)
-	validateError(t, 400, recorder)
+	assert.Equal(op.MetaData, order.MetaData, "Order metadata should have been updated")
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -759,7 +727,7 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 //
 //	assert.Equal(expected.ID, actual.ID)
 //	assert.Equal(expected.Title, actual.Title)
-//	assert.Equal(expected.SKU, actual.SKU)
+//	assert.Equal(expected.Sku, actual.Sku)
 //	assert.Equal(expected.Type, actual.Type)
 //	assert.Equal(expected.Description, actual.Description)
 //	assert.Equal(expected.VAT, actual.VAT)

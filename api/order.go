@@ -18,10 +18,15 @@ import (
 )
 
 type OrderLineItem struct {
-	SKU      string                 `json:"sku"`
+	Sku      string                 `json:"sku"`
 	Path     string                 `json:"path"`
 	Quantity uint64                 `json:"quantity"`
+	Addons   []OrderAddon           `json:"addons"`
 	MetaData map[string]interface{} `json:"meta"`
+}
+
+type OrderAddon struct {
+	Sku string `json:"sku"`
 }
 
 type OrderParams struct {
@@ -39,7 +44,7 @@ type OrderParams struct {
 
 	VATNumber string `json:"vatnumber"`
 
-	Data map[string]interface{} `json:"data"`
+	MetaData map[string]interface{} `json:"meta"`
 
 	LineItems []*OrderLineItem `json:"line_items"`
 
@@ -316,6 +321,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	order.Email = params.Email
 	order.IP = r.RemoteAddr
+	order.MetaData = params.MetaData
 	httpError := setOrderEmail(tx, order, claims, log)
 	if httpError != nil {
 		log.WithError(httpError).Info("Failed to set the order email from the token")
@@ -361,13 +367,6 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 			return
 		}
 		order.VATNumber = params.VATNumber
-	}
-
-	if params.Data != nil {
-		if err := order.UpdateOrderData(tx, &params.Data); err != nil {
-			cleanup(tx, w, badRequestError(w, "Bad order metadata %v", err))
-			return
-		}
 	}
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
@@ -441,6 +440,10 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		log.Debugf("Updating email from '%s' to '%s'", existingOrder.Email, orderParams.Email)
 		existingOrder.Email = orderParams.Email
 		changes = append(changes, "email")
+	}
+
+	if orderParams.MetaData != nil {
+		existingOrder.MetaData = orderParams.MetaData
 	}
 
 	if orderParams.Currency != "" {
@@ -523,30 +526,16 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		changes = append(changes, "fulfillment_state")
 	}
 
-	if orderParams.Data != nil {
-		err := existingOrder.UpdateOrderData(tx, &orderParams.Data)
-		if err != nil {
-			log.WithError(err).Warn("Failed to update order data: " + err.Error())
-			if _, ok := err.(*models.InvalidDataType); ok {
-				cleanup(tx, w, badRequestError(w, "Bad type: "+err.Error()))
-			} else {
-				cleanup(tx, w, internalServerError(w, "Problem while saving the extra data"))
-			}
-			return
-		}
-		changes = append(changes, "data")
-	}
-
 	//
 	// handle the line items
 	//
 	updatedItems := make(map[string]*OrderLineItem)
 	for _, item := range orderParams.LineItems {
-		updatedItems[item.SKU] = item
+		updatedItems[item.Sku] = item
 	}
 
 	for _, item := range existingOrder.LineItems {
-		if update, exists := updatedItems[item.SKU]; exists {
+		if update, exists := updatedItems[item.Sku]; exists {
 			item.Quantity = update.Quantity
 			if update.Path != "" {
 				item.Path = update.Path
@@ -646,12 +635,18 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
-	for _, item := range items {
-		lineItem := &models.LineItem{SKU: item.SKU, Quantity: item.Quantity, MetaData: item.MetaData, Path: item.Path, OrderID: order.ID}
+	for _, orderItem := range items {
+		lineItem := &models.LineItem{
+			Sku:      orderItem.Sku,
+			Quantity: orderItem.Quantity,
+			MetaData: orderItem.MetaData,
+			Path:     orderItem.Path,
+			OrderID:  order.ID,
+		}
 		order.LineItems = append(order.LineItems, lineItem)
 		sem <- 1
 		wg.Add(1)
-		go func(item *models.LineItem) {
+		go func(item *models.LineItem, orderItem *OrderLineItem) {
 			defer func() {
 				wg.Done()
 				<-sem
@@ -661,10 +656,10 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 				return
 			}
 
-			if err := a.processLineItem(ctx, order, item); err != nil {
+			if err := a.processLineItem(ctx, order, item, orderItem); err != nil {
 				sharedErr.setError(err)
 			}
-		}(lineItem)
+		}(lineItem, orderItem)
 	}
 	wg.Wait()
 
@@ -673,8 +668,8 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	}
 
 	for _, item := range order.LineItems {
-		order.SubTotal = order.SubTotal + item.Price*item.Quantity
-		if err := tx.Create(&item).Error; err != nil {
+		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
+		if err := tx.Save(&item).Error; err != nil {
 			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating line item: %v", err)}
 		}
 	}
@@ -747,7 +742,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	return address, nil
 }
 
-func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem) error {
+func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *OrderLineItem) error {
 	config := getConfig(ctx)
 	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
 	if err != nil {
@@ -780,17 +775,23 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
 	}
 
-	if len(metaProducts) == 1 && item.SKU == "" {
-		item.SKU = metaProducts[0].Sku
+	if len(metaProducts) == 1 && item.Sku == "" {
+		item.Sku = metaProducts[0].Sku
 	}
 
 	for _, meta := range metaProducts {
-		if meta.Sku == item.SKU {
+		if meta.Sku == item.Sku {
+			for _, addon := range orderItem.Addons {
+				item.AddonItems = append(item.AddonItems, models.AddonItem{
+					Sku: addon.Sku,
+				})
+			}
+
 			return item.Process(order, meta)
 		}
 	}
 
-	return fmt.Errorf("No product SKU from path matched: %v", item.SKU)
+	return fmt.Errorf("No product Sku from path matched: %v", item.Sku)
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {
@@ -799,7 +800,6 @@ func orderQuery(db *gorm.DB) *gorm.DB {
 		Preload("Downloads").
 		Preload("ShippingAddress").
 		Preload("BillingAddress").
-		Preload("Data").
 		Preload("Transactions")
 }
 

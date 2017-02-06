@@ -254,7 +254,7 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 		ID:          123,
 		OrderID:     dyingOrder.ID,
 		Title:       "coffin",
-		SKU:         "123-cough-cough-123",
+		Sku:         "123-cough-cough-123",
 		Type:        "home",
 		Description: "nappytimeplace",
 		Price:       100,

@@ -60,7 +60,6 @@ func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
 	if err := json.NewDecoder(resp.Body).Decode(signature); err != nil {
 		return "", err
 	}
-	fmt.Printf("Got signature %v\n", signature)
 
 	return signature.URL, nil
 }

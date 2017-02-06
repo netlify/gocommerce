@@ -13,7 +13,7 @@ type Download struct {
 	LineItemID int64  `json:"line_item_id"`
 
 	Title  string `json:"title"`
-	SKU    string `json:"sku"`
+	Sku    string `json:"sku"`
 	Format string `json:"format"`
 	URL    string `json:"url"`
 

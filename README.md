@@ -35,7 +35,7 @@ The metadata can be anywhere on the page, and goes in a script tag in this forma
 {"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
 </script>
 
-The minimum required is the SKU, title and at least one "price". Default currency is USD if nothing else specified.
+The minimum required is the Sku, title and at least one "price". Default currency is USD if nothing else specified.
 
 ### Mail templates (Not implemented yet)
 
