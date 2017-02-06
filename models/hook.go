@@ -8,15 +8,20 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 )
 
 const MaxConcurrentHooks = 5
 const MaxRetries = 5
+const RetryPeriod = 30 * time.Second
+const SignatureExpiration = 5 * time.Minute
 
 type Hook struct {
 	ID uint64
+
+	UserID string
 
 	Type string
 
@@ -44,21 +49,36 @@ func (Hook) TableName() string {
 	return tableName("hooks")
 }
 
-func NewHook(hookType string, url string, payload interface{}) *Hook {
+func NewHook(hookType, url, userID string, payload interface{}) *Hook {
 	json, _ := json.Marshal(payload)
 	return &Hook{
 		Type:    hookType,
+		UserID:  userID,
 		URL:     url,
 		Payload: string(json),
 	}
 }
 
-func (h *Hook) Trigger(log *logrus.Entry) (*http.Response, error) {
+func (h *Hook) Trigger(client *http.Client, log *logrus.Entry, secret string) (*http.Response, error) {
 	log.Infof("Triggering hook %v: %v", h.ID, h.URL)
-	h.Tries += 1
+	h.Tries++
 	body := bytes.NewBufferString(h.Payload)
-	resp, err := http.Post(h.URL, "application/json", body)
-	return resp, err
+	req, err := http.NewRequest("POST", h.URL, body)
+	if err != nil {
+		return nil, err
+	}
+	if secret != "" {
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"sub": h.UserID,
+			"exp": time.Now().Add(SignatureExpiration),
+		})
+		tokenString, err := token.SignedString([]byte(secret))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("X-Commerce-Signature", tokenString)
+	}
+	return client.Do(req)
 }
 
 func (h *Hook) handleError(db *gorm.DB, log *logrus.Entry, resp *http.Response, err error) {
@@ -79,14 +99,14 @@ func (h *Hook) handleError(db *gorm.DB, log *logrus.Entry, resp *http.Response, 
 
 	now := time.Now()
 	if h.Tries >= MaxRetries {
-		log.Errorf("Hook %v failed more than %v times. Giving up.", h.ID, MaxRetries)
+		log.Errorf("Hook %v failed more than %v times. %v. Giving up.", h.ID, MaxRetries, err)
 		h.Failed = true
 		h.Done = true
 		h.CompletedAt = &now
 	} else {
-		runAfter := now.Add(time.Duration(h.Tries) * 30 * time.Second)
+		runAfter := now.Add(time.Duration(h.Tries) * RetryPeriod)
 		h.RunAfter = &runAfter
-		log.Errorf("Hook %v failed - retrying at %v", h.ID, runAfter)
+		log.Errorf("Hook %v failed %v - retrying at %v", h.ID, err, runAfter)
 	}
 	db.Save(h)
 }
@@ -105,11 +125,12 @@ func (h *Hook) handleSuccess(db *gorm.DB, log *logrus.Entry, resp *http.Response
 	db.Save(h)
 }
 
-func RunHooks(db *gorm.DB, log *logrus.Entry) {
+func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
 	go func() {
 		id := uuid.NewRandom().String()
 		sem := make(chan bool, MaxConcurrentHooks)
 		table := Hook{}.TableName()
+		client := &http.Client{}
 		for {
 			hooks := []*Hook{}
 			db.Table(table).
@@ -121,7 +142,7 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 			for _, hook := range hooks {
 				sem <- true
 				go func(hook *Hook) {
-					resp, err := hook.Trigger(log)
+					resp, err := hook.Trigger(client, log, secret)
 					hook.LockedAt = nil
 					hook.LockedBy = nil
 					if err != nil || !(resp.StatusCode >= 200 && resp.StatusCode < 300) {

@@ -199,7 +199,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tx.Save(order)
 
 	if a.config.Webhooks.Payment != "" {
-		hook := models.NewHook("payment", a.config.Webhooks.Payment, order)
+		hook := models.NewHook("payment", a.config.Webhooks.Payment, order.UserID, order)
 		tx.Save(hook)
 	}
 
@@ -313,7 +313,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	log.Infof("Finished transaction with stripe: %s", m.ProcessorID)
 	tx.Save(m)
 	if a.config.Webhooks.Refund != "" {
-		hook := models.NewHook("refund", a.config.Webhooks.Refund, m)
+		hook := models.NewHook("refund", a.config.Webhooks.Refund, m.UserID, m)
 		tx.Save(hook)
 	}
 	tx.Commit()

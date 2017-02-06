@@ -74,6 +74,8 @@ type Configuration struct {
 		Payment string `mapstructure:"payment" json:"payment"`
 		Update  string `mapstructure:"update" json:"update"`
 		Refund  string `mapstructure:"refund" json:"refund"`
+
+		Secret string `mapstructure:"secret" json:"secret"`
 	} `mapstructure:"webhooks" json:"webhooks"`
 }
 
