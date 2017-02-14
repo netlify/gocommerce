@@ -29,6 +29,11 @@ type Tax struct {
 	Countries    []string `json:"countries"`
 }
 
+type taxAmount struct {
+	price      uint64
+	percentage uint64
+}
+
 func (t *Tax) AppliesTo(country, productType string) bool {
 	applies := true
 	if t.ProductTypes != nil && len(t.ProductTypes) > 0 {
@@ -59,6 +64,7 @@ type Item interface {
 	PriceIn(string) uint64
 	ProductType() string
 	VAT() uint64
+	TaxableItems() []Item
 }
 
 type Coupon interface {
@@ -74,21 +80,41 @@ func CalculatePrice(settings *Settings, country, currency string, coupon Coupon,
 	for _, item := range items {
 		itemPrice := ItemPrice{}
 		itemPrice.Subtotal = item.PriceIn(currency)
-		tax := item.VAT()
-		if tax == 0 && settings != nil {
+
+		taxAmounts := []taxAmount{}
+		if item.VAT() != 0 {
+			taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: item.VAT()})
+		} else if settings != nil && item.TaxableItems() != nil && len(item.TaxableItems()) > 0 {
+			for _, item := range item.TaxableItems() {
+				amount := taxAmount{price: item.PriceIn(currency)}
+				for _, t := range settings.Taxes {
+					if t.AppliesTo(country, item.ProductType()) {
+						amount.percentage = t.Percentage
+						break
+					}
+				}
+				taxAmounts = append(taxAmounts, amount)
+			}
+		} else if settings != nil {
 			for _, t := range settings.Taxes {
 				if t.AppliesTo(country, item.ProductType()) {
-					tax = t.Percentage
+					taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: t.Percentage})
 					break
 				}
 			}
 		}
 
-		if tax != 0 {
+		if len(taxAmounts) != 0 {
 			if includeTaxes {
-				itemPrice.Subtotal = rint(float64(itemPrice.Subtotal) / (100 + float64(tax)) * 100)
+				itemPrice.Subtotal = 0
 			}
-			itemPrice.Taxes = rint(float64(itemPrice.Subtotal) * float64(tax) / 100)
+			for _, tax := range taxAmounts {
+				if includeTaxes {
+					tax.price = rint(float64(tax.price) / (100 + float64(tax.percentage)) * 100)
+					itemPrice.Subtotal += tax.price
+				}
+				itemPrice.Taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
+			}
 		}
 		if coupon != nil && coupon.ValidForType(item.ProductType()) {
 			amountToDiscount := itemPrice.Subtotal

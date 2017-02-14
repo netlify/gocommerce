@@ -10,6 +10,7 @@ type TestItem struct {
 	price    uint64
 	itemType string
 	vat      uint64
+	items    []Item
 }
 
 func (t *TestItem) PriceIn(currency string) uint64 {
@@ -22,6 +23,10 @@ func (t *TestItem) ProductType() string {
 
 func (t *TestItem) VAT() uint64 {
 	return t.vat
+}
+
+func (t *TestItem) TaxableItems() []Item {
+	return t.items
 }
 
 type TestCoupon struct {
@@ -125,4 +130,33 @@ func TestCouponWithNoVATWhenPRiceIncludeTaxes(t *testing.T) {
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
 	assert.Equal(t, uint64(90), price.Total)
+}
+
+func TestPricingItems(t *testing.T) {
+	settings := &Settings{Taxes: []*Tax{&Tax{
+		Percentage:   7,
+		ProductTypes: []string{"book"},
+		Countries:    []string{"DE"},
+	}, &Tax{
+		Percentage:   21,
+		ProductTypes: []string{"ebook"},
+		Countries:    []string{"DE"},
+	}}}
+	item := &TestItem{
+		price:    100,
+		itemType: "book",
+		items: []Item{&TestItem{
+			price:    80,
+			itemType: "book",
+		}, &TestItem{
+			price:    20,
+			itemType: "ebook",
+		}},
+	}
+	price := CalculatePrice(settings, "DE", "USD", nil, []Item{item})
+
+	assert.Equal(t, uint64(100), price.Subtotal)
+	assert.Equal(t, uint64(10), price.Taxes)
+	assert.Equal(t, uint64(0), price.Discount)
+	assert.Equal(t, uint64(110), price.Total)
 }
