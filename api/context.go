@@ -13,6 +13,7 @@ import (
 const (
 	tokenKey     = "jwt"
 	configKey    = "config"
+	couponsKey   = "coupons"
 	loggerKey    = "logger"
 	requestIDKey = "request_id"
 	startKey     = "request_start_time"
@@ -35,6 +36,10 @@ func withLogger(ctx context.Context, l *logrus.Entry) context.Context {
 
 func withConfig(ctx context.Context, config *conf.Configuration) context.Context {
 	return context.WithValue(ctx, configKey, config)
+}
+
+func withCoupons(ctx context.Context, config *conf.Configuration) context.Context {
+	return context.WithValue(ctx, couponsKey, NewCouponCacheFromUrl(config))
 }
 
 func withToken(ctx context.Context, token *jwt.Token) context.Context {
@@ -83,6 +88,15 @@ func getConfig(ctx context.Context) *conf.Configuration {
 	}
 
 	return obj.(*conf.Configuration)
+}
+
+func getCoupons(ctx context.Context) CouponCache {
+	obj := ctx.Value(couponsKey)
+	if obj == nil {
+		return nil
+	}
+
+	return obj.(CouponCache)
 }
 
 func getToken(ctx context.Context) *jwt.Token {

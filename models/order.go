@@ -39,7 +39,9 @@ type Order struct {
 	Taxes    uint64 `json:"taxes"`
 	Shipping uint64 `json:"shipping"`
 	SubTotal uint64 `json:"subtotal"`
-	Total    uint64 `json:"total"`
+	Discount uint64 `json:"discount"`
+
+	Total uint64 `json:"total"`
 
 	PaymentState     string `json:"payment_state"`
 	FulfillmentState string `json:"fulfillment_state"`
@@ -61,6 +63,11 @@ type Order struct {
 	MetaData    map[string]interface{} `sql:"-" json:"meta"`
 	RawMetaData string                 `json:"-"`
 
+	CouponCode string `json:"coupon_code,omitempty"`
+
+	Coupon    *Coupon `json:"coupon,omitempty" sql:"-"`
+	RawCoupon string  `json:"-"`
+
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"-",sql:"index"`
@@ -70,19 +77,41 @@ func (Order) TableName() string {
 	return tableName("orders")
 }
 
-func (o *Order) AfterFind() (err error) {
+func (o *Order) AfterFind() error {
 	if o.RawMetaData != "" {
-		return json.Unmarshal([]byte(o.RawMetaData), &o.MetaData)
+		err := json.Unmarshal([]byte(o.RawMetaData), &o.MetaData)
+		if err != nil {
+			return err
+		}
 	}
-	return err
+	if o.RawCoupon != "" {
+		o.Coupon = &Coupon{}
+		err := json.Unmarshal([]byte(o.RawCoupon), &o.Coupon)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
-func (o *Order) BeforeUpdate() (err error) {
-	data, err := json.Marshal(o.MetaData)
-	if err == nil {
+func (o *Order) BeforeUpdate() error {
+	if o.MetaData != nil {
+		data, err := json.Marshal(o.MetaData)
+		if err != nil {
+			return err
+		}
 		o.RawMetaData = string(data)
 	}
-	return err
+	if o.Coupon != nil {
+		data, err := json.Marshal(o.Coupon)
+		if err != nil {
+			return err
+		}
+		o.RawCoupon = string(data)
+	}
+
+	return nil
 }
 
 func NewOrder(sessionID, email, currency string) *Order {
@@ -104,11 +133,12 @@ func (o *Order) CalculateTotal(settings *SiteSettings) {
 	if o.VATNumber == "" {
 		for _, item := range o.LineItems {
 			taxes += taxFor(item, settings.Taxes, o.ShippingAddress.Country)
+			o.Discount += item.Discount
 		}
 	}
 
 	o.Taxes = taxes
-	o.Total = o.SubTotal + taxes
+	o.Total = o.SubTotal - o.Discount + taxes
 }
 
 func inList(list []string, candidate string) bool {
@@ -127,6 +157,7 @@ func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
 		for _, i := range item.PriceItems {
 			tax += taxFor(&LineItem{
 				Price:    i.Amount,
+				Discount: i.Discount,
 				Type:     i.Type,
 				VAT:      i.VAT,
 				Quantity: item.Quantity,
@@ -135,12 +166,12 @@ func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
 		return tax
 	}
 	if item.VAT != 0 {
-		return (item.Price + item.AddonPrice) * item.Quantity * (item.VAT / 100)
+		return (item.Price + item.AddonPrice - item.Discount) * item.Quantity * (item.VAT / 100)
 	}
 	if len(taxes) > 0 && country != "" {
 		for _, tax := range taxes {
 			if inList(tax.ProductTypes, item.Type) && inList(tax.Countries, country) {
-				result := float64(item.Price+item.AddonPrice) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
+				result := float64(item.Price+item.AddonPrice-item.Discount) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
 				return uint64(rint(result))
 			}
 		}

@@ -69,6 +69,12 @@ type Configuration struct {
 		NetlifyToken string `mapstructure:"netlify_token" json:"netlify_token"`
 	} `mapstructure:"downloads" json:"downloads"`
 
+	Coupons struct {
+		URL      string `mapstructure:"url" json:"url"`
+		User     string `mapstructure:"user" json:"user"`
+		Password string `mapstructure:"password" json:"password"`
+	} `mapstructure:"coupons" json:"coupons"`
+
 	Webhooks struct {
 		Order   string `mapstructure:"order" json:"order"`
 		Payment string `mapstructure:"payment" json:"payment"`

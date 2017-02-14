@@ -130,7 +130,8 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 		mailer:     mailer,
 		httpClient: &http.Client{},
 		assets:     assets,
-		version:    version}
+		version:    version,
+	}
 
 	mux := kami.New()
 	mux.Use("/", api.populateContext)
@@ -173,6 +174,8 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/reports/sales", api.SalesReport)
 	mux.Get("/reports/products", api.ProductsReport)
 
+	mux.Get("/coupons/:code", api.CouponView)
+
 	mux.Post("/claim", api.ClaimOrders)
 
 	corsHandler := cors.New(cors.Options{
@@ -213,6 +216,7 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = withStartTime(ctx, time.Now())
 	ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
 	ctx = withPayer(ctx, StripeChargerType, &stripeProvider{})
+	ctx = withCoupons(ctx, a.config)
 
 	log.Info("request started")
 	return ctx

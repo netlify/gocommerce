@@ -51,6 +51,8 @@ type OrderParams struct {
 	Currency string `json:"currency"`
 
 	FulfillmentState string `json:"fulfillment_state"`
+
+	CouponCode string `json:"coupon"`
 }
 
 type ReceiptParams struct {
@@ -304,8 +306,22 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	claims := getClaims(ctx)
-
 	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
+
+	if params.CouponCode != "" {
+		coupon, err := a.lookupCoupon(ctx, w, params.CouponCode)
+		if err != nil {
+			return
+		}
+		if !coupon.Valid() {
+			badRequestError(w, "This coupon is not valid at this time")
+			return
+		}
+
+		order.CouponCode = coupon.Code
+		order.Coupon = coupon
+	}
+
 	log = log.WithFields(logrus.Fields{
 		"order_id":   order.ID,
 		"session_id": params.SessionID,

@@ -17,13 +17,14 @@ type LineItem struct {
 	Sku         string `json:"sku"`
 	Type        string `json:"type"`
 	Description string `json:"description"`
-	VAT         uint64 `json:"vat"`
 
 	Path string `json:"path"`
 
-	Price      uint64      `json:"price"`
-	PriceItems []PriceItem `json:"price_items"`
+	Price    uint64 `json:"price"`
+	Discount uint64 `json:"discount"`
+	VAT      uint64 `json:"vat"`
 
+	PriceItems []PriceItem `json:"price_items"`
 	AddonItems []AddonItem `json:"addons"`
 	AddonPrice uint64      `json:"addon_price"`
 
@@ -39,9 +40,10 @@ type LineItem struct {
 type PriceItem struct {
 	ID int64 `json:"id"`
 
-	Amount uint64 `json:"amount"`
-	Type   string `json:"type"`
-	VAT    uint64 `json:"vat"`
+	Amount   uint64 `json:"amount"`
+	Discount uint64 `json:"discount"`
+	Type     string `json:"type"`
+	VAT      uint64 `json:"vat"`
 }
 
 func (PriceItem) TableName() string {
@@ -163,7 +165,13 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 		order.Downloads = append(order.Downloads, download)
 	}
 
-	return i.calculatePrice(meta.Prices, order.Currency)
+	if err := i.calculatePrice(meta.Prices, order.Currency); err != nil {
+		return err
+	}
+
+	i.calculateDiscount(order)
+
+	return nil
 }
 
 func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error {
@@ -185,6 +193,21 @@ func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error
 	}
 
 	return nil
+}
+
+func (i *LineItem) calculateDiscount(order *Order) {
+	if order.Coupon == nil {
+		return
+	}
+
+	if !order.Coupon.ValidForType(i.Type) {
+		return
+	}
+
+	if order.Coupon.Percentage != 0 {
+		p := uint64(order.Coupon.Percentage)
+		i.Discount = i.Price*p/100 + i.AddonPrice*p/100
+	}
 }
 
 func determineLowestPrice(prices []PriceMetadata, currency string) (PriceMetadata, error) {
