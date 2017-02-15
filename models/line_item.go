@@ -62,6 +62,9 @@ func (i *PriceItem) FixedVAT() uint64 {
 func (i *PriceItem) TaxableItems() []calculator.Item {
 	return nil
 }
+func (i *PriceItem) GetQuantity() uint64 {
+	return 1
+}
 
 type AddonItem struct {
 	ID int64 `json:"id"`
@@ -151,6 +154,10 @@ func (i *LineItem) TaxableItems() []calculator.Item {
 		return items
 	}
 	return nil
+}
+
+func (i *LineItem) GetQuantity() uint64 {
+	return i.Quantity
 }
 
 func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {

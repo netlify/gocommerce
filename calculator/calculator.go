@@ -12,6 +12,8 @@ type Price struct {
 }
 
 type ItemPrice struct {
+	Quantity uint64
+
 	Subtotal uint64
 	Discount uint64
 	Taxes    uint64
@@ -39,6 +41,7 @@ type Item interface {
 	ProductType() string
 	FixedVAT() uint64
 	TaxableItems() []Item
+	GetQuantity() uint64
 }
 
 type Coupon interface {
@@ -78,7 +81,7 @@ func CalculatePrice(settings *Settings, country, currency string, coupon Coupon,
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 	for _, item := range items {
-		itemPrice := ItemPrice{}
+		itemPrice := ItemPrice{Quantity: item.GetQuantity()}
 		itemPrice.Subtotal = item.PriceInLowestUnit()
 
 		taxAmounts := []taxAmount{}
@@ -128,10 +131,10 @@ func CalculatePrice(settings *Settings, country, currency string, coupon Coupon,
 
 		price.Items = append(price.Items, itemPrice)
 
-		price.Subtotal += itemPrice.Subtotal
-		price.Discount += itemPrice.Discount
-		price.Taxes += itemPrice.Taxes
-		price.Total += itemPrice.Total
+		price.Subtotal += (itemPrice.Subtotal * itemPrice.Quantity)
+		price.Discount += (itemPrice.Discount * itemPrice.Quantity)
+		price.Taxes += (itemPrice.Taxes * itemPrice.Quantity)
+		price.Total += (itemPrice.Total * itemPrice.Quantity)
 	}
 
 	price.Total = price.Subtotal - price.Discount + price.Taxes
