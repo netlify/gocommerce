@@ -16,6 +16,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/netlify/netlify-commerce/calculator"
 	"github.com/netlify/netlify-commerce/conf"
 	"github.com/netlify/netlify-commerce/models"
 )
@@ -168,7 +169,7 @@ func loadTestData(db *gorm.DB) {
 
 	firstOrder.ID = "first-order"
 	firstOrder.LineItems = []*models.LineItem{&firstLineItem}
-	firstOrder.CalculateTotal(&models.SiteSettings{})
+	firstOrder.CalculateTotal(&calculator.Settings{})
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress
 	firstOrder.User = &testUser
@@ -178,7 +179,7 @@ func loadTestData(db *gorm.DB) {
 
 	secondOrder.ID = "second-order"
 	secondOrder.LineItems = []*models.LineItem{&secondLineItem1, &secondLineItem2}
-	secondOrder.CalculateTotal(&models.SiteSettings{})
+	secondOrder.CalculateTotal(&calculator.Settings{})
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
 	secondOrder.User = &testUser

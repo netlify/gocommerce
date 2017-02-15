@@ -41,7 +41,7 @@ func TestSimpleCouponLookup(t *testing.T) {
 	NewAPI(config, db, nil, nil, nil).CouponView(ctx, recorder, req)
 	coupon := &models.Coupon{}
 	extractPayload(t, 200, recorder, coupon)
-	assert.Equal(t, 15, coupon.Percentage, "Expected coupon percetage to be 15")
+	assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
 	assert.Equal(t, "coupon-code", coupon.Code, "Expected coupon code to be 'coupon-code'")
 }
 

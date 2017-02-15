@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/netlify/netlify-commerce/calculator"
 	"github.com/pborman/uuid"
 )
 
@@ -20,13 +21,12 @@ type LineItem struct {
 
 	Path string `json:"path"`
 
-	Price    uint64 `json:"price"`
-	Discount uint64 `json:"discount"`
-	VAT      uint64 `json:"vat"`
+	Price uint64 `json:"price"`
+	VAT   uint64 `json:"vat"`
 
-	PriceItems []PriceItem `json:"price_items"`
-	AddonItems []AddonItem `json:"addons"`
-	AddonPrice uint64      `json:"addon_price"`
+	PriceItems []*PriceItem `json:"price_items"`
+	AddonItems []*AddonItem `json:"addons"`
+	AddonPrice uint64       `json:"addon_price"`
 
 	Quantity uint64 `json:"quantity"`
 
@@ -40,14 +40,27 @@ type LineItem struct {
 type PriceItem struct {
 	ID int64 `json:"id"`
 
-	Amount   uint64 `json:"amount"`
-	Discount uint64 `json:"discount"`
-	Type     string `json:"type"`
-	VAT      uint64 `json:"vat"`
+	Amount uint64 `json:"amount"`
+	Type   string `json:"type"`
+	VAT    uint64 `json:"vat"`
 }
 
 func (PriceItem) TableName() string {
 	return tableName("price_items")
+}
+
+// Make sure a PriceItem fullfils the calculator Item interface
+func (i *PriceItem) PriceInLowestUnit() uint64 {
+	return i.Amount
+}
+func (i *PriceItem) ProductType() string {
+	return i.Type
+}
+func (i *PriceItem) FixedVAT() uint64 {
+	return i.VAT
+}
+func (i *PriceItem) TaxableItems() []calculator.Item {
+	return nil
 }
 
 type AddonItem struct {
@@ -119,6 +132,27 @@ type LineItemMetadata struct {
 	Webhook string `json:"webhook"`
 }
 
+// Make sure LineItem is a valid Item for the calculator
+func (i *LineItem) PriceInLowestUnit() uint64 {
+	return i.Price + i.AddonPrice
+}
+func (i *LineItem) ProductType() string {
+	return i.Type
+}
+func (i *LineItem) FixedVAT() uint64 {
+	return i.VAT
+}
+func (i *LineItem) TaxableItems() []calculator.Item {
+	if i.PriceItems != nil {
+		items := make([]calculator.Item, len(i.PriceItems))
+		for i, priceItem := range i.PriceItems {
+			items[i] = priceItem
+		}
+		return items
+	}
+	return nil
+}
+
 func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 	i.Sku = meta.Sku
 	i.Title = meta.Title
@@ -169,8 +203,6 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 		return err
 	}
 
-	i.calculateDiscount(order)
-
 	return nil
 }
 
@@ -180,34 +212,19 @@ func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error
 		return err
 	}
 	i.Price = lowestPrice.cents
-	i.PriceItems = make([]PriceItem, len(lowestPrice.Items))
+	i.PriceItems = make([]*PriceItem, len(lowestPrice.Items))
 	for index, item := range lowestPrice.Items {
 		amount, err := strconv.ParseFloat(item.Amount, 64)
 		if err != nil {
 			return err
 		}
-		i.PriceItems[index] = PriceItem{Amount: uint64(amount * 100), Type: item.Type, VAT: item.VAT}
+		i.PriceItems[index] = &PriceItem{Amount: uint64(amount * 100), Type: item.Type, VAT: item.VAT}
 	}
 	for _, addon := range i.AddonItems {
 		i.AddonPrice += addon.Price
 	}
 
 	return nil
-}
-
-func (i *LineItem) calculateDiscount(order *Order) {
-	if order.Coupon == nil {
-		return
-	}
-
-	if !order.Coupon.ValidForType(i.Type) {
-		return
-	}
-
-	if order.Coupon.Percentage != 0 {
-		p := uint64(order.Coupon.Percentage)
-		i.Discount = i.Price*p/100 + i.AddonPrice*p/100
-	}
 }
 
 func determineLowestPrice(prices []PriceMetadata, currency string) (PriceMetadata, error) {

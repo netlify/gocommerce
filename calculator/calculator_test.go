@@ -13,7 +13,7 @@ type TestItem struct {
 	items    []Item
 }
 
-func (t *TestItem) PriceIn(currency string) uint64 {
+func (t *TestItem) PriceInLowestUnit() uint64 {
 	return t.price
 }
 
@@ -21,7 +21,7 @@ func (t *TestItem) ProductType() string {
 	return t.itemType
 }
 
-func (t *TestItem) VAT() uint64 {
+func (t *TestItem) FixedVAT() uint64 {
 	return t.vat
 }
 

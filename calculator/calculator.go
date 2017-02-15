@@ -34,6 +34,20 @@ type taxAmount struct {
 	percentage uint64
 }
 
+type Item interface {
+	PriceInLowestUnit() uint64
+	ProductType() string
+	FixedVAT() uint64
+	TaxableItems() []Item
+}
+
+type Coupon interface {
+	ValidForType(string) bool
+	ValidForPrice(string, uint64) bool
+	PercentageDiscount() uint64
+	FixedDiscount() uint64
+}
+
 func (t *Tax) AppliesTo(country, productType string) bool {
 	applies := true
 	if t.ProductTypes != nil && len(t.ProductTypes) > 0 {
@@ -60,33 +74,19 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 	return applies
 }
 
-type Item interface {
-	PriceIn(string) uint64
-	ProductType() string
-	VAT() uint64
-	TaxableItems() []Item
-}
-
-type Coupon interface {
-	ValidForType(string) bool
-	ValidForPrice(string, uint64) bool
-	PercentageDiscount() uint64
-	FixedDiscount() uint64
-}
-
 func CalculatePrice(settings *Settings, country, currency string, coupon Coupon, items []Item) Price {
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 	for _, item := range items {
 		itemPrice := ItemPrice{}
-		itemPrice.Subtotal = item.PriceIn(currency)
+		itemPrice.Subtotal = item.PriceInLowestUnit()
 
 		taxAmounts := []taxAmount{}
-		if item.VAT() != 0 {
-			taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: item.VAT()})
+		if item.FixedVAT() != 0 {
+			taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: item.FixedVAT()})
 		} else if settings != nil && item.TaxableItems() != nil && len(item.TaxableItems()) > 0 {
 			for _, item := range item.TaxableItems() {
-				amount := taxAmount{price: item.PriceIn(currency)}
+				amount := taxAmount{price: item.PriceInLowestUnit()}
 				for _, t := range settings.Taxes {
 					if t.AppliesTo(country, item.ProductType()) {
 						amount.percentage = t.Percentage

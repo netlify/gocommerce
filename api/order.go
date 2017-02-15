@@ -13,6 +13,7 @@ import (
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
+	"github.com/netlify/netlify-commerce/calculator"
 	"github.com/netlify/netlify-commerce/models"
 	"github.com/pborman/uuid"
 )
@@ -710,10 +711,10 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	return nil
 }
 
-func (a *API) loadSettings(ctx context.Context) (*models.SiteSettings, error) {
+func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
 	config := getConfig(ctx)
 
-	settings := &models.SiteSettings{}
+	settings := &calculator.Settings{}
 	resp, err := a.httpClient.Get(config.SiteURL + "/netlify-commerce/settings.json")
 	if err != nil {
 		return nil, fmt.Errorf("Error loading site settings: %v", err)
@@ -802,7 +803,7 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 	for _, meta := range metaProducts {
 		if meta.Sku == item.Sku {
 			for _, addon := range orderItem.Addons {
-				item.AddonItems = append(item.AddonItems, models.AddonItem{
+				item.AddonItems = append(item.AddonItems, &models.AddonItem{
 					Sku: addon.Sku,
 				})
 			}

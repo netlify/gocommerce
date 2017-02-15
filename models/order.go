@@ -2,9 +2,9 @@ package models
 
 import (
 	"encoding/json"
-	"math"
 	"time"
 
+	"github.com/netlify/netlify-commerce/calculator"
 	"github.com/pborman/uuid"
 )
 
@@ -127,18 +127,18 @@ func NewOrder(sessionID, email, currency string) *Order {
 	return order
 }
 
-func (o *Order) CalculateTotal(settings *SiteSettings) {
-	// Calculate taxes/shipping here
-	var taxes uint64
-	if o.VATNumber == "" {
-		for _, item := range o.LineItems {
-			taxes += taxFor(item, settings.Taxes, o.ShippingAddress.Country)
-			o.Discount += item.Discount
-		}
+func (o *Order) CalculateTotal(settings *calculator.Settings) {
+	items := make([]calculator.Item, len(o.LineItems))
+	for i, item := range o.LineItems {
+		items[i] = item
 	}
 
-	o.Taxes = taxes
-	o.Total = o.SubTotal - o.Discount + taxes
+	price := calculator.CalculatePrice(settings, o.ShippingAddress.Country, o.Currency, o.Coupon, items)
+
+	o.SubTotal = price.Subtotal
+	o.Taxes = price.Taxes
+	o.Discount = price.Discount
+	o.Total = price.Total
 }
 
 func inList(list []string, candidate string) bool {
@@ -148,50 +148,4 @@ func inList(list []string, candidate string) bool {
 		}
 	}
 	return false
-}
-
-func taxFor(item *LineItem, taxes []*Tax, country string) uint64 {
-	// Note - we're not handling products with PricItems and Addons right now
-	if len(item.PriceItems) > 0 {
-		var tax uint64
-		for _, i := range item.PriceItems {
-			tax += taxFor(&LineItem{
-				Price:    i.Amount,
-				Discount: i.Discount,
-				Type:     i.Type,
-				VAT:      i.VAT,
-				Quantity: item.Quantity,
-			}, taxes, country)
-		}
-		return tax
-	}
-	if item.VAT != 0 {
-		return (item.Price + item.AddonPrice - item.Discount) * item.Quantity * (item.VAT / 100)
-	}
-	if len(taxes) > 0 && country != "" {
-		for _, tax := range taxes {
-			if inList(tax.ProductTypes, item.Type) && inList(tax.Countries, country) {
-				result := float64(item.Price+item.AddonPrice-item.Discount) * float64(item.Quantity) * (float64(tax.Percentage) / 100)
-				return uint64(rint(result))
-			}
-		}
-	}
-	return 0
-}
-
-// Nopes - no `round` method in go
-// See https://gist.github.com/siddontang/1806573b9a8574989ccb
-func rint(x float64) float64 {
-	v, frac := math.Modf(x)
-	if x > 0.0 {
-		if frac > 0.5 || (frac == 0.5 && uint64(v)%2 != 0) {
-			v += 1.0
-		}
-	} else {
-		if frac < -0.5 || (frac == -0.5 && uint64(v)%2 != 0) {
-			v -= 1.0
-		}
-	}
-
-	return v
 }
