@@ -46,11 +46,11 @@ type Configuration struct {
 		Subjects   struct {
 			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
 			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
-		} `mapstructure:"mail_subjects" json:"mail_subjects"`
+		} `mapstructure:"subjects" json:"subjects"`
 		Templates struct {
 			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
 			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
-		}
+		} `mapstructure:"templates" json:"templates"`
 	} `mapstructure:"mailer" json:"mailer"`
 
 	Payment struct {
