@@ -134,10 +134,11 @@ func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
 		for {
 			hooks := []*Hook{}
 			tx := db.Begin()
+			now := time.Now()
 
 			tx.Table(table).
-				Where("done = 0 AND (locked_at IS NULL OR locked_at < ?) AND (run_after IS NULL OR run_after < ?)", time.Now().Add(-5*time.Minute), time.Now()).
-				Updates(map[string]interface{}{"locked_at": time.Now(), "locked_by": id})
+				Where("done = ? AND (locked_at IS NULL OR locked_at < ?) AND (run_after IS NULL OR run_after < ?)", false, now.Add(-5*time.Minute), now).
+				Updates(map[string]interface{}{"locked_at": now, "locked_by": id})
 
 			tx.Where("locked_by = ?", id).Find(&hooks)
 			tx.Commit()
