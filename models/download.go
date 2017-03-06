@@ -3,7 +3,7 @@ package models
 import (
 	"time"
 
-	"github.com/netlify/netlify-commerce/assetstores"
+	"github.com/netlify/gocommerce/assetstores"
 )
 
 type Download struct {

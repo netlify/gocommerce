@@ -16,9 +16,9 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/netlify-commerce/calculator"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/calculator"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/models"
 )
 
 var dbFiles []string

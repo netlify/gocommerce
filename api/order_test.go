@@ -13,8 +13,8 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/models"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -776,7 +776,7 @@ func startTestSite(config *conf.Configuration) {
 				<html>
 				<head><title>Test Product</title></head>
 				<body>
-					<script class="netlify-commerce-product">
+					<script class="gocommerce-product">
 					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
 						{"amount": "9.99", "currency": "USD"}
 					]}
@@ -788,7 +788,7 @@ func startTestSite(config *conf.Configuration) {
 				<html>
 				<head><title>Test Product</title></head>
 				<body>
-					<script class="netlify-commerce-product">
+					<script class="gocommerce-product">
 					{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
 						{"amount": "9.99", "currency": "USD", "items": [
 							{"amount": "7.00", "type": "Book"},
@@ -798,7 +798,7 @@ func startTestSite(config *conf.Configuration) {
 					</script>
 				</body>
 				</html>`)
-		case "/netlify-commerce/settings.json":
+		case "/gocommerce/settings.json":
 			fmt.Fprintln(w, `{
 				"taxes": [
 					{"percentage": 19, "product_types": ["E-Book"], "countries": ["Germany"]},

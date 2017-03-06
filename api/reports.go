@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 )
 
 type SalesRow struct {

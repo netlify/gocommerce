@@ -7,7 +7,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"golang.org/x/net/context"
 
-	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/gocommerce/conf"
 )
 
 const (

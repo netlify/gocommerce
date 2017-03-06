@@ -15,9 +15,9 @@ import (
 	"github.com/rs/cors"
 	"github.com/zenazn/goji/web/mutil"
 
-	"github.com/netlify/netlify-commerce/assetstores"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/mailer"
+	"github.com/netlify/gocommerce/assetstores"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/mailer"
 
 	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
 )

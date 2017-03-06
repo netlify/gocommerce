@@ -93,9 +93,8 @@ func Load(configFile string) (*Configuration, error) {
 		viper.SetConfigFile(configFile)
 	} else {
 		viper.SetConfigName("config")
-		viper.AddConfigPath("./")                       // ./config.[json | toml]
-		viper.AddConfigPath("$HOME/.gocommerce/")       // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
-		viper.AddConfigPath("$HOME/.netlify-commerce/") // ~/.netlify-commerce/config.[json | toml]
+		viper.AddConfigPath("./")                 // ./config.[json | toml]
+		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
 	}
 
 	viper.SetEnvPrefix("NETLIFY_COMMERCE")
