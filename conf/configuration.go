@@ -97,7 +97,7 @@ func Load(configFile string) (*Configuration, error) {
 		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
 	}
 
-	viper.SetEnvPrefix("NETLIFY_COMMERCE")
+	viper.SetEnvPrefix("GOCOMMERCE")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
