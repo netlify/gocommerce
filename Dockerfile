@@ -1,8 +1,8 @@
 FROM calavera/go-glide:v0.12.2
 
-ADD . /go/src/github.com/netlify/netlify-commerce
+ADD . /go/src/github.com/netlify/gocommerce
 
-RUN useradd -m netlify && cd /go/src/github.com/netlify/netlify-commerce && make deps build && mv netlify-commerce /usr/local/bin/
+RUN useradd -m netlify && cd /go/src/github.com/netlify/gocommerce && make deps build && mv gocommerce /usr/local/bin/
 
 USER netlify
-CMD ["netlify-commerce"]
+CMD ["gocommerce"]
