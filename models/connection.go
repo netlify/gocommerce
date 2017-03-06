@@ -9,7 +9,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 
-	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/gocommerce/conf"
 )
 
 // Namespace puts all tables names under a common

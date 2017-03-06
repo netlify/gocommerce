@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/netlify/netlify-commerce/api"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/mailer"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/api"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/mailer"
+	"github.com/netlify/gocommerce/models"
 	"github.com/spf13/cobra"
 	stripe "github.com/stripe/stripe-go"
 )

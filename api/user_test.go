@@ -12,7 +12,7 @@ import (
 	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 )
 
 func TestUsersQueryForAllUsersAsStranger(t *testing.T) {

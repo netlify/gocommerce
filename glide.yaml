@@ -1,4 +1,4 @@
-package: github.com/netlify/netlify-commerce
+package: github.com/netlify/gocommerce
 import:
 - package: github.com/PuerkitoBio/goquery
 - package: github.com/dgrijalva/jwt-go

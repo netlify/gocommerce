@@ -13,7 +13,7 @@ import (
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
 )
 
@@ -565,12 +565,12 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 		return err
 	}
 
-	metaTag := doc.Find("#netlify-commerce-product").First()
+	metaTag := doc.Find("#gocommerce-product").First()
 	if metaTag.Length() == 0 {
 		metaTag = doc.Find("#gocommerce-product").First() // Keep the code backwards compatible
 
 		if metaTag.Length() == 0 {
-			return fmt.Errorf("No script tag with id netlify-commerce-product tag found for '%v'", item.Title)
+			return fmt.Errorf("No script tag with id gocommerce-product tag found for '%v'", item.Title)
 		}
 	}
 	meta := &models.LineItemMetadata{}

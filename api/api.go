@@ -15,8 +15,8 @@ import (
 	"github.com/rs/cors"
 	"github.com/zenazn/goji/web/mutil"
 
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/mailer"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/mailer"
 )
 
 var (

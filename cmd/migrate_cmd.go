@@ -2,9 +2,10 @@ package cmd
 
 import (
 	"github.com/Sirupsen/logrus"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/models"
 	"github.com/spf13/cobra"
+
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/models"
 )
 
 var migrateCmd = cobra.Command{
