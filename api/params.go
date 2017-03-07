@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 )
 
 var sortFields = map[string]string{

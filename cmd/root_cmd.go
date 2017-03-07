@@ -4,13 +4,13 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
 
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/models"
 )
 
 // rootCmd will run the log streamer
 var rootCmd = cobra.Command{
-	Use:  "netlify-commerce",
+	Use:  "gocommerce",
 	Long: "A service that will validate restful transactions and send them to stripe.",
 	Run: func(cmd *cobra.Command, args []string) {
 		execWithConfig(cmd, serve)

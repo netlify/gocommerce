@@ -9,7 +9,7 @@ import (
 	"github.com/Sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/gocommerce/conf"
 )
 
 func TestTraceWrapper(t *testing.T) {

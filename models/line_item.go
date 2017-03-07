@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/netlify/netlify-commerce/calculator"
+	"github.com/netlify/gocommerce/calculator"
 	"github.com/pborman/uuid"
 )
 

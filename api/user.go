@@ -12,7 +12,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 )
 
 // UserList will return all of the users. It requires admin access.

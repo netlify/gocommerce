@@ -7,7 +7,7 @@ import (
 
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/models"
 )
 
 const MaxIPsPerDay = 50

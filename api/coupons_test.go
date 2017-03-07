@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"github.com/guregu/kami"
-	"github.com/netlify/netlify-commerce/conf"
-	"github.com/netlify/netlify-commerce/models"
+	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/models"
 	"github.com/stretchr/testify/assert"
 )
 

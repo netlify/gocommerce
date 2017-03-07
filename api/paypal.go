@@ -30,8 +30,8 @@ func (a *API) PaypalCreatePayment(ctx context.Context, w http.ResponseWriter, r 
 		Currency: r.FormValue("currency"),
 	}
 	a.log.Infof("Creating paypal payment with profile %v: %v", profile, amount)
-	redirectURI := a.config.SiteURL + "/netlify-commerce/paypal"
-	cancelURI := a.config.SiteURL + "/netlify-commerce/paypal/cancel"
+	redirectURI := a.config.SiteURL + "/gocommerce/paypal"
+	cancelURI := a.config.SiteURL + "/gocommerce/paypal/cancel"
 	paymentResult, err := a.paypal.CreatePayment(paypalsdk.Payment{
 		Intent: "sale",
 		Payer: &paypalsdk.Payer{
@@ -80,7 +80,7 @@ func (a *API) getExperience() (*paypalsdk.WebProfile, error) {
 	}
 
 	for _, profile := range experiences {
-		if profile.Name == "netlify-commerce" {
+		if profile.Name == "gocommerce" {
 			paypalExperience.mutex.Lock()
 			paypalExperience.profile = &profile
 			paypalExperience.mutex.Unlock()
@@ -89,7 +89,7 @@ func (a *API) getExperience() (*paypalsdk.WebProfile, error) {
 	}
 
 	profile, err := a.paypal.CreateWebProfile(paypalsdk.WebProfile{
-		Name: "netlify-commerce",
+		Name: "gocommerce",
 		InputFields: paypalsdk.InputFields{
 			NoShipping: 1,
 		},

@@ -10,12 +10,12 @@ import (
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/logpacker/PayPal-Go-SDK"
+	"github.com/pborman/uuid"
 	"github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/charge"
 	"github.com/stripe/stripe-go/refund"
 
-	"github.com/netlify/netlify-commerce/models"
-	"github.com/pborman/uuid"
+	"github.com/netlify/gocommerce/models"
 )
 
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups

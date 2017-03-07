@@ -3,7 +3,7 @@ package assetstores
 import (
 	"fmt"
 
-	"github.com/netlify/netlify-commerce/conf"
+	"github.com/netlify/gocommerce/conf"
 )
 
 type Store interface {
