@@ -66,7 +66,7 @@ func serve(config *conf.Configuration) {
 	stripe.Key = config.Payment.Stripe.SecretKey
 
 	l := fmt.Sprintf("%v:%v", config.API.Host, config.API.Port)
-	logrus.Infof("Netlify Commerce API started on: %s", l)
+	logrus.Infof("GoCommerce API started on: %s", l)
 
 	models.RunHooks(bgDB, logrus.WithField("component", "hooks"), config.Webhooks.Secret)
 
