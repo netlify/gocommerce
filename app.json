@@ -18,7 +18,7 @@
     "GOCOMMERCE_LOG_CONF_LEVEL": { "value": "DEBUG", "required": false },
 
     "GOCOMMERCE_MAILER_HOST": { "value": "smtp.mandrillapp.com", "required": false },
-    "GOCOMMERCE_MAILER_PORT": { "value": 587, "required": false },
+    "GOCOMMERCE_MAILER_PORT": { "value": "587", "required": false },
     "GOCOMMERCE_MAILER_USER": { "value": "test@example.com", "required": false },
     "GOCOMMERCE_MAILER_PASS": { "value": "secret", "required": false },
     "GOCOMMERCE_MAILER_ADMIN_EMAIL": { "value": "admin@example.com", "required": false },
