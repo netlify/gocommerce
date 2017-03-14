@@ -4,8 +4,46 @@
   "repository": "https://github.com/netlify/gocommerce",
   "logo": "https://cdn.netlify.com/2b614e203c78c24019e665c124c159bc80489a4c/e6f39/img/open-source/rainbow-diamond.jpg",
   "env": {
-    "GOCOMMERCE_COMMERCE_DB_AUTOMIGRATE": {
-      "value": "true"
-    }
+    "GOCOMMERCE_SITE_URL": { "value": "TODO" },
+    "GOCOMMERCE_JWT_SECRET": { "generator": "secret" },
+
+    "GOCOMMERCE_API_HOST": { "value": "" },
+    "GOCOMMERCE_API_PORT": { "value": "5678" },
+
+    "GOCOMMERCE_DB_AUTOMIGRATE": { "value": "true" },
+    "GOCOMMERCE_DB_NAMESPACE":   { "value": "commerce" },
+    "GOCOMMERCE_DB_DRIVER":      { "value": "sqlite3" },
+    "GOCOMMERCE_DB_URL":         { "value": "gorm.db" },
+
+    "GOCOMMERCE_LOG_CONF_LEVEL": { "value": "DEBUG" },
+
+    "GOCOMMERCE_MAILER_HOST": { "value": "smtp.mandrillapp.com" },
+    "GOCOMMERCE_MAILER_PORT": { "value": 587 },
+    "GOCOMMERCE_MAILER_USER": { "value": "test@example.com" },
+    "GOCOMMERCE_MAILER_PASS": { "value": "super-secret-password" },
+    "GOCOMMERCE_MAILER_ADMIN_EMAIL": { "value": "admin@example.com" },
+
+    "GOCOMMERCE_MAILER_SUBJECTS_ORDER_CONFIRMATION": {  "value": "Thank you for your order {{ .Order.ID }}, {{ .Order.BillingAddress.FirstName }}." },
+    "GOCOMMERCE_MAILER_SUBJECTS_ORDER_RECIEVED":     {  "value": "Thank you for your order {{ .Order.ID }}, {{ .Order.BillingAddress.FirstName }}." },
+    "GOCOMMERCE_MAILER_TEMPLATES_ORDER_CONFIRMATION": { "value": "/mails/order-confirmation" },
+    "GOCOMMERCE_MAILER_TEMPLATES_ORDER_RECEIVED":     { "value": "/mails/order-received" },
+
+    "GOCOMMERCE_PAYMENT_PAYPAL_ENV":        { "value": "sandbox" },
+    "GOCOMMERCE_PAYMENT_PAYPAL_SECRET":     { "generator": "secret" },
+    "GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID":  { "value": "TODO" },
+    "GOCOMMERCE_PAYMENT_STRIPE_SECRET_KEY": { "generator": "secret" },
+
+    "GOCOMMERCE_DOWNLOADS_PROVIDER": { "value": "TODO" },
+    "GOCOMMERCE_DOWNLOADS_NETLIFY_TOKEN": { "generator": "secret" },
+
+    "GOCOMMERCE_COUPONS_URL":      { "value": "https://my.herokuapp.com/gocommerce/coupons.json" },
+    "GOCOMMERCE_COUPONS_USER":     { "value": "netlify" },
+    "GOCOMMERCE_COUPONS_PASSWORD": { "generator": "secret" },
+
+    "GOCOMMERCE_WEBHOOKS_SECRET":  { "generator": "secret" },
+    "GOCOMMERCE_WEBHOOKS_ORDER":   { "value": "TODO" },
+    "GOCOMMERCE_WEBHOOKS_PAYMENT": { "value": "https://my.herokuapp.com/payment" },
+    "GOCOMMERCE_WEBHOOKS_REFUND":  { "value": "https://my.herokuapp.com/refund" },
+    "GOCOMMERCE_WEBHOOKS_UPDATE":  { "value": "https://my.herokuapp.com/update" }
   }
 }
