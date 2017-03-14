@@ -44,6 +44,6 @@
     "GOCOMMERCE_WEBHOOKS_ORDER":   { "value": "", "required": "false", "description": "an endpoint to hit when when an order is made" },
     "GOCOMMERCE_WEBHOOKS_PAYMENT": { "value": "", "required": "false", "description": "an endpoint to hit when when an payment is made" },
     "GOCOMMERCE_WEBHOOKS_REFUND":  { "value": "", "required": "false", "description": "an endpoint to hit when when an refund is made" },
-    "GOCOMMERCE_WEBHOOKS_UPDATE":  { "value": "", "required": "false", "description": "an endpoint to hit when when an update to an order is made" },
+    "GOCOMMERCE_WEBHOOKS_UPDATE":  { "value": "", "required": "false", "description": "an endpoint to hit when when an update to an order is made" }
   }
 }
