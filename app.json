@@ -1,0 +1,11 @@
+{
+  "name": "gocommerce",
+  "description": "A commerce API to support static sites",
+  "repository": "https://github.com/netlify/gocommerce",
+  "logo": "https://cdn.netlify.com/2b614e203c78c24019e665c124c159bc80489a4c/e6f39/img/open-source/rainbow-diamond.jpg",
+  "env": {
+    "GOCOMMERCE_COMMERCE_DB_AUTOMIGRATE": {
+      "value": "true"
+    }
+  }
+}
