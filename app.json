@@ -7,7 +7,7 @@
     "GOCOMMERCE_SITE_URL": { "description": "the name of the app, often 'https://my.herokuapp.com'" },
     "GOCOMMERCE_JWT_SECRET": { "generator": "secret" },
 
-    "GOCOMMERCE_API_HOST": { "value": "", "required": "false", "description": "this should be blank if you're not running a dev server" },
+    "GOCOMMERCE_API_HOST": { "value": "", "required": false, "description": "this should be blank if you're not running a dev server" },
     "GOCOMMERCE_API_PORT": { "value": "5678" },
 
     "GOCOMMERCE_DB_AUTOMIGRATE": { "value": "true" },
@@ -15,35 +15,35 @@
     "GOCOMMERCE_DB_DRIVER":      { "value": "sqlite3" },
     "GOCOMMERCE_DB_URL":         { "value": "gorm.db" },
 
-    "GOCOMMERCE_LOG_CONF_LEVEL": { "value": "DEBUG", "required": "false" },
+    "GOCOMMERCE_LOG_CONF_LEVEL": { "value": "DEBUG", "required": false },
 
-    "GOCOMMERCE_MAILER_HOST": { "value": "smtp.mandrillapp.com", "required": "false" },
-    "GOCOMMERCE_MAILER_PORT": { "value": 587, "required": "false" },
-    "GOCOMMERCE_MAILER_USER": { "value": "test@example.com", "required": "false" },
-    "GOCOMMERCE_MAILER_PASS": { "value": "secret", "required": "false" },
-    "GOCOMMERCE_MAILER_ADMIN_EMAIL": { "value": "admin@example.com", "required": "false" },
+    "GOCOMMERCE_MAILER_HOST": { "value": "smtp.mandrillapp.com", "required": false },
+    "GOCOMMERCE_MAILER_PORT": { "value": 587, "required": false },
+    "GOCOMMERCE_MAILER_USER": { "value": "test@example.com", "required": false },
+    "GOCOMMERCE_MAILER_PASS": { "value": "secret", "required": false },
+    "GOCOMMERCE_MAILER_ADMIN_EMAIL": { "value": "admin@example.com", "required": false },
 
     "GOCOMMERCE_MAILER_SUBJECTS_ORDER_CONFIRMATION": {  "value": "Thank you for your order {{ .Order.ID }}, {{ .Order.BillingAddress.FirstName }}." },
     "GOCOMMERCE_MAILER_SUBJECTS_ORDER_RECIEVED":     {  "value": "Thank you for your order {{ .Order.ID }}, {{ .Order.BillingAddress.FirstName }}." },
     "GOCOMMERCE_MAILER_TEMPLATES_ORDER_CONFIRMATION": { "value": "/mails/order-confirmation" },
     "GOCOMMERCE_MAILER_TEMPLATES_ORDER_RECEIVED":     { "value": "/mails/order-received" },
 
-    "GOCOMMERCE_PAYMENT_PAYPAL_ENV":        { "value": "sandbox", "required": "false"},
-    "GOCOMMERCE_PAYMENT_PAYPAL_SECRET":     { "value": "secret", "required": "false" },
-    "GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID":  { "value": "TODO", "required": "false" },
-    "GOCOMMERCE_PAYMENT_STRIPE_SECRET_KEY": { "value": "secret", "required": "false" },
+    "GOCOMMERCE_PAYMENT_PAYPAL_ENV":        { "value": "sandbox", "required": false},
+    "GOCOMMERCE_PAYMENT_PAYPAL_SECRET":     { "value": "secret", "required": false },
+    "GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID":  { "value": "TODO", "required": false },
+    "GOCOMMERCE_PAYMENT_STRIPE_SECRET_KEY": { "value": "secret", "required": false },
 
-    "GOCOMMERCE_DOWNLOADS_PROVIDER": { "value": "", "required": "false" },
-    "GOCOMMERCE_DOWNLOADS_NETLIFY_TOKEN": { "value": "secret", "required": "false" },
+    "GOCOMMERCE_DOWNLOADS_PROVIDER": { "value": "", "required": false },
+    "GOCOMMERCE_DOWNLOADS_NETLIFY_TOKEN": { "value": "secret", "required": false },
 
-    "GOCOMMERCE_COUPONS_URL":      { "value": "", "required": "false", "description": "an endpoint for getting a json blob with the coupons" },
-    "GOCOMMERCE_COUPONS_USER":     { "value": "netlify", "required": "false" },
-    "GOCOMMERCE_COUPONS_PASSWORD": { "value": "", "required": "false" },
+    "GOCOMMERCE_COUPONS_URL":      { "value": "", "required": false, "description": "an endpoint for getting a json blob with the coupons" },
+    "GOCOMMERCE_COUPONS_USER":     { "value": "netlify", "required": false },
+    "GOCOMMERCE_COUPONS_PASSWORD": { "value": "", "required": false },
 
-    "GOCOMMERCE_WEBHOOKS_SECRET":  { "value": "secret", "required": "false" },
-    "GOCOMMERCE_WEBHOOKS_ORDER":   { "value": "", "required": "false", "description": "an endpoint to hit when when an order is made" },
-    "GOCOMMERCE_WEBHOOKS_PAYMENT": { "value": "", "required": "false", "description": "an endpoint to hit when when an payment is made" },
-    "GOCOMMERCE_WEBHOOKS_REFUND":  { "value": "", "required": "false", "description": "an endpoint to hit when when an refund is made" },
-    "GOCOMMERCE_WEBHOOKS_UPDATE":  { "value": "", "required": "false", "description": "an endpoint to hit when when an update to an order is made" }
+    "GOCOMMERCE_WEBHOOKS_SECRET":  { "value": "secret", "required": false },
+    "GOCOMMERCE_WEBHOOKS_ORDER":   { "value": "", "required": false, "description": "an endpoint to hit when when an order is made" },
+    "GOCOMMERCE_WEBHOOKS_PAYMENT": { "value": "", "required": false, "description": "an endpoint to hit when when an payment is made" },
+    "GOCOMMERCE_WEBHOOKS_REFUND":  { "value": "", "required": false, "description": "an endpoint to hit when when an refund is made" },
+    "GOCOMMERCE_WEBHOOKS_UPDATE":  { "value": "", "required": false, "description": "an endpoint to hit when when an update to an order is made" }
   }
 }
