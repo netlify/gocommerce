@@ -1,0 +1,88 @@
+---
+hero:
+  headline: A headless e-commerce API with client-side JavaScript integration using the [GoCommerce JS](https://github.com/netlify/gocommerce-js) library.
+  subhead: |
+    - Handles orders and payments
+    - Integrates with [Stripe](https://stripe.com/) or [PayPal](https://www.paypal.com)
+    - Supports international pricing and VAT verification
+    - Built in Go, accessible via client-side JavaScript
+
+sectionsintro: Get Started
+
+sections:
+  - headline: Running the API
+    body: |
+      First, you’ll need to get the API running on a server. You can do this quickly and easily with Heroku:
+
+      <a href="https://www.heroku.com/deploy/?template=https://github.com/heroku/node-js-getting-started"><img src="https://www.herokucdn.com/deploy/button.svg" alt="Deploy"></a>
+  - headline: Preparing your site
+    body: |
+      Each product you want to sell on your site must have unique URL where GoCommerce can find the meta data needed for calculating pricing and taxes in order to verify that the order is legitimate before using Stripe to charge the client.
+
+      The metadata can be anywhere on the page, and goes in a script tag in this format:
+
+      ```html
+      <script id="gocommerce-product" type="application/json">
+      {
+        "sku":"my-product",
+        "title":"My Product",
+        "prices":[
+          { "amount":"49.99" }
+        ],
+        "type":"ebook"
+      }
+      </script>
+      ```
+
+      _Note - final syntax ended up being a little different we should update README as well (changed from id to class so we can have multiple products on the same page):_
+
+      ```html
+      <script class="netlify-commerce-product" type="application/json">
+      {
+        "sku":"my-product",
+        "title":"My Product",
+        "prices":[
+          { "amount":"49.99", "currency": "USD" }
+        ],
+        "type":"ebook"
+      }
+      </script>
+      ```
+
+      The minimum required is the `sku` ,`title`, and at least one entry in the `prices` array.
+  - headline: Email Templates
+    body: |
+      GoCommerce will look for mail templates inside `https://yoursite.com/gocommerce/emails/` when sending mails to users or administrators.
+      Right now the mail templates are:
+
+      - Order Confirmation `gocommerce/emails/confirmation.html`
+  - headline: VAT, Countries and Regions
+    body: |
+      GoCommerce will regularly check for a file called `https://yoursite.com/gocommerce/settings.json`
+      This file should have settings with rules for VAT or currency regions.
+
+      This file is not required for GoCommerce to work, but will enable support for various advanced features. Currently it enables VAT calculations on a per country/product type basic.
+
+      The reason we make you include the file in the static site, is that you'll need to do the same VAT calculations client side during checkout to be able to show this to the user. The [commerce-js](https://github.com/netlify/gocommerce-js) client library can help you with this.
+
+      Here's an example settings file:
+
+      ```json
+      {
+        "taxes": [{
+          "percentage": 20,
+          "product_types": ["ebook"],
+          "countries": ["Austria", "Bulgaria", "Estonia", "France", "Gibraltar", "Slovakia", "United Kingdom"]
+        }, {
+          "percentage": 7,
+          "product_types": ["book"],
+          "countries": ["Austria", "Belgium", "Bulgaria", "Croatia", "Cyprus", "Denmark", "Estonia"]
+        }]
+      }
+      ```
+
+      Based on these rules, if an order includes a product with "type" set to "ebook" in the product metadata on the site and the users billing Address is set to "Austria", GoCommerce will verify that a 20 percentage tax has been included in that product.
+  - headline: "Interacting with the API: GoCommerce JS"
+    body: |
+      The easiest way to access the GoCommerce API is with the GoCommerce JS library. Check the [Readme](https://github.com/netlify/gocommerce-js) for simple documentation.
+---
