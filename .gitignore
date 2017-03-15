@@ -5,3 +5,8 @@ netlify-commerce
 vendor/
 .idea
 *.iml
+
+.DS_Store
+www/dist/
+www/.DS_Store
+www/node_modules
