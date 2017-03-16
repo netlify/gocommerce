@@ -1,0 +1,6 @@
+baseurl: "/"
+languageCode: "en-us"
+title: "GoCommerce API"
+disable404: true
+pluralizeListTitles: false
+metaDataFormat: "yaml"
