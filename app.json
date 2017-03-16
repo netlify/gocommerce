@@ -1,0 +1,40 @@
+{
+  "name": "Gocommerce",
+  "description": "",
+  "website": "https://www.gocommerceapi.org",
+  "repository": "https://github.com/netlify/gocommerce",
+  "env": {
+    "DATABASE_URL: {},
+    "GOCOMMERCE_DB_DRIVER": {
+      "value": "sqlite3"
+    },
+    "GOCOMMERCE_DB_AUTOMIGRATE": {
+      "value": true
+    },
+    "GOCOMMERCE_DB_NAMESPACE": {
+      "value": "auth"
+    },
+    "GOCOMMERCE_JWT_SECRET": {
+      "required": true
+    },
+    "GOCOMMERCE_MAILER_ADMIN_EMAIL": {},
+    "GOCOMMERCE_MAILER_HOST": {},
+    "GOCOMMERCE_MAILER_MEMBER_FOLDER": {},
+    "GOCOMMERCE_MAILER_USER": {}
+    "GOCOMMERCE_MAILER_PASS": {},
+    "GOCOMMERCE_MAILER_PORT": {},
+    "GOCOMMERCE_MAILER_SITE_URL": {},
+    "GOCOMMERCE_MAILER_SUBJECTS_ORDER_CONFIRMATION": {},
+    "GOCOMMERCE_MAILER_TEMPLATES_ORDER_CONFIRMATION": {},
+    "GOCOMMERCE_COUPONS_URL": {},
+    "GOCOMMERCE_COUPONS_USER": {},
+    "GOCOMMERCE_COUPONS_PASSWORD": {},
+    "GOCOMMERCE_SITE_URL": {},
+    "GOCOMMERCE_WEBHOOKS_PAYMENT": {},
+    "GOCOMMERCE_WEBHOOKS_SECRET": {},
+    "GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID": {},
+    "GOCOMMERCE_PAYMENT_PAYPAL_ENV": {},
+    "GOCOMMERCE_PAYMENT_PAYPAL_SECRET": {},
+    "GOCOMMERCE_PAYMENT_STRIPE_SECRET": {},
+  }
+}
