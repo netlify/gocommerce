@@ -4,7 +4,7 @@
   "website": "https://www.gocommerceapi.org",
   "repository": "https://github.com/netlify/gocommerce",
   "env": {
-    "DATABASE_URL: {},
+    "DATABASE_URL": {},
     "GOCOMMERCE_DB_DRIVER": {
       "value": "sqlite3"
     },
@@ -20,7 +20,7 @@
     "GOCOMMERCE_MAILER_ADMIN_EMAIL": {},
     "GOCOMMERCE_MAILER_HOST": {},
     "GOCOMMERCE_MAILER_MEMBER_FOLDER": {},
-    "GOCOMMERCE_MAILER_USER": {}
+    "GOCOMMERCE_MAILER_USER": {},
     "GOCOMMERCE_MAILER_PASS": {},
     "GOCOMMERCE_MAILER_PORT": {},
     "GOCOMMERCE_MAILER_SITE_URL": {},
@@ -35,6 +35,6 @@
     "GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID": {},
     "GOCOMMERCE_PAYMENT_PAYPAL_ENV": {},
     "GOCOMMERCE_PAYMENT_PAYPAL_SECRET": {},
-    "GOCOMMERCE_PAYMENT_STRIPE_SECRET": {},
+    "GOCOMMERCE_PAYMENT_STRIPE_SECRET": {}
   }
 }
