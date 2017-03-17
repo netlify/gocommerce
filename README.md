@@ -13,7 +13,7 @@ Please make sure you understand its [implications and guarantees](https://writin
 See [the example configuration](config.example.json) for an example of how to configure
 GoCcommerce.
 
-The most important setting is the `site_url`. GoCcommerce is always tied to a website,
+The most important setting is the `site_url`. GoCommerce is always tied to a website,
 and will use the site URL to verify product prices, offers, and settings for countries,
 product types and VAT rules.
 
