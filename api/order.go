@@ -708,7 +708,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		return &HTTPError{Code: 500, Message: err.Error()}
 	}
 
-	order.CalculateTotal(settings)
+	order.CalculateTotal(settings, getClaimsAsMap(ctx))
 
 	return nil
 }

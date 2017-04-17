@@ -9,6 +9,7 @@ type Coupon struct {
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
 	Percentage uint64 `json:"percentage,omitempty"`
+	Amount uint64 `json:"amount,omitempty"`
 
 	ProductTypes []string               `json:"product_types,omitempty"`
 	Claims       map[string]interface{} `json:"claims,omitempty"`

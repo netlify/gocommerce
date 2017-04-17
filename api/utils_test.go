@@ -169,7 +169,7 @@ func loadTestData(db *gorm.DB) {
 
 	firstOrder.ID = "first-order"
 	firstOrder.LineItems = []*models.LineItem{&firstLineItem}
-	firstOrder.CalculateTotal(&calculator.Settings{})
+	firstOrder.CalculateTotal(&calculator.Settings{}, nil)
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress
 	firstOrder.User = &testUser
@@ -179,7 +179,7 @@ func loadTestData(db *gorm.DB) {
 
 	secondOrder.ID = "second-order"
 	secondOrder.LineItems = []*models.LineItem{&secondLineItem1, &secondLineItem2}
-	secondOrder.CalculateTotal(&calculator.Settings{})
+	secondOrder.CalculateTotal(&calculator.Settings{}, nil)
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
 	secondOrder.User = &testUser

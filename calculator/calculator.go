@@ -1,6 +1,9 @@
 package calculator
 
-import "math"
+import (
+	"math"
+	"strings"
+)
 
 type Price struct {
 	Items []ItemPrice
@@ -23,6 +26,7 @@ type ItemPrice struct {
 type Settings struct {
 	PricesIncludeTaxes bool   `json:"prices_include_taxes"`
 	Taxes              []*Tax `json:"taxes"`
+	MemberDiscounts		 []*MemberDiscount `json:"member_discounts"`
 }
 
 type Tax struct {
@@ -34,6 +38,12 @@ type Tax struct {
 type taxAmount struct {
 	price      uint64
 	percentage uint64
+}
+
+type MemberDiscount struct {
+	Claims map[string]string `json:"claims"`
+	Percentage uint64 `json:"percentage"`
+	Fixed uint64 `json:"fixed"`
 }
 
 type Item interface {
@@ -77,7 +87,7 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 	return applies
 }
 
-func CalculatePrice(settings *Settings, country, currency string, coupon Coupon, items []Item) Price {
+func CalculatePrice(settings *Settings, claims map[string]interface{}, country, currency string, coupon Coupon, items []Item) Price {
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 	for _, item := range items {
@@ -120,11 +130,14 @@ func CalculatePrice(settings *Settings, country, currency string, coupon Coupon,
 			}
 		}
 		if coupon != nil && coupon.ValidForType(item.ProductType()) {
-			amountToDiscount := itemPrice.Subtotal
-			if includeTaxes {
-				amountToDiscount += itemPrice.Taxes
+			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(), includeTaxes)
+		}
+		if settings != nil && settings.MemberDiscounts != nil {
+			for _, discount := range settings.MemberDiscounts {
+				if claims != nil && hasClaims(claims, discount.Claims) {
+					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.Fixed, includeTaxes)
+				}
 			}
-			itemPrice.Discount = rint(float64(amountToDiscount) * float64(coupon.PercentageDiscount()) / 100)
 		}
 
 		itemPrice.Total = itemPrice.Subtotal - itemPrice.Discount + itemPrice.Taxes
@@ -140,6 +153,48 @@ func CalculatePrice(settings *Settings, country, currency string, coupon Coupon,
 	price.Total = price.Subtotal - price.Discount + price.Taxes
 
 	return price
+}
+
+func hasClaims(userClaims map[string]interface{}, requiredClaims map[string]string) bool {
+	for key, value := range requiredClaims {
+		parts := strings.Split(key, ".")
+		obj := userClaims
+		for i, part := range parts {
+			newObj, ok := obj[part]
+			if !ok {
+				return false
+			}
+			if i+1 == len(parts) {
+				str, ok := newObj.(string)
+				if !ok {
+					return false
+				}
+				return str == value
+			} else {
+				obj, ok = newObj.(map[string]interface{})
+				if !ok {
+					return false
+				}
+			}
+		}
+	}
+	return false
+}
+
+func calculateDiscount(amountToDiscount, taxes, percentage, fixed uint64, includeTaxes bool) uint64 {
+	if includeTaxes {
+		amountToDiscount += taxes
+	}
+	var discount uint64
+	if percentage > 0 {
+		discount = rint(float64(amountToDiscount) * float64(percentage) / 100)
+	}
+	discount += fixed
+
+	if discount > amountToDiscount {
+		return amountToDiscount
+	}
+	return discount
 }
 
 // Nopes - no `round` method in go

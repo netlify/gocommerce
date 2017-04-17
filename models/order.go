@@ -127,13 +127,13 @@ func NewOrder(sessionID, email, currency string) *Order {
 	return order
 }
 
-func (o *Order) CalculateTotal(settings *calculator.Settings) {
+func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]interface{}) {
 	items := make([]calculator.Item, len(o.LineItems))
 	for i, item := range o.LineItems {
 		items[i] = item
 	}
 
-	price := calculator.CalculatePrice(settings, o.ShippingAddress.Country, o.Currency, o.Coupon, items)
+	price := calculator.CalculatePrice(settings, claims, o.ShippingAddress.Country, o.Currency, o.Coupon, items)
 
 	o.SubTotal = price.Subtotal
 	o.Taxes = price.Taxes

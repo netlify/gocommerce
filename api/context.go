@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -114,6 +115,29 @@ func getClaims(ctx context.Context) *JWTClaims {
 		return nil
 	}
 	return token.Claims.(*JWTClaims)
+}
+
+func getClaimsAsMap(ctx context.Context) map[string]interface{} {
+	token := getToken(ctx)
+	if token == nil {
+		return nil
+	}
+	config := getConfig(ctx)
+	if config == nil {
+		return nil
+	}
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(token.Raw, &claims, func(token *jwt.Token) (interface{}, error) {
+		if token.Header["alg"] != jwt.SigningMethodHS256.Name {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(config.JWT.Secret), nil
+	})
+	if err != nil {
+		return nil
+	}
+
+	return map[string]interface{}(claims)
 }
 
 func withAdminFlag(ctx context.Context, isAdmin bool) context.Context {
