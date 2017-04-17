@@ -2,14 +2,19 @@ package models
 
 import "time"
 
+type FixedAmount struct {
+	Amount   uint64 `json:"amount"`
+	Currency string `json:"currency"`
+}
+
 type Coupon struct {
 	Code string `json:"code"`
 
 	StartDate *time.Time `json:"start_date,omitempty"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	Percentage uint64 `json:"percentage,omitempty"`
-	Amount uint64 `json:"amount,omitempty"`
+	Percentage  uint64         `json:"percentage,omitempty"`
+	FixedAmount []*FixedAmount `json:"fixed,omitempty"`
 
 	ProductTypes []string               `json:"product_types,omitempty"`
 	Claims       map[string]interface{} `json:"claims,omitempty"`
@@ -51,7 +56,14 @@ func (c *Coupon) ValidForPrice(currency string, price uint64) bool {
 func (c *Coupon) PercentageDiscount() uint64 {
 	return c.Percentage
 }
-func (c *Coupon) FixedDiscount() uint64 {
-	// TODO: Support for fixed amount discoutns
+func (c *Coupon) FixedDiscount(currency string) uint64 {
+	if c.FixedAmount != nil {
+		for _, discount := range c.FixedAmount {
+			if discount.Currency == currency {
+				return discount.Amount
+			}
+		}
+	}
+
 	return 0
 }

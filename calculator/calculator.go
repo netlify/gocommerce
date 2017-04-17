@@ -24,9 +24,9 @@ type ItemPrice struct {
 }
 
 type Settings struct {
-	PricesIncludeTaxes bool   `json:"prices_include_taxes"`
-	Taxes              []*Tax `json:"taxes"`
-	MemberDiscounts		 []*MemberDiscount `json:"member_discounts"`
+	PricesIncludeTaxes bool              `json:"prices_include_taxes"`
+	Taxes              []*Tax            `json:"taxes"`
+	MemberDiscounts    []*MemberDiscount `json:"member_discounts"`
 }
 
 type Tax struct {
@@ -40,10 +40,15 @@ type taxAmount struct {
 	percentage uint64
 }
 
+type FixedMemberDiscount struct {
+	Amount   uint64 `json:"amount"`
+	Currency string `json:"currency"`
+}
+
 type MemberDiscount struct {
-	Claims map[string]string `json:"claims"`
-	Percentage uint64 `json:"percentage"`
-	Fixed uint64 `json:"fixed"`
+	Claims      map[string]string      `json:"claims"`
+	Percentage  uint64                 `json:"percentage"`
+	FixedAmount []*FixedMemberDiscount `json:"fixed"`
 }
 
 type Item interface {
@@ -58,7 +63,19 @@ type Coupon interface {
 	ValidForType(string) bool
 	ValidForPrice(string, uint64) bool
 	PercentageDiscount() uint64
-	FixedDiscount() uint64
+	FixedDiscount(string) uint64
+}
+
+func (c *MemberDiscount) FixedDiscount(currency string) uint64 {
+	if c.FixedAmount != nil {
+		for _, discount := range c.FixedAmount {
+			if discount.Currency == currency {
+				return discount.Amount
+			}
+		}
+	}
+
+	return 0
 }
 
 func (t *Tax) AppliesTo(country, productType string) bool {
@@ -130,12 +147,12 @@ func CalculatePrice(settings *Settings, claims map[string]interface{}, country, 
 			}
 		}
 		if coupon != nil && coupon.ValidForType(item.ProductType()) {
-			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(), includeTaxes)
+			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(currency), includeTaxes)
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
 				if claims != nil && hasClaims(claims, discount.Claims) {
-					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.Fixed, includeTaxes)
+					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(currency), includeTaxes)
 				}
 			}
 		}

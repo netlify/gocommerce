@@ -57,7 +57,7 @@ func (c *TestCoupon) PercentageDiscount() uint64 {
 	return c.percentage
 }
 
-func (c *TestCoupon) FixedDiscount() uint64 {
+func (c *TestCoupon) FixedDiscount(currency string) uint64 {
 	return c.fixed
 }
 
