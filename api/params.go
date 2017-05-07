@@ -49,6 +49,9 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	query = addFilters(query, models.User{}.TableName(), params, []string{
 		"id",
+	})
+
+	query = addLikeFilters(query, models.User{}.TableName(), params, []string{
 		"email",
 	})
 
@@ -168,6 +171,15 @@ func addFilters(query *gorm.DB, table string, params url.Values, availableFilter
 	for _, filter := range availableFilters {
 		if values, exists := params[filter]; exists {
 			query = query.Where(table+"."+filter+" = ?", values[0])
+		}
+	}
+	return query
+}
+
+func addLikeFilters(query *gorm.DB, table string, params url.Values, availableFilters []string) *gorm.DB {
+	for _, filter := range availableFilters {
+		if values, exists := params[filter]; exists {
+			query = query.Where(table+"."+filter+" LIKE ?", "%"+values[0]+"%")
 		}
 	}
 	return query
