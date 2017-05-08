@@ -40,7 +40,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
-	req, _ := http.NewRequest("GET", "http://junk?email=twoface@dc.com", nil)
+	req, _ := http.NewRequest("GET", "http://junk?email=dc.com", nil)
 	recorder := httptest.NewRecorder()
 	NewAPI(config, db, nil, nil, nil).UserList(ctx, recorder, req)
 
