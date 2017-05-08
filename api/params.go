@@ -121,6 +121,14 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Where(models.Order{}.TableName()+".email LIKE ?", "%"+email+"%")
 	}
 
+	if items := params.Get("items"); items != "" {
+		lineItemTable := models.LineItem{}.TableName()
+		orderTable := models.Order{}.TableName()
+		statement := "JOIN " + lineItemTable + " as line_item on line_item.order_id = " +
+			orderTable + ".id AND line_item.title LIKE ?"
+		query = query.Joins(statement, "%"+items+"%")
+	}
+
 	return parseTimeQueryParams(query, params)
 }
 

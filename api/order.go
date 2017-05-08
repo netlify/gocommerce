@@ -200,6 +200,8 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 //  - fullfilment_state=pending   - only orders pending shipping
 //  - payment_state=pending       - only payd orders
 //  - type=book  - filter on product type
+//  - email
+//  - item
 
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := getLogger(ctx)
