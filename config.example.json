@@ -1,7 +1,7 @@
 {
   "site_url": "https://my-jam-store.example.com",
   "jwt": {
-    "secret": "CHANGE-THIS! VERY IMPORTANT!",
+    "secret": "CHANGE-THIS! VERY IMPORTANT!"
   },
   "db": {
     "driver": "sqlite3",
@@ -21,7 +21,7 @@
       "confirmation": "Thank you for your order!"
     }
   },
-  "payments": {
+  "payment": {
     "stripe": {
       "secret_key": "Your secret key"
     },
