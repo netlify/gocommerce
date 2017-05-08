@@ -117,6 +117,10 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Order("created_at desc")
 	}
 
+	if email := params.Get("email"); email != "" {
+		query = query.Where(models.Order{}.TableName()+".email LIKE ?", "%"+email+"%")
+	}
+
 	return parseTimeQueryParams(query, params)
 }
 
