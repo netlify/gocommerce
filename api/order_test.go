@@ -159,6 +159,51 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 	}
 }
 
+func TestOrderQueryEmailFilterAsTheUser(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real?email=bruce", nil)
+
+	api := NewAPI(config, db, nil, nil, nil)
+	api.OrderList(ctx, recorder, req)
+
+	orders := []models.Order{}
+	extractPayload(t, 200, recorder, &orders)
+	assert.Equal(t, 2, len(orders))
+}
+
+func TestEmptyOrderQueryEmailFilterAsTheUser(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real?email=gmail.com", nil)
+
+	api := NewAPI(config, db, nil, nil, nil)
+	api.OrderList(ctx, recorder, req)
+
+	orders := []models.Order{}
+	extractPayload(t, 200, recorder, &orders)
+	assert.Equal(t, 0, len(orders))
+}
+
+func TestOrderQueryItemFilterAsTheUser(t *testing.T) {
+	db, config := db(t)
+
+	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	recorder := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "https://not-real?items=batwing", nil)
+
+	api := NewAPI(config, db, nil, nil, nil)
+	api.OrderList(ctx, recorder, req)
+
+	orders := []models.Order{}
+	extractPayload(t, 200, recorder, &orders)
+	assert.Equal(t, 1, len(orders))
+}
+
 func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	db, config := db(t)
 
@@ -188,6 +233,7 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 		}
 	}
 }
+
 
 func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	db, config := db(t)
