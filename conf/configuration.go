@@ -101,8 +101,11 @@ func Load(configFile string) (*Configuration, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
-	if err := viper.ReadInConfig(); err != nil && !os.IsNotExist(err) {
-		return nil, errors.Wrap(err, "reading configuration from files")
+	if err := viper.ReadInConfig(); err != nil {
+		_, ok := err.(viper.ConfigFileNotFoundError)
+		if !ok {
+			return nil, errors.Wrap(err, "reading configuration from files")
+		}
 	}
 
 	config := new(Configuration)
