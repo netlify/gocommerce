@@ -2,11 +2,13 @@ package models
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/netlify/gocommerce/calculator"
+	"github.com/netlify/gocommerce/claims"
 	"github.com/pborman/uuid"
 )
 
@@ -100,10 +102,11 @@ func (l *LineItem) AfterFind() (err error) {
 }
 
 type PriceMetadata struct {
-	Amount   string          `json:"amount"`
-	Currency string          `json:"currency"`
-	VAT      string          `json:"vat"`
-	Items    []PriceMetaItem `json:"items"`
+	Amount   string            `json:"amount"`
+	Currency string            `json:"currency"`
+	VAT      string            `json:"vat"`
+	Items    []PriceMetaItem   `json:"items"`
+	Claims   map[string]string `json:"claims"`
 
 	cents uint64
 }
@@ -160,7 +163,7 @@ func (i *LineItem) GetQuantity() uint64 {
 	return i.Quantity
 }
 
-func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
+func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta *LineItemMetadata) error {
 	i.Sku = meta.Sku
 	i.Title = meta.Title
 	i.Description = meta.Description
@@ -179,7 +182,7 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 			return fmt.Errorf("Unkown addon %v for item %v", addon.Sku, i.Sku)
 		}
 
-		lowestPrice, err := determineLowestPrice(metaAddon.Prices, order.Currency)
+		lowestPrice, err := determineLowestPrice(userClaims, metaAddon.Prices, order.Currency)
 		if err != nil {
 			return err
 		}
@@ -206,15 +209,15 @@ func (i *LineItem) Process(order *Order, meta *LineItemMetadata) error {
 		order.Downloads = append(order.Downloads, download)
 	}
 
-	if err := i.calculatePrice(meta.Prices, order.Currency); err != nil {
+	if err := i.calculatePrice(userClaims, meta.Prices, order.Currency); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error {
-	lowestPrice, err := determineLowestPrice(prices, currency)
+func (i *LineItem) calculatePrice(userClaims map[string]interface{}, prices []PriceMetadata, currency string) error {
+	lowestPrice, err := determineLowestPrice(userClaims, prices, currency)
 	if err != nil {
 		return err
 	}
@@ -234,8 +237,9 @@ func (i *LineItem) calculatePrice(prices []PriceMetadata, currency string) error
 	return nil
 }
 
-func determineLowestPrice(prices []PriceMetadata, currency string) (PriceMetadata, error) {
+func determineLowestPrice(userClaims map[string]interface{}, prices []PriceMetadata, currency string) (PriceMetadata, error) {
 	lowestPrice := PriceMetadata{}
+	found := false
 	for _, price := range prices {
 		if price.Currency == currency {
 			amount, err := strconv.ParseFloat(price.Amount, 64)
@@ -243,10 +247,14 @@ func determineLowestPrice(prices []PriceMetadata, currency string) (PriceMetadat
 				return lowestPrice, err
 			}
 			price.cents = uint64(amount * 100)
-			if lowestPrice.cents == 0 || price.cents < lowestPrice.cents {
+			if (!found || price.cents < lowestPrice.cents) && claims.HasClaims(userClaims, price.Claims) {
 				lowestPrice = price
+				found = true
 			}
 		}
+	}
+	if !found {
+		return lowestPrice, errors.New("No valid price found for item")
 	}
 	return lowestPrice, nil
 }

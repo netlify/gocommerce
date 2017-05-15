@@ -767,6 +767,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 
 func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *OrderLineItem) error {
 	config := getConfig(ctx)
+	jwtClaims := getClaimsAsMap(ctx)
 	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
 	if err != nil {
 		return err
@@ -810,7 +811,7 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 				})
 			}
 
-			return item.Process(order, meta)
+			return item.Process(jwtClaims, order, meta)
 		}
 	}
 

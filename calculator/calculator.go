@@ -2,7 +2,8 @@ package calculator
 
 import (
 	"math"
-	"strings"
+
+	"github.com/netlify/gocommerce/claims"
 )
 
 type Price struct {
@@ -104,7 +105,7 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 	return applies
 }
 
-func CalculatePrice(settings *Settings, claims map[string]interface{}, country, currency string, coupon Coupon, items []Item) Price {
+func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, country, currency string, coupon Coupon, items []Item) Price {
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 	for _, item := range items {
@@ -151,7 +152,7 @@ func CalculatePrice(settings *Settings, claims map[string]interface{}, country, 
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
-				if claims != nil && hasClaims(claims, discount.Claims) {
+				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) {
 					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(currency), includeTaxes)
 				}
 			}
@@ -170,32 +171,6 @@ func CalculatePrice(settings *Settings, claims map[string]interface{}, country, 
 	price.Total = price.Subtotal - price.Discount + price.Taxes
 
 	return price
-}
-
-func hasClaims(userClaims map[string]interface{}, requiredClaims map[string]string) bool {
-	for key, value := range requiredClaims {
-		parts := strings.Split(key, ".")
-		obj := userClaims
-		for i, part := range parts {
-			newObj, ok := obj[part]
-			if !ok {
-				return false
-			}
-			if i+1 == len(parts) {
-				str, ok := newObj.(string)
-				if !ok {
-					return false
-				}
-				return str == value
-			} else {
-				obj, ok = newObj.(map[string]interface{})
-				if !ok {
-					return false
-				}
-			}
-		}
-	}
-	return false
 }
 
 func calculateDiscount(amountToDiscount, taxes, percentage, fixed uint64, includeTaxes bool) uint64 {
