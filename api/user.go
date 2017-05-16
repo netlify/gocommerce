@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"reflect"
@@ -50,6 +51,10 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 
 	offset, limit, err := paginate(w, r, query.Model(&models.User{}))
 	if err != nil {
+		if err == sql.ErrNoRows {
+			sendJSON(w, 200, []string{})
+			return
+		}
 		badRequestError(w, "Bad Pagination Parameters: %v", err)
 		return
 	}
