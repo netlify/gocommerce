@@ -47,9 +47,22 @@ type FixedMemberDiscount struct {
 }
 
 type MemberDiscount struct {
-	Claims      map[string]string      `json:"claims"`
-	Percentage  uint64                 `json:"percentage"`
-	FixedAmount []*FixedMemberDiscount `json:"fixed"`
+	Claims       map[string]string      `json:"claims"`
+	Percentage   uint64                 `json:"percentage"`
+	FixedAmount  []*FixedMemberDiscount `json:"fixed"`
+	ProductTypes []string               `json:"product_types"`
+}
+
+func (d *MemberDiscount) ValidForType(productType string) bool {
+	if d.ProductTypes == nil || len(d.ProductTypes) == 0 {
+		return true
+	}
+	for _, validType := range d.ProductTypes {
+		if validType == productType {
+			return true
+		}
+	}
+	return false
 }
 
 type Item interface {
@@ -152,7 +165,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
-				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) {
+				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) {
 					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(currency), includeTaxes)
 				}
 			}
