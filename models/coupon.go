@@ -1,9 +1,13 @@
 package models
 
-import "time"
+import (
+	"math"
+	"strconv"
+	"time"
+)
 
 type FixedAmount struct {
-	Amount   uint64 `json:"amount"`
+	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
@@ -60,10 +64,28 @@ func (c *Coupon) FixedDiscount(currency string) uint64 {
 	if c.FixedAmount != nil {
 		for _, discount := range c.FixedAmount {
 			if discount.Currency == currency {
-				return discount.Amount
+				amount, _ := strconv.ParseFloat(discount.Amount, 64)
+				return rint(amount * 100)
 			}
 		}
 	}
 
 	return 0
+}
+
+// Nopes - no `round` method in go
+// See https://gist.github.com/siddontang/1806573b9a8574989ccb
+func rint(x float64) uint64 {
+	v, frac := math.Modf(x)
+	if x > 0.0 {
+		if frac > 0.5 || (frac == 0.5 && uint64(v)%2 != 0) {
+			v += 1.0
+		}
+	} else {
+		if frac < -0.5 || (frac == -0.5 && uint64(v)%2 != 0) {
+			v -= 1.0
+		}
+	}
+
+	return uint64(v)
 }

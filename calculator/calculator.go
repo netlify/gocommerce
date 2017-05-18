@@ -2,6 +2,7 @@ package calculator
 
 import (
 	"math"
+	"strconv"
 
 	"github.com/netlify/gocommerce/claims"
 )
@@ -42,7 +43,7 @@ type taxAmount struct {
 }
 
 type FixedMemberDiscount struct {
-	Amount   uint64 `json:"amount"`
+	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
@@ -84,7 +85,8 @@ func (c *MemberDiscount) FixedDiscount(currency string) uint64 {
 	if c.FixedAmount != nil {
 		for _, discount := range c.FixedAmount {
 			if discount.Currency == currency {
-				return discount.Amount
+				amount, _ := strconv.ParseFloat(discount.Amount, 64)
+				return rint(amount * 100)
 			}
 		}
 	}
