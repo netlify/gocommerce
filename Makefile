@@ -5,8 +5,21 @@ help: ## Show this help.
 
 all: test build ## Run the tests and build the binary.
 
-build: ## Build the binary.
-	go build -ldflags "-X github.com/netlify/gocommerce/cmd.Version=`git rev-parse HEAD`"
+os = darwin
+arch = amd64
+
+build: test
+	@echo "Making gocommerce for $(os)/$(arch)"
+	GOOS=$(os) GOARCH=$(arch) go build -ldflags "-X github.com/netlify/gocommerce/cmd.Version=`git rev-parse HEAD`"
+
+build_linux: override os=linux
+build_linux: build
+
+package: build
+	tar -czf gocommerce-$(os)-$(arch).tar.gz gocommerce
+
+package_linux: override os=linux
+package_linux: package
 
 deps: ## Install dependencies.
 	@go get -u github.com/golang/lint/golint
