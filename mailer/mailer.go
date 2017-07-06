@@ -11,7 +11,12 @@ import (
 )
 
 // Mailer will send mail and use templates from the site for easy mail styling
-type Mailer struct {
+type Mailer interface {
+	OrderConfirmationMail(transaction *models.Transaction) error
+	OrderReceivedMail(transaction *models.Transaction) error
+}
+
+type mailer struct {
 	Config         *conf.Configuration
 	TemplateMailer *mailme.Mailer
 }
@@ -22,13 +27,17 @@ type MailSubjects struct {
 }
 
 // NewMailer returns a new authlify mailer
-func NewMailer(conf *conf.Configuration) *Mailer {
+func NewMailer(conf *conf.Configuration) Mailer {
 	mailConf := conf.Mailer
-	return &Mailer{
+	if mailConf.AdminEmail == "" || mailConf.Host == "" || mailConf.Port == 0 {
+		return newNoopMailer()
+	}
+
+	return &mailer{
 		Config: conf,
 		TemplateMailer: &mailme.Mailer{
 			BaseURL: conf.SiteURL,
-			From:    conf.Mailer.AdminEmail,
+			From:    mailConf.AdminEmail,
 			Host:    mailConf.Host,
 			Port:    mailConf.Port,
 			User:    mailConf.User,
@@ -78,7 +87,7 @@ const defaultConfirmationTemplate = `<h2>Thank you for your order!</h2>
 `
 
 // OrderConfirmationMail sends an order confirmation to the user
-func (m *Mailer) OrderConfirmationMail(transaction *models.Transaction) error {
+func (m *mailer) OrderConfirmationMail(transaction *models.Transaction) error {
 	log.Printf("Sending order confirmation to %v with template %v", transaction.Order.Email, m.Config.Mailer.Templates.OrderConfirmation)
 	return m.TemplateMailer.Mail(
 		transaction.Order.Email,
@@ -104,7 +113,7 @@ const defaultReceivedTemplate = `<h2>Order Received From {{ .Order.Email }}</h2>
 `
 
 // OrderReceivedMail sends a notification to the shop admin
-func (m *Mailer) OrderReceivedMail(transaction *models.Transaction) error {
+func (m *mailer) OrderReceivedMail(transaction *models.Transaction) error {
 	return m.TemplateMailer.Mail(
 		m.Config.Mailer.AdminEmail,
 		withDefault(m.Config.Mailer.Subjects.OrderReceived, "Order Received From {{ .Order.Email }}"),
