@@ -19,6 +19,11 @@ var paypalExperience Experience
 
 // PaypalCreatePayment creates a new payment that can be authorized in the browser
 func (a *API) PaypalCreatePayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	_, err := a.paypal.GetAccessToken()
+	if err != nil {
+		internalServerError(w, fmt.Sprintf("Error creating paypal experience: %v", err))
+		return
+	}
 	profile, err := a.getExperience()
 	if err != nil {
 		internalServerError(w, fmt.Sprintf("Error creating paypal experience: %v", err))
