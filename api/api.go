@@ -33,7 +33,7 @@ type API struct {
 	db         *gorm.DB
 	paypal     *paypalsdk.Client
 	config     *conf.Configuration
-	mailer     *mailer.Mailer
+	mailer     mailer.Mailer
 	httpClient *http.Client
 	log        *logrus.Entry
 	assets     assetstores.Store
@@ -116,12 +116,12 @@ func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, store assetstores.Store) *API {
+func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer mailer.Mailer, store assetstores.Store) *API {
 	return NewAPIWithVersion(config, db, paypal, mailer, store, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API
-func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer *mailer.Mailer, assets assetstores.Store, version string) *API {
+func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer mailer.Mailer, assets assetstores.Store, version string) *API {
 	api := &API{
 		log:        logrus.WithField("component", "api"),
 		config:     config,
