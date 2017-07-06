@@ -17,8 +17,9 @@
     "user": "test@example.com",
     "pass": "super-secret-password",
     "admin_email": "admin@example.com",
-    "mail_subjects": {
-      "confirmation": "Thank you for your order!"
+    "subjects": {
+      "order_confirmation": "Thank you for your order!",
+      "order_received": "A new order has been placed"
     }
   },
   "payment": {
