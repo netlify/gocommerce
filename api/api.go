@@ -168,8 +168,10 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/payments/:pay_id", api.PaymentView)
 	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
 
-	mux.Post("/paypal", api.PaypalCreatePayment)
-	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
+	if paypal != nil {
+		mux.Post("/paypal", api.PaypalCreatePayment)
+		mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
+	}
 
 	mux.Get("/reports/sales", api.SalesReport)
 	mux.Get("/reports/products", api.ProductsReport)
@@ -214,7 +216,9 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = withLogger(ctx, log)
 	ctx = withConfig(ctx, a.config)
 	ctx = withStartTime(ctx, time.Now())
-	ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
+	if a.paypal != nil {
+		ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
+	}
 	ctx = withPayer(ctx, StripeChargerType, &stripeProvider{})
 	ctx = withCoupons(ctx, a.config)
 

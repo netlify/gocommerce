@@ -103,9 +103,14 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	if params.StripeToken == "" && (params.PaypalID == "" || params.PaypalUserID == "") {
-		badRequestError(w, "Payments requires a stripe_token or a paypal_payment_id and paypal_user_id pair")
-		return
+	if params.StripeToken == "" {
+		if a.paypal == nil {
+			badRequestError(w, "Payments requires a stripe_token")
+			return
+		} else if params.PaypalID == "" || params.PaypalUserID == "" {
+			badRequestError(w, "Payments requires a stripe_token or a paypal_payment_id and paypal_user_id pair")
+			return
+		}
 	}
 
 	orderID := kami.Param(ctx, "order_id")
@@ -163,14 +168,14 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 	tr := models.NewTransaction(order)
 
-	chType := StripeChargerType
+	var chType ChargerType
 	var paymentToken string
 	var paymentUser string
 	if params.StripeToken != "" {
 		chType = StripeChargerType
 		paymentToken = params.StripeToken
 		order.PaymentProcessor = "stripe"
-	} else if params.PaypalID != "" {
+	} else if a.paypal != nil && params.PaypalID != "" {
 		chType = PaypalChargerType
 		paymentToken = params.PaypalID
 		paymentUser = params.PaypalUserID
@@ -283,6 +288,18 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
+	log := getLogger(ctx)
+	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	if order.PaymentProcessor == "paypal" {
+		badRequestError(w, "Can't refund a paypal transaction")
+		return
+	}
+
 	// ok make the refund
 	m := &models.Transaction{
 		ID:       uuid.NewRandom().String(),
@@ -296,9 +313,8 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 
 	tx := a.db.Begin()
 	tx.Create(m)
-	log := getLogger(ctx)
 	log.Debug("Starting refund to stripe")
-	// TODO ~ refund via paypal
+	// TODO ~ refund via paypal #58
 	stripeID, err := getCharger(ctx, StripeChargerType).refund(params.Amount, trans.ProcessorID)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
