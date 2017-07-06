@@ -243,21 +243,34 @@ func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
 	validateError(t, 400, w)
 }
 
-func TestPaymentsRefundMissingStripeToken(t *testing.T) {
-	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:      1,
-		Currency:    firstTransaction.ID,
-		StripeToken: "",
-	})
-	validateError(t, 400, w)
-}
-
 func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 	w, _ := runPaymentRefund(t, &PaymentParams{
 		Amount:      1000,
-		Currency:    firstTransaction.Currency,
+		Currency:    "usd",
 		StripeToken: "123",
 	})
+
+	validateError(t, 400, w)
+}
+
+func TestPaymentsRefundPaypal(t *testing.T) {
+	db, config := db(t)
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", secondTransaction.ID)
+	ctx = context.WithValue(ctx, payerKey, nil)
+
+	params := &PaymentParams{
+		Amount:       1,
+		Currency:     secondTransaction.Currency,
+		PaypalID:     "123",
+		PaypalUserID: "456",
+	}
+
+	body, _ := json.Marshal(params)
+	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	NewAPI(config, db, nil, nil, nil).PaymentRefund(ctx, w, r)
 
 	validateError(t, 400, w)
 }

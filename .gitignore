@@ -5,6 +5,7 @@ gocommerce
 
 vendor/
 .idea
+.vscode
 *.iml
 
 .DS_Store

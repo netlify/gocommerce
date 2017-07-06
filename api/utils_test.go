@@ -122,6 +122,7 @@ func loadTestData(db *gorm.DB) {
 
 	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
 	firstOrder.UserID = testUser.ID
+	firstOrder.PaymentProcessor = "stripe"
 	firstTransaction = models.NewTransaction(firstOrder)
 	firstTransaction.ProcessorID = "stripe"
 	firstTransaction.Amount = 100
@@ -140,7 +141,9 @@ func loadTestData(db *gorm.DB) {
 
 	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
 	secondOrder.UserID = testUser.ID
+	secondOrder.PaymentProcessor = "paypal"
 	secondTransaction = models.NewTransaction(secondOrder)
+	secondTransaction.ProcessorID = "paypal"
 	secondLineItem1 = models.LineItem{
 		ID:          21,
 		OrderID:     secondOrder.ID,
@@ -183,6 +186,8 @@ func loadTestData(db *gorm.DB) {
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
 	secondOrder.User = &testUser
+	secondTransaction.Amount = secondOrder.Total
+	secondTransaction.Status = models.PaidState
 	db.Create(&secondLineItem1)
 	db.Create(&secondLineItem2)
 	db.Create(secondTransaction)
