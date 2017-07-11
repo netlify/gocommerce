@@ -259,7 +259,6 @@ func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(t, http.StatusBadRequest, recorder.Code)
 	validateError(t, http.StatusBadRequest, recorder)
 }
 
@@ -272,7 +271,6 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, nil)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -327,7 +325,6 @@ func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 	req := httptest.NewRequest("GET", urlForFirstOrder, nil)
 
 	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
-	assert.Equal(t, http.StatusUnauthorized, recorder.Code)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
