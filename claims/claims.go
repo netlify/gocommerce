@@ -1,6 +1,18 @@
 package claims
 
-import "strings"
+import (
+	"strings"
+
+	jwt "github.com/dgrijalva/jwt-go"
+)
+
+type JWTClaims struct {
+	ID           string                 `json:"id"`
+	Email        string                 `json:"email"`
+	AppMetaData  map[string]interface{} `json:"app_metadata"`
+	UserMetaData map[string]interface{} `json:"user_metadata"`
+	*jwt.StandardClaims
+}
 
 // HasClaims is used to determine if a set of userClaims matches the requiredClaims
 func HasClaims(userClaims map[string]interface{}, requiredClaims map[string]string) bool {

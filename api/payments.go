@@ -5,34 +5,28 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+
+	"github.com/pkg/errors"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
-	"github.com/logpacker/PayPal-Go-SDK"
 	"github.com/pborman/uuid"
-	"github.com/stripe/stripe-go"
-	"github.com/stripe/stripe-go/charge"
-	"github.com/stripe/stripe-go/refund"
 
+	"github.com/netlify/gocommerce/claims"
+	"github.com/netlify/gocommerce/conf"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
+	"github.com/netlify/gocommerce/payments"
+	"github.com/netlify/gocommerce/payments/paypal"
+	"github.com/netlify/gocommerce/payments/stripe"
 )
-
-// MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
-const MaxConcurrentLookups = 10
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
-	Amount       uint64 `json:"amount"`
-	Currency     string `json:"currency"`
-	StripeToken  string `json:"stripe_token"`
-	PaypalID     string `json:"paypal_payment_id"`
-	PaypalUserID string `json:"paypal_user_id"`
-}
-
-type paymentProvider interface {
-	charge(amount uint64, currency, token, userToken string) (string, error)
-	refund(amount uint64, id string) (string, error)
+	Amount   uint64 `json:"amount"`
+	Currency string `json:"currency"`
 }
 
 // PaymentListForUser is the endpoint for listing transactions for a user.
@@ -40,11 +34,10 @@ type paymentProvider interface {
 func (a *API) PaymentListForUser(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log, claims, userID, httpErr := initEndpoint(ctx, w, "user_id", true)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
 
-	if userID != claims.ID && !isAdmin(ctx) {
+	if userID != claims.ID && !gcontext.IsAdmin(ctx) {
 		log.Warn("Illegal access attempt")
 		unauthorizedError(w, "Can't access payments for this user")
 		return
@@ -63,7 +56,6 @@ func (a *API) PaymentListForUser(ctx context.Context, w http.ResponseWriter, r *
 func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log, claims, orderID, httpErr := initEndpoint(ctx, w, "order_id", true)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
 
@@ -73,19 +65,19 @@ func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r 
 		return
 	}
 
-	isAdmin := isAdmin(ctx)
+	isAdmin := gcontext.IsAdmin(ctx)
 
 	// now we need to check if you're allowed to look at this order
 	if order.UserID == "" && !isAdmin {
 		// anon order ~ only accessible by an admin
 		log.Warn("Queried for an anonymous order but not as admin")
-		sendJSON(w, 401, unauthorizedError(w, "Anonymous orders must be accessed by admins"))
+		unauthorizedError(w, "Anonymous orders must be accessed by admins")
 		return
 	}
 
 	if order.UserID != claims.ID && !isAdmin {
 		log.Warnf("Attempt to access order as %s, but order.UserID is %s", claims.ID, order.UserID)
-		sendJSON(w, 401, unauthorizedError(w, "Anonymous orders must be accessed by admins"))
+		unauthorizedError(w, "Anonymous orders must be accessed by admins")
 		return
 	}
 
@@ -95,16 +87,20 @@ func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r 
 
 // PaymentCreate is the endpoint for creating a payment for an order
 func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	params := &PaymentParams{Currency: "USD"}
-	jsonDecoder := json.NewDecoder(r.Body)
-	err := jsonDecoder.Decode(params)
+	log := gcontext.GetLogger(ctx)
+	config := gcontext.GetConfig(ctx)
+	mailer := gcontext.GetMailer(ctx)
+	provider := gcontext.GetPaymentProvider(ctx)
+	charger, err := provider.NewCharger(ctx, r)
 	if err != nil {
-		badRequestError(w, fmt.Sprintf("Could not read params: %v", err))
+		badRequestError(w, "Error creating payment provider: %v", err)
 		return
 	}
 
-	if params.StripeToken == "" && (params.PaypalID == "" || params.PaypalUserID == "") {
-		badRequestError(w, "Payments requires a stripe_token or a paypal_payment_id and paypal_user_id pair")
+	params := PaymentParams{Currency: "USD"}
+	err = json.NewDecoder(r.Body).Decode(&params)
+	if err != nil {
+		badRequestError(w, "Could not read params: %v", err)
 		return
 	}
 
@@ -117,7 +113,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		if result.RecordNotFound() {
 			notFoundError(w, "No order with this ID found")
 		} else {
-			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
+			internalServerError(w, "Error during database query: %v", result.Error)
 		}
 		return
 	}
@@ -130,14 +126,14 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 	if order.Currency != params.Currency {
 		tx.Rollback()
-		badRequestError(w, fmt.Sprintf("Currencies doesn't match - %v vs %v", order.Currency, params.Currency))
+		badRequestError(w, "Currencies doesn't match - %v vs %v", order.Currency, params.Currency)
 		return
 	}
 
-	token := getToken(ctx)
+	token := gcontext.GetToken(ctx)
 	if order.UserID == "" {
 		if token != nil {
-			claims := token.Claims.(*JWTClaims)
+			claims := token.Claims.(*claims.JWTClaims)
 			order.UserID = claims.ID
 			tx.Save(order)
 		}
@@ -147,7 +143,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 			unauthorizedError(w, "You must be logged in to pay for this order")
 			return
 		}
-		claims := token.Claims.(*JWTClaims)
+		claims := token.Claims.(*claims.JWTClaims)
 		if order.UserID != claims.ID {
 			tx.Rollback()
 			unauthorizedError(w, "You must be logged in to pay for this order")
@@ -158,26 +154,13 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
-		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
+		internalServerError(w, "We failed to authorize the amount for this order: %v", err)
 		return
 	}
 	tr := models.NewTransaction(order)
 
-	chType := StripeChargerType
-	var paymentToken string
-	var paymentUser string
-	if params.StripeToken != "" {
-		chType = StripeChargerType
-		paymentToken = params.StripeToken
-		order.PaymentProcessor = "stripe"
-	} else if params.PaypalID != "" {
-		chType = PaypalChargerType
-		paymentToken = params.PaypalID
-		paymentUser = params.PaypalUserID
-		order.PaymentProcessor = "paypal"
-	}
-
-	processorID, err := getCharger(ctx, chType).charge(params.Amount, params.Currency, paymentToken, paymentUser)
+	order.PaymentProcessor = provider.Name()
+	processorID, err := charger.Charge(params.Amount, params.Currency)
 	tr.ProcessorID = processorID
 
 	if err != nil {
@@ -191,26 +174,26 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 	if err != nil {
 		tx.Commit()
-		internalServerError(w, fmt.Sprintf("There was an error charging your card: %v", err))
+		internalServerError(w, "There was an error charging your card: %v", err)
 		return
 	}
 
 	order.PaymentState = models.PaidState
 	tx.Save(order)
 
-	if a.config.Webhooks.Payment != "" {
-		hook := models.NewHook("payment", a.config.Webhooks.Payment, order.UserID, order)
+	if config.Webhooks.Payment != "" {
+		hook := models.NewHook("payment", config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
 		tx.Save(hook)
 	}
 
 	tx.Commit()
 
 	go func() {
-		err1 := a.mailer.OrderConfirmationMail(tr)
-		err2 := a.mailer.OrderReceivedMail(tr)
+		err1 := mailer.OrderConfirmationMail(tr)
+		err2 := mailer.OrderReceivedMail(tr)
 
 		if err1 != nil || err2 != nil {
-			a.log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
+			log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
 		}
 	}()
 
@@ -249,9 +232,9 @@ func (a *API) PaymentView(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	params := &PaymentParams{Currency: "USD"}
-	jsonDecoder := json.NewDecoder(r.Body)
-	err := jsonDecoder.Decode(params)
+	config := gcontext.GetConfig(ctx)
+	params := PaymentParams{Currency: "USD"}
+	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
 		badRequestError(w, "Could not read params: %v", err)
 		return
@@ -264,7 +247,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	if trans.Currency != params.Currency {
-		badRequestError(w, "Currencies doesn't match - %v vs %v", trans.Currency, params.Currency)
+		badRequestError(w, "Currencies do not match - %v vs %v", trans.Currency, params.Currency)
 		return
 	}
 
@@ -283,6 +266,25 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
+	log := gcontext.GetLogger(ctx)
+	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
+	if httpErr != nil {
+		sendJSON(w, httpErr.Code, httpErr)
+		return
+	}
+
+	provider := gcontext.GetPaymentProvider(ctx)
+	refunder, err := provider.NewRefunder(ctx, r)
+	if err != nil {
+		badRequestError(w, "Error creating payment provider: %v", err)
+		return
+	}
+
+	if provider.Name() != order.PaymentProcessor {
+		badRequestError(w, "Order does not match configured payment provider")
+		return
+	}
+
 	// ok make the refund
 	m := &models.Transaction{
 		ID:       uuid.NewRandom().String(),
@@ -296,29 +298,69 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 
 	tx := a.db.Begin()
 	tx.Create(m)
-	log := getLogger(ctx)
-	log.Debug("Starting refund to stripe")
-	// TODO ~ refund via paypal
-	stripeID, err := getCharger(ctx, StripeChargerType).refund(params.Amount, trans.ProcessorID)
+	provID := provider.Name()
+	log.Debugf("Starting refund to %s", provID)
+	refundID, err := refunder.Refund(trans.ProcessorID, params.Amount)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
 		m.FailureCode = "500"
 		m.FailureDescription = err.Error()
 		m.Status = models.FailedState
 	} else {
-		m.ProcessorID = stripeID
+		m.ProcessorID = refundID
 		m.Status = models.PaidState
 	}
 
-	log.Infof("Finished transaction with stripe: %s", m.ProcessorID)
+	log.Infof("Finished transaction with %s: %s", provID, m.ProcessorID)
 	tx.Save(m)
-	if a.config.Webhooks.Refund != "" {
-		hook := models.NewHook("refund", a.config.Webhooks.Refund, m.UserID, m)
+	if config.Webhooks.Refund != "" {
+		hook := models.NewHook("refund", config.Webhooks.Refund, m.UserID, config.Webhooks.Secret, m)
 		tx.Save(hook)
 	}
 	tx.Commit()
 	sendJSON(w, http.StatusOK, m)
 }
+
+// PreauthorizePayment creates a new payment that can be authorized in the browser
+func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	provider := gcontext.GetPaymentProvider(ctx)
+	auther, err := provider.NewPreauthorizer(ctx, r)
+	if err != nil {
+		badRequestError(w, "Error creating payment provider: %v", err)
+		return
+	}
+
+	amt, err := strconv.ParseUint(r.FormValue("amount"), 10, 64)
+	if err != nil {
+		internalServerError(w, "Error parsing amount: %v", err)
+		return
+	}
+
+	paymentResult, err := auther.Preauthorize(amt, r.FormValue("currency"), r.FormValue("description"))
+	if err != nil {
+		internalServerError(w, "Error preauthorizing payment: %v", err)
+		return
+	}
+
+	sendJSON(w, 200, paymentResult)
+}
+
+// PayPalGetPayment retrieves information on an authorized paypal payment, including
+// the shipping address
+// func (a *API) PayPalGetPayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+// 	provider, ok := getPaymentProvider(ctx).(*payments.paypalPaymentProvider)
+// 	if !ok {
+// 		internalServerError(w, "PayPal provider not available")
+// 		return
+// 	}
+// 	payment, err := provider.client.GetPayment(kami.Param(ctx, "payment_id"))
+// 	if err != nil {
+// 		internalServerError(w, "Error fetching paypal payment: %v", err)
+// 		return
+// 	}
+
+// 	sendJSON(w, 200, payment)
+// }
 
 // ------------------------------------------------------------------------------------------------
 // Helpers
@@ -333,27 +375,27 @@ func (a *API) getTransaction(ctx context.Context) (*models.Transaction, *HTTPErr
 	if rsp := a.db.First(trans); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find transaction %s", payID)
-			return nil, httpError(404, "Transaction not found")
+			return nil, httpError(http.StatusNotFound, "Transaction not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for transaction '%s'", payID)
-		return nil, httpError(500, "Error while querying for transactions")
+		return nil, httpError(http.StatusInternalServerError, "Error while querying for transactions")
 	}
 
 	return trans, nil
 }
 
 func requireAdmin(ctx context.Context, paramKey string) (*logrus.Entry, string, *HTTPError) {
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 	paramValue := ""
 	if paramKey != "" {
 		paramValue = kami.Param(ctx, paramKey)
 		log = log.WithField(paramKey, paramValue)
 	}
 
-	if !isAdmin(ctx) {
+	if !gcontext.IsAdmin(ctx) {
 		log.Warn("Illegal access attempt")
-		return nil, paramValue, httpError(401, "Can only access payments as admin")
+		return nil, paramValue, httpError(http.StatusUnauthorized, "Can only access payments as admin")
 	}
 
 	return log, paramValue, nil
@@ -367,15 +409,15 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 	return nil
 }
 
-func initEndpoint(ctx context.Context, w http.ResponseWriter, paramKey string, authRequired bool) (*logrus.Entry, *JWTClaims, string, *HTTPError) {
-	log := getLogger(ctx)
+func initEndpoint(ctx context.Context, w http.ResponseWriter, paramKey string, authRequired bool) (*logrus.Entry, *claims.JWTClaims, string, *HTTPError) {
+	log := gcontext.GetLogger(ctx)
 	paramValue := ""
 	if paramKey != "" {
 		paramValue = kami.Param(ctx, paramKey)
 		log = log.WithField(paramKey, paramValue)
 	}
 
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 	if claims == nil && authRequired {
 		log.Warn("Claims is missing and auth required")
 		return log, nil, paramValue, unauthorizedError(w, "Listing payments requires authentication")
@@ -389,11 +431,11 @@ func queryForOrder(db *gorm.DB, orderID string, log *logrus.Entry) (*models.Orde
 	if rsp := db.Preload("Transactions").Find(order, "id = ?", orderID); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find order %s", orderID)
-			return nil, httpError(404, "Order not found")
+			return nil, httpError(http.StatusNotFound, "Order not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for order %s", orderID)
-		return nil, httpError(500, "Error while querying for order")
+		return nil, httpError(http.StatusInternalServerError, "Error while querying for order")
 	}
 	return order, nil
 }
@@ -403,76 +445,31 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 	if rsp := db.Find(&trans, clause, id); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find transactions that meet criteria '%s' '%s'", clause, id)
-			return nil, httpError(404, "Transactions not found")
+			return nil, httpError(http.StatusNotFound, "Transactions not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for transactions '%s' '%s'", clause, id)
-		return nil, httpError(500, "Error while querying for transactions")
+		return nil, httpError(http.StatusInternalServerError, "Error while querying for transactions")
 	}
 
 	return trans, nil
 }
 
-type stripeProvider struct {
-}
-
-func (stripeProvider) charge(amount uint64, currency, token, userToken string) (string, error) {
-	ch, err := charge.New(&stripe.ChargeParams{
-		Amount:   amount,
-		Source:   &stripe.SourceParams{Token: token},
-		Currency: stripe.Currency(currency),
-	})
-
-	if err != nil {
-		return "", err
+// createPaymentProvider creates an instance of Provider based on the configuration
+// provided.
+func createPaymentProvider(c *conf.Configuration) (payments.Provider, error) {
+	switch c.Payment.ProviderType {
+	case payments.StripeProvider:
+		return stripe.NewPaymentProvider(stripe.Config{
+			SecretKey: c.Payment.Stripe.SecretKey,
+		})
+	case payments.PayPalProvider:
+		return paypal.NewPaymentProvider(paypal.Config{
+			Env:      c.Payment.PayPal.Env,
+			ClientID: c.Payment.PayPal.ClientID,
+			Secret:   c.Payment.PayPal.Secret,
+		})
+	default:
+		return nil, errors.Errorf("unknown payment provider: %s", c.Payment.ProviderType)
 	}
-
-	return ch.ID, nil
-}
-
-func (stripeProvider) refund(amount uint64, id string) (string, error) {
-	r, err := refund.New(&stripe.RefundParams{
-		Charge: id,
-		Amount: amount,
-	})
-	if err != nil {
-		return "", err
-	}
-
-	return r.ID, err
-}
-
-type paypalProvider struct {
-	paypal *paypalsdk.Client
-}
-
-func (p *paypalProvider) charge(amount uint64, currency, paymentID, payerID string) (string, error) {
-	payment, err := p.paypal.GetPayment(paymentID)
-	if err != nil {
-		return "", err
-	}
-	if len(payment.Transactions) != 1 {
-		return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
-	}
-
-	if payment.Transactions[0].Amount == nil {
-		return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
-	}
-
-	transactionValue := fmt.Sprintf("%.2f", float64(amount)/100)
-
-	if transactionValue != payment.Transactions[0].Amount.Total || payment.Transactions[0].Amount.Currency != currency {
-		return "", fmt.Errorf("The Amount in the transaction doesn't match the amount for the order: %v", payment.Transactions[0].Amount)
-	}
-
-	executeResult, err := p.paypal.ExecuteApprovedPayment(paymentID, payerID)
-	if err != nil {
-		return "", err
-	}
-
-	return executeResult.ID, nil
-}
-
-func (paypalProvider) refund(amount uint64, id string) (string, error) {
-	return "", nil
 }

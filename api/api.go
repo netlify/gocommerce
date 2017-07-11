@@ -2,13 +2,13 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"regexp"
 	"time"
 
+	"github.com/pkg/errors"
+
 	"github.com/Sirupsen/logrus"
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
@@ -17,9 +17,8 @@ import (
 
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/mailer"
-
-	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
 )
 
 var (
@@ -31,109 +30,50 @@ var (
 type API struct {
 	handler    http.Handler
 	db         *gorm.DB
-	paypal     *paypalsdk.Client
-	config     *conf.Configuration
-	mailer     mailer.Mailer
+	config     *conf.GlobalConfiguration
 	httpClient *http.Client
 	log        *logrus.Entry
-	assets     assetstores.Store
 	version    string
 }
 
-type JWTClaims struct {
-	ID           string                 `json:"id"`
-	Email        string                 `json:"email"`
-	AppMetaData  map[string]interface{} `json:"app_metadata"`
-	UserMetaData map[string]interface{} `json:"user_metadata"`
-	*jwt.StandardClaims
-}
-
-func (a *API) withToken(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	log := getLogger(ctx)
-	config := getConfig(ctx)
-	authHeader := r.Header.Get("Authorization")
-	if authHeader == "" {
-		log.Info("Making unauthenticated request")
-		return ctx
-	}
-
-	matches := bearerRegexp.FindStringSubmatch(authHeader)
-	if len(matches) != 2 {
-		log.Info("Invalid auth header format: " + authHeader)
-		unauthorizedError(w, "Bad authentication header")
-		return nil
-	}
-
-	token, err := jwt.ParseWithClaims(matches[1], &JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Header["alg"] != jwt.SigningMethodHS256.Name {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(config.JWT.Secret), nil
-	})
-	if err != nil {
-		log.Infof("Invalid token: %v", err)
-		unauthorizedError(w, "Invalid token")
-		return nil
-	}
-
-	claims := token.Claims.(*JWTClaims)
-	if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-		msg := fmt.Sprintf("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
-		log.Info(msg)
-		unauthorizedError(w, msg)
-		return nil
-	}
-
-	isAdmin := false
-	roles, ok := claims.AppMetaData["roles"]
-	if ok {
-		roleStrings, _ := roles.([]interface{})
-		for _, data := range roleStrings {
-			role, _ := data.(string)
-			if role == config.JWT.AdminGroupName {
-				isAdmin = true
-				break
-			}
-		}
-	}
-
-	log = log.WithFields(logrus.Fields{
-		"claims_id":    claims.ID,
-		"claims_email": claims.Email,
-		"roles":        roles,
-		"is_admin":     isAdmin,
-	})
-
-	log.Info("successfully parsed claims")
-	ctx = withAdminFlag(ctx, isAdmin)
-	ctx = withLogger(ctx, log)
-
-	return withToken(ctx, token)
-}
-
-// ListenAndServe starts the REST API
+// ListenAndServe starts the REST API.
 func (a *API) ListenAndServe(hostAndPort string) error {
 	return http.ListenAndServe(hostAndPort, a.handler)
 }
 
-func NewAPI(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer mailer.Mailer, store assetstores.Store) *API {
-	return NewAPIWithVersion(config, db, paypal, mailer, store, defaultVersion)
+// NewAPI instantiates a new REST API using the default version.
+func NewAPI(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB) *API {
+	return NewSingleTenantAPIWithVersion(globalConfig, config, db, defaultVersion)
 }
 
-// NewAPIWithVersion instantiates a new REST API
-func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsdk.Client, mailer mailer.Mailer, assets assetstores.Store, version string) *API {
+// NewMultiTenantAPI creates a new REST API to serve multiple tenants.
+func NewMultiTenantAPI(globalConfig *conf.GlobalConfiguration, db *gorm.DB) *API {
+	return NewAPIWithVersion(context.Background(), globalConfig, db, defaultVersion)
+}
+
+// NewSingleTenantAPIWithVersion creates a single-tenant version of the REST API
+func NewSingleTenantAPIWithVersion(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB, version string) *API {
+	ctx := context.Background()
+	ctx, err := withTenantConfig(ctx, config)
+	if err != nil {
+		logrus.Fatalf("%+v", err)
+	}
+
+	return NewAPIWithVersion(ctx, globalConfig, db, version)
+}
+
+// NewAPIWithVersion instantiates a new REST API.
+func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
 	api := &API{
 		log:        logrus.WithField("component", "api"),
 		config:     config,
 		db:         db,
-		paypal:     paypal,
-		mailer:     mailer,
 		httpClient: &http.Client{},
-		assets:     assets,
 		version:    version,
 	}
 
 	mux := kami.New()
+	mux.Context = ctx
 	mux.Use("/", api.populateContext)
 	mux.Use("/", api.withToken)
 	mux.LogHandler = api.logCompleted
@@ -168,8 +108,9 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 	mux.Get("/payments/:pay_id", api.PaymentView)
 	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
 
-	mux.Post("/paypal", api.PaypalCreatePayment)
-	mux.Get("/paypal/:payment_id", api.PaypalGetPayment)
+	mux.Post("/paypal", api.PreauthorizePayment)
+	// TODO is this needed? I did not see a use case in the PayPal payment flow.
+	// mux.Get("/paypal/:payment_id", api.PayPalGetPayment)
 
 	mux.Get("/reports/sales", api.SalesReport)
 	mux.Get("/reports/products", api.ProductsReport)
@@ -191,14 +132,14 @@ func NewAPIWithVersion(config *conf.Configuration, db *gorm.DB, paypal *paypalsd
 }
 
 func (a *API) logCompleted(ctx context.Context, wp mutil.WriterProxy, r *http.Request) {
-	log := getLogger(ctx).WithField("status", wp.Status())
+	log := gcontext.GetLogger(ctx).WithField("status", wp.Status())
 
-	start := getStartTime(ctx)
+	start := gcontext.GetStartTime(ctx)
 	if start != nil {
 		log = log.WithField("duration", time.Since(*start))
 	}
 
-	log.Infof("Completed request %s. path: %s, method: %s, status: %d", getRequestID(ctx), r.URL.Path, r.Method, wp.Status())
+	log.Infof("Completed request %s. path: %s, method: %s, status: %d", gcontext.GetRequestID(ctx), r.URL.Path, r.Method, wp.Status())
 }
 
 func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
@@ -210,14 +151,51 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 		"path":   r.URL.Path,
 	})
 
-	ctx = withRequestID(ctx, id)
-	ctx = withLogger(ctx, log)
-	ctx = withConfig(ctx, a.config)
-	ctx = withStartTime(ctx, time.Now())
-	ctx = withPayer(ctx, PaypalChargerType, &paypalProvider{a.paypal})
-	ctx = withPayer(ctx, StripeChargerType, &stripeProvider{})
-	ctx = withCoupons(ctx, a.config)
+	ctx = gcontext.WithRequestID(ctx, id)
+	ctx = gcontext.WithLogger(ctx, log)
+	ctx = gcontext.WithStartTime(ctx, time.Now())
+
+	instanceID := r.Header.Get("x-nf-id")
+	if instanceID != "" {
+		// TODO populate config
+		// env := r.Header.Get("x-nf-env")
+		// var config *conf.Configuration
+		// var err error
+		// ctx, err = withTenantConfig(ctx, config)
+		// if err != nil {
+		// 	internalServerError(w, err.Error())
+		// 	return nil
+		// }
+	}
+
+	// safety check in case of multi-tenant but missing X-NF-* headers
+	if gcontext.GetPaymentProvider(ctx) == nil {
+		internalServerError(w, "No payment provider configured")
+		return nil
+	}
 
 	log.Info("request started")
 	return ctx
+}
+
+func withTenantConfig(ctx context.Context, config *conf.Configuration) (context.Context, error) {
+	ctx = gcontext.WithConfig(ctx, config)
+	ctx = gcontext.WithCoupons(ctx, config)
+
+	mailer := mailer.NewMailer(config)
+	ctx = gcontext.WithMailer(ctx, mailer)
+
+	store, err := assetstores.NewStore(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error initializing asset store")
+	}
+	ctx = gcontext.WithAssetStore(ctx, store)
+
+	prov, err := createPaymentProvider(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating payment provider")
+	}
+	ctx = gcontext.WithPaymentProvider(ctx, prov)
+
+	return ctx, nil
 }

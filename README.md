@@ -20,8 +20,8 @@ product types and VAT rules.
 GoCommerce will also look for email templates within a designated site folder and use
 the site URL to construct links to order history.
 
-Create a `config.json` file based on `config.example.json` - You must set the `site_url`,
-`stripe_key` and paypal `client_id` and `secret` as a minimum.  You can get paypal keys by
+Create a `config.json` file based on `config.example.json` - You must set the `site_url`, and either
+`stripe_key`, or paypal `client_id` and `secret`, as a minimum.  You can get paypal keys by
 creating an app at on the `REST API apps` section of the [paypal developer website](https://developer.paypal.com/developer/applications/).
 
 ### What your static site must support

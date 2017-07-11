@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/guregu/kami"
@@ -14,7 +13,7 @@ func (a *API) VatnumberLookup(ctx context.Context, w http.ResponseWriter, r *htt
 
 	response, err := vat.CheckVAT(number)
 	if err != nil {
-		internalServerError(w, fmt.Sprintf("Failed to lookup VAT Number: %v", err))
+		internalServerError(w, "Failed to lookup VAT Number: %v", err)
 		return
 	}
 

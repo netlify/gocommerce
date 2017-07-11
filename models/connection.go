@@ -25,7 +25,7 @@ type Configuration struct {
 }
 
 // Connect will connect to that storage engine
-func Connect(config *conf.Configuration) (*gorm.DB, error) {
+func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
 	db, err := gorm.Open(config.DB.Driver, config.DB.ConnURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "opening database connection")

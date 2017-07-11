@@ -9,14 +9,18 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/Sirupsen/logrus"
-	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
 	"github.com/netlify/gocommerce/calculator"
+	"github.com/netlify/gocommerce/claims"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
 )
+
+// MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
+const MaxConcurrentLookups = 10
 
 type OrderLineItem struct {
 	Sku      string                 `json:"sku"`
@@ -73,9 +77,9 @@ func (e *verificationError) setError(err error) {
 
 // ClaimOrders will look for any orders with no user id belonging to an email and claim them
 func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 	if claims == nil {
 		unauthorizedError(w, "Claiming an order requires a token")
 		log.Info("request made with no claims")
@@ -146,8 +150,8 @@ func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	id := kami.Param(ctx, "order_id")
-	log := getLogger(ctx)
-	claims := getClaims(ctx)
+	log := gcontext.GetLogger(ctx)
+	claims := gcontext.GetClaims(ctx)
 
 	params := &ReceiptParams{}
 	jsonDecoder := json.NewDecoder(r.Body)
@@ -171,7 +175,7 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 	}
 
 	if order.UserID != "" {
-		if claims == nil || (order.UserID != claims.ID && !isAdmin(ctx)) {
+		if claims == nil || (order.UserID != claims.ID && !gcontext.IsAdmin(ctx)) {
 			unauthorizedError(w, "Order History Requires Authentication")
 			log.Info("request made with no claims")
 			return
@@ -182,10 +186,11 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 		order.Email = params.Email
 	}
 
+	mailer := gcontext.GetMailer(ctx)
 	for _, transaction := range order.Transactions {
 		if transaction.Type == models.ChargeTransactionType {
 			transaction.Order = order
-			a.mailer.OrderConfirmationMail(transaction)
+			mailer.OrderConfirmationMail(transaction)
 		}
 	}
 
@@ -204,10 +209,10 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 //  - items
 
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	var err error
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 	if claims == nil {
 		unauthorizedError(w, "Order History Requires Authentication")
 		log.Info("request made with no claims")
@@ -227,7 +232,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	id := claims.ID
 	userID := kami.Param(ctx, "user_id")
 	if userID != "" {
-		if isAdmin(ctx) {
+		if gcontext.IsAdmin(ctx) {
 			id = userID
 			log.WithField("admin_id", claims.ID).Debugf("Making admin request for user %s by %s", id, claims.ID)
 		} else {
@@ -263,8 +268,8 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 // Only the owner of the order, an admin, or an anon order are allowed to be seen
 func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	id := kami.Param(ctx, "id")
-	log := getLogger(ctx).WithField("order_id", id)
-	claims := getClaims(ctx)
+	log := gcontext.GetLogger(ctx).WithField("order_id", id)
+	claims := gcontext.GetClaims(ctx)
 	if claims == nil {
 		log.Info("Request with no claims made")
 		unauthorizedError(w, "Order History Requires Authentication")
@@ -283,7 +288,7 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if order.UserID == "" || (order.UserID == claims.ID) || isAdmin(ctx) {
+	if order.UserID == "" || (order.UserID == claims.ID) || gcontext.IsAdmin(ctx) {
 		log.Debugf("Successfully got order %s", order.ID)
 		sendJSON(w, 200, order)
 	} else {
@@ -297,7 +302,8 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 // OrderCreate endpoint
 func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
+	config := gcontext.GetConfig(ctx)
 
 	params := &OrderParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
@@ -308,7 +314,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
 
 	if params.CouponCode != "" {
@@ -329,7 +335,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		"order_id":   order.ID,
 		"session_id": params.SessionID,
 	})
-	ctx = withLogger(ctx, log)
+	ctx = gcontext.WithLogger(ctx, log)
 
 	log.WithFields(logrus.Fields{
 		"email":    params.Email,
@@ -398,8 +404,8 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 	tx.Create(order)
 	models.LogEvent(tx, r.RemoteAddr, order.UserID, order.ID, models.EventCreated, nil)
-	if a.config.Webhooks.Order != "" {
-		hook := models.NewHook("order", a.config.Webhooks.Order, order.UserID, order)
+	if config.Webhooks.Order != "" {
+		hook := models.NewHook("order", config.Webhooks.Order, order.UserID, config.Webhooks.Secret, order)
 		tx.Save(hook)
 	}
 	tx.Commit()
@@ -416,11 +422,12 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 // There are also blocks to changing certain fields after the state has been locked
 func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	orderID := kami.Param(ctx, "id")
-	log := getLogger(ctx).WithField("order_id", orderID)
-	claims := getClaims(ctx)
+	log := gcontext.GetLogger(ctx).WithField("order_id", orderID)
+	claims := gcontext.GetClaims(ctx)
+	config := gcontext.GetConfig(ctx)
 	changes := []string{}
 
-	if !isAdmin(ctx) {
+	if !gcontext.IsAdmin(ctx) {
 		log.Warn("Illegal access attempted")
 		cleanup(nil, w, unauthorizedError(w, "Admin privileges are required"))
 		return
@@ -578,6 +585,11 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
+	if config.Webhooks.Update != "" {
+		// TODO should this be claims.ID or existingOrder.UserID ?
+		hook := models.NewHook("update", config.Webhooks.Update, claims.ID, config.Webhooks.Secret, existingOrder)
+		tx.Save(hook)
+	}
 	if rsp := tx.Commit(); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while committing order updates")
 		cleanup(tx, w, internalServerError(w, "Error committing order updates"))
@@ -587,32 +599,6 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, 200, existingOrder)
 }
 
-func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.Order, token *jwt.Token) *HTTPError {
-	if token != nil {
-		claims := token.Claims.(*JWTClaims)
-		if claims.ID == "" {
-			tx.Rollback()
-			return &HTTPError{Code: 400, Message: fmt.Sprintf("Token had an invalid ID: %v", claims.ID)}
-		}
-		order.UserID = claims.ID
-		if result := tx.First(user, "id = ?", claims.ID); result.Error != nil {
-			if result.RecordNotFound() {
-				user.ID = claims.ID
-				if claims.Email != "" {
-					user.Email = claims.Email
-				} else {
-					order.Email = user.Email
-				}
-				tx.Create(user)
-			} else {
-				tx.Rollback()
-				return &HTTPError{Code: 500, Message: fmt.Sprintf("Token had an invalid ID: %v", result.Error)}
-			}
-		}
-	}
-	return nil
-}
-
 // An order's email is determined by a few things. The rules guiding it are:
 // 1 - if no claims are provided then the one in the params is used (for anon orders)
 // 2 - if claims are provided they must be a valid user id
@@ -620,12 +606,12 @@ func (a *API) setUserIDFromToken(tx *gorm.DB, user *models.User, order *models.O
 //     if the user doesn't have an email, the one from the order is used
 // 4 - if the order doesn't have an email, but the user does, we will use that one
 //
-func setOrderEmail(tx *gorm.DB, order *models.Order, claims *JWTClaims, log *logrus.Entry) *HTTPError {
+func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, log *logrus.Entry) *HTTPError {
 	if claims == nil {
 		log.Debug("No claims provided, proceeding as an anon request")
 	} else {
 		if claims.ID == "" {
-			return httpError(400, "Token had an invalid ID: %s", claims.ID)
+			return httpError(http.StatusBadRequest, "Token had an invalid ID: %s", claims.ID)
 		}
 
 		log = log.WithField("user_id", claims.ID)
@@ -640,7 +626,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *JWTClaims, log *log
 			tx.Create(user)
 		} else if result.Error != nil {
 			log.WithError(result.Error).Warnf("Unexpected error from the db while querying for user id %d", user.ID)
-			return httpError(500, "Token had an invalid ID: %v", result.Error)
+			return httpError(http.StatusInternalServerError, "Token had an invalid ID: %v", result.Error)
 		}
 
 		if order.Email == "" {
@@ -649,7 +635,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *JWTClaims, log *log
 	}
 
 	if order.Email == "" {
-		return httpError(400, "Either the order parameters or the user must provide an email")
+		return httpError(http.StatusBadRequest, "Either the order parameters or the user must provide an email")
 	}
 	return nil
 }
@@ -687,34 +673,34 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	wg.Wait()
 
 	if sharedErr.err != nil {
-		return &HTTPError{Code: 500, Message: fmt.Sprintf("Error processing line item: %v", sharedErr.err)}
+		return httpError(http.StatusInternalServerError, "Error processing line item: %v", sharedErr.err)
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
 		if err := tx.Save(&item).Error; err != nil {
-			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating line item: %v", err)}
+			return httpError(http.StatusInternalServerError, "Error creating line item: %v", err)
 		}
 	}
 
 	for _, download := range order.Downloads {
 		if err := tx.Create(&download).Error; err != nil {
-			return &HTTPError{Code: 500, Message: fmt.Sprintf("Error creating download item: %v", err)}
+			return httpError(http.StatusInternalServerError, "Error creating download item: %v", err)
 		}
 	}
 
 	settings, err := a.loadSettings(ctx)
 	if err != nil {
-		return &HTTPError{Code: 500, Message: err.Error()}
+		return httpError(http.StatusInternalServerError, err.Error())
 	}
 
-	order.CalculateTotal(settings, getClaimsAsMap(ctx))
+	order.CalculateTotal(settings, gcontext.GetClaimsAsMap(ctx))
 
 	return nil
 }
 
 func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
-	config := getConfig(ctx)
+	config := gcontext.GetConfig(ctx)
 
 	settings := &calculator.Settings{}
 	resp, err := a.httpClient.Get(config.SiteURL + "/gocommerce/settings.json")
@@ -740,11 +726,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	if id != "" {
 		loadedAddress := new(models.Address)
 		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
-			return nil, httpError(400, "Bad %v id: %v, %v", name, id, result.Error)
+			return nil, httpError(http.StatusBadRequest, "Bad %v id: %v, %v", name, id, result.Error)
 		}
 
 		if order.UserID != loadedAddress.UserID {
-			return nil, httpError(400, "Can't update the order to an %v that doesn't belong to the user", name)
+			return nil, httpError(http.StatusBadRequest, "Can't update the order to an %v that doesn't belong to the user", name)
 		}
 
 		if loadedAddress.UserID == "" {
@@ -756,7 +742,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 
 	// it is a new address we're  making
 	if err := address.Validate(); err != nil {
-		return nil, httpError(400, "Failed to validate %v: %v", name, err.Error())
+		return nil, httpError(http.StatusBadRequest, "Failed to validate %v: %v", name, err.Error())
 	}
 
 	// is a valid id that doesn't already belong to a user
@@ -766,8 +752,8 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 }
 
 func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *OrderLineItem) error {
-	config := getConfig(ctx)
-	jwtClaims := getClaimsAsMap(ctx)
+	config := gcontext.GetConfig(ctx)
+	jwtClaims := gcontext.GetClaimsAsMap(ctx)
 	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
 	if err != nil {
 		return err

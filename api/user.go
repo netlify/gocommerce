@@ -13,6 +13,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
 
@@ -30,7 +31,7 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	query, err := parseUserQueryParams(a.db, r.URL.Query())
 	if err != nil {
@@ -94,7 +95,7 @@ func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	user := &models.User{
 		ID: userID,
@@ -108,10 +109,12 @@ func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	if rsp.Error != nil {
 		log.WithError(rsp.Error).Warnf("Failed to query DB: %v", rsp.Error)
 		internalServerError(w, "Problem searching for user "+userID)
+		return
 	}
 
 	if user.DeletedAt != nil {
 		notFoundError(w, "Couldn't find a record for "+userID)
+		return
 	}
 
 	orders := []models.Order{}
@@ -128,7 +131,7 @@ func (a *API) AddressList(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
@@ -154,7 +157,7 @@ func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
@@ -183,7 +186,7 @@ func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Req
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 	log.Debugf("Starting to delete user %s", userID)
 
 	user := getUser(a.db, userID)
@@ -256,7 +259,7 @@ func (a *API) AddressDelete(ctx context.Context, w http.ResponseWriter, r *http.
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	log := getLogger(ctx).WithField("addr_id", addrID)
+	log := gcontext.GetLogger(ctx).WithField("addr_id", addrID)
 
 	if getUser(a.db, userID) == nil {
 		log.Warn("requested non-existent user - not an error b/c it is a delete")
@@ -283,7 +286,7 @@ func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *ht
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "Couldn't find user "+userID)).Warn("Requested to add an address to a missing user")
@@ -323,30 +326,30 @@ func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *ht
 // Helper methods
 // -------------------------------------------------------------------------------------------------------------------
 func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTTPError) {
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 	userID := kami.Param(ctx, "user_id")
 	addrID := kami.Param(ctx, "addr_id")
 
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 	if claims == nil {
-		err := httpError(401, "No claims provided")
+		err := httpError(http.StatusUnauthorized, "No claims provided")
 		log.WithError(err).Warn("Illegal access attempt")
 		return "", "", err
 	}
 
-	isAdmin := isAdmin(ctx)
+	isAdmin := gcontext.IsAdmin(ctx)
 	if isAdmin {
-		ctx = withLogger(ctx, log.WithField("admin_id", claims.ID))
+		ctx = gcontext.WithLogger(ctx, log.WithField("admin_id", claims.ID))
 	}
 
 	if claims.ID != userID && !isAdmin {
-		err := httpError(401, "Can't access a different user unless you're an admin")
+		err := httpError(http.StatusUnauthorized, "Can't access a different user unless you're an admin")
 		log.WithError(err).Warn("Illegal access attempt")
 		return "", "", err
 	}
 
 	if adminOnly && !isAdmin {
-		err := httpError(401, "Admin permissions required")
+		err := httpError(http.StatusUnauthorized, "Admin permissions required")
 		log.WithError(err).Warn("Illegal access attempt")
 		return "", "", err
 	}

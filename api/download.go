@@ -7,6 +7,7 @@ import (
 
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
 
@@ -14,8 +15,9 @@ const MaxIPsPerDay = 50
 
 func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	id := kami.Param(ctx, "id")
-	log := getLogger(ctx).WithField("download_id", id)
-	claims := getClaims(ctx)
+	log := gcontext.GetLogger(ctx).WithField("download_id", id)
+	claims := gcontext.GetClaims(ctx)
+	assets := gcontext.GetAssetStore(ctx)
 
 	download := &models.Download{}
 	if result := a.db.Where("id = ?", id).First(download); result.Error != nil {
@@ -42,7 +44,7 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 
 	if order.UserID != "" {
-		if (order.UserID != claims.ID) && isAdmin(ctx) {
+		if (order.UserID != claims.ID) && gcontext.IsAdmin(ctx) {
 			unauthorizedError(w, "Not Authorized to access this download")
 			return
 		}
@@ -71,7 +73,7 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if err := download.SignURL(a.assets); err != nil {
+	if err := download.SignURL(assets); err != nil {
 		log.WithError(err).Warnf("Error while signing download: %s", err)
 		internalServerError(w, "Error signing download: %v", err)
 		return
@@ -87,11 +89,11 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	orderID := kami.Param(ctx, "order_id")
-	log := getLogger(ctx)
+	log := gcontext.GetLogger(ctx)
 	if orderID != "" {
 		log = log.WithField("order_id", orderID)
 	}
-	claims := getClaims(ctx)
+	claims := gcontext.GetClaims(ctx)
 
 	if orderID == "" && (claims == nil || claims.ID == "") {
 		unauthorizedError(w, "Listing all downloads requires authentication")

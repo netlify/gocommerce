@@ -10,6 +10,15 @@ import (
 
 const tagPrefix = "viper"
 
+func populateGlobalConfig(config *GlobalConfiguration) (*GlobalConfiguration, error) {
+	err := recursivelySet(reflect.ValueOf(config), "")
+	if err != nil {
+		return nil, err
+	}
+
+	return config, nil
+}
+
 func populateConfig(config *Configuration) (*Configuration, error) {
 	err := recursivelySet(reflect.ValueOf(config), "")
 	if err != nil {

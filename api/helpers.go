@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/netlify/gocommerce/claims"
 )
 
 func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
@@ -19,6 +20,6 @@ func userIDFromToken(token *jwt.Token) string {
 		return ""
 	}
 
-	claims := token.Claims.(*JWTClaims)
+	claims := token.Claims.(*claims.JWTClaims)
 	return claims.ID
 }

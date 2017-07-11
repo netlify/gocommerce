@@ -30,6 +30,7 @@ type Hook struct {
 
 	URL     string
 	Payload string
+	Secret  string
 
 	ResponseStatus  string
 	ResponseHeaders string
@@ -49,17 +50,18 @@ func (Hook) TableName() string {
 	return tableName("hooks")
 }
 
-func NewHook(hookType, url, userID string, payload interface{}) *Hook {
+func NewHook(hookType, url, userID, secret string, payload interface{}) *Hook {
 	json, _ := json.Marshal(payload)
 	return &Hook{
 		Type:    hookType,
 		UserID:  userID,
 		URL:     url,
+		Secret:  secret,
 		Payload: string(json),
 	}
 }
 
-func (h *Hook) Trigger(client *http.Client, log *logrus.Entry, secret string) (*http.Response, error) {
+func (h *Hook) Trigger(client *http.Client, log *logrus.Entry) (*http.Response, error) {
 	log.Infof("Triggering hook %v: %v", h.ID, h.URL)
 	h.Tries++
 	body := bytes.NewBufferString(h.Payload)
@@ -67,12 +69,12 @@ func (h *Hook) Trigger(client *http.Client, log *logrus.Entry, secret string) (*
 	if err != nil {
 		return nil, err
 	}
-	if secret != "" {
+	if h.Secret != "" {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub": h.UserID,
 			"exp": time.Now().Add(SignatureExpiration),
 		})
-		tokenString, err := token.SignedString([]byte(secret))
+		tokenString, err := token.SignedString([]byte(h.Secret))
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +127,7 @@ func (h *Hook) handleSuccess(db *gorm.DB, log *logrus.Entry, resp *http.Response
 	db.Save(h)
 }
 
-func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
+func RunHooks(db *gorm.DB, log *logrus.Entry) {
 	go func() {
 		id := uuid.NewRandom().String()
 		sem := make(chan bool, MaxConcurrentHooks)
@@ -146,7 +148,7 @@ func RunHooks(db *gorm.DB, log *logrus.Entry, secret string) {
 			for _, hook := range hooks {
 				sem <- true
 				go func(hook *Hook) {
-					resp, err := hook.Trigger(client, log, secret)
+					resp, err := hook.Trigger(client, log)
 					hook.LockedAt = nil
 					hook.LockedBy = nil
 					tx := db.Begin()

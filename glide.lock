@@ -1,5 +1,5 @@
-hash: db33b58bfc45a459b6cc91de74d7e1555475f2ae8c0d8dae7a5daf4651bcbe25
-updated: 2017-03-06T12:53:38.181766452-08:00
+hash: c2fd719c3fd783e250955a8346cba928f076d4509758fdc03635a366dd42c83e
+updated: 2017-07-11T14:33:57.866851957-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -24,10 +24,10 @@ imports:
   subpackages:
   - hcl/ast
   - hcl/parser
-  - hcl/token
-  - json/parser
   - hcl/scanner
   - hcl/strconv
+  - hcl/token
+  - json/parser
   - json/scanner
   - json/token
 - name: github.com/inconshreveable/mousetrap
@@ -47,7 +47,7 @@ imports:
 - name: github.com/mattes/vat
   version: 805d21ad07390288471b830934b4c08304774dc6
 - name: github.com/mattn/go-sqlite3
-  version: 3b3f1d01b2696af5501697c35629048c227586ab
+  version: ca5e3819723d8eeaf170ad510e7da1d6d2e94a08
 - name: github.com/mitchellh/mapstructure
   version: db1efb556f84b25a0a13a04aad883943538ad2e0
 - name: github.com/netlify/mailme
@@ -87,16 +87,43 @@ imports:
 - name: github.com/stripe/stripe-go
   version: 24fcc021315b5b9d0d6c9de3b4bb4170e4fdc2e6
   subpackages:
+  - account
+  - balance
+  - bankaccount
+  - bitcoinreceiver
+  - bitcointransaction
+  - card
   - charge
-  - refund
+  - client
+  - countryspec
+  - coupon
+  - customer
+  - discount
+  - dispute
+  - event
+  - fee
+  - feerefund
+  - fileupload
+  - invoice
+  - invoiceitem
+  - order
   - orderitem
+  - plan
+  - product
+  - recipient
+  - refund
+  - reversal
+  - sku
+  - sub
+  - token
+  - transfer
 - name: github.com/zenazn/goji
   version: 4d7077956293261309684d3cf1af673f773c6819
   subpackages:
-  - web/mutil
   - bind
   - graceful
   - graceful/listener
+  - web/mutil
 - name: golang.org/x/net
   version: d379faa25cbdc04d653984913a2ceb43b0bc46d7
   subpackages:
@@ -117,10 +144,10 @@ imports:
   subpackages:
   - internal
   - internal/app_identity
-  - internal/modules
   - internal/base
   - internal/datastore
   - internal/log
+  - internal/modules
   - internal/remote_api
 - name: gopkg.in/alexcesaro/quotedprintable.v3
   version: 2caba252f4dc53eaf6b553000885530023f54623
@@ -141,3 +168,4 @@ testImports:
   version: f390dcf405f7b83c997eac1b06768bb9f44dec18
   subpackages:
   - assert
+  - require

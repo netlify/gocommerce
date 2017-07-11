@@ -34,3 +34,4 @@ testImport:
   version: v1.1.3
   subpackages:
   - assert
+  - require
