@@ -84,7 +84,7 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, order.ID, models.EventUpdated, []string{"download"})
 	tx.Commit()
 
-	sendJSON(w, 200, download)
+	sendJSON(w, http.StatusOK, download)
 }
 
 func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
@@ -151,5 +151,5 @@ func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.R
 	}
 
 	log.WithField("download_count", len(downloads)).Debugf("Successfully retrieved %d downloads", len(downloads))
-	sendJSON(w, 200, downloads)
+	sendJSON(w, http.StatusOK, downloads)
 }

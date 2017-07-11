@@ -53,7 +53,7 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	offset, limit, err := paginate(w, r, query.Model(&models.User{}))
 	if err != nil {
 		if err == sql.ErrNoRows {
-			sendJSON(w, 200, []string{})
+			sendJSON(w, http.StatusOK, []string{})
 			return
 		}
 		badRequestError(w, "Bad Pagination Parameters: %v", err)
@@ -84,7 +84,7 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 
 	numUsers := len(users)
 	log.WithField("user_count", numUsers).Debugf("Successfully retrieved %d users", numUsers)
-	sendJSON(w, 200, users)
+	sendJSON(w, http.StatusOK, users)
 }
 
 // UserView will return the user specified.
@@ -120,7 +120,7 @@ func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	orders := []models.Order{}
 	a.db.Where("user_id = ?", user.ID).Find(&orders).Count(&user.OrderCount)
 
-	sendJSON(w, 200, user)
+	sendJSON(w, http.StatusOK, user)
 }
 
 // AddressList will return the addresses for a given user
@@ -146,7 +146,7 @@ func (a *API) AddressList(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	sendJSON(w, 200, &addrs)
+	sendJSON(w, http.StatusOK, &addrs)
 }
 
 // AddressView will return a particular address for a given user
@@ -175,7 +175,7 @@ func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	sendJSON(w, 200, &addr)
+	sendJSON(w, http.StatusOK, &addr)
 }
 
 // UserDelete will soft delete the user. It requires admin access
@@ -319,7 +319,7 @@ func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *ht
 		return
 	}
 
-	sendJSON(w, 200, &struct{ ID string }{ID: addr.ID})
+	sendJSON(w, http.StatusOK, &struct{ ID string }{ID: addr.ID})
 }
 
 // -------------------------------------------------------------------------------------------------------------------

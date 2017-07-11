@@ -23,7 +23,7 @@ func TestNoCoupons(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://example.org", nil)
 
 	NewAPI(globalConfig, config, db).CouponView(ctx, recorder, req)
-	validateError(t, 404, recorder)
+	validateError(t, http.StatusNotFound, recorder)
 }
 
 func TestSimpleCouponLookup(t *testing.T) {
@@ -40,7 +40,7 @@ func TestSimpleCouponLookup(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).CouponView(ctx, recorder, req)
 	coupon := &models.Coupon{}
-	extractPayload(t, 200, recorder, coupon)
+	extractPayload(t, http.StatusOK, recorder, coupon)
 	assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
 	assert.Equal(t, "coupon-code", coupon.Code, "Expected coupon code to be 'coupon-code'")
 }

@@ -42,5 +42,5 @@ func (a *API) CouponView(ctx context.Context, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	sendJSON(w, 200, coupon)
+	sendJSON(w, http.StatusOK, coupon)
 }

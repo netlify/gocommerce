@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -22,7 +23,7 @@ func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 	req := httptest.NewRequest("GET", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestUsersQueryForAllUsersWithParams(t *testing.T) {
@@ -44,7 +45,7 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
 
 	users := []models.User{}
-	extractPayload(t, 200, recorder, &users)
+	extractPayload(t, http.StatusOK, recorder, &users)
 	assert.Equal(t, 1, len(users))
 	assert.Equal(t, "villian", users[0].ID)
 }
@@ -65,7 +66,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
 
 	users := []models.User{}
-	extractPayload(t, 200, recorder, &users)
+	extractPayload(t, http.StatusOK, recorder, &users)
 	for _, u := range users {
 		switch u.ID {
 		case toDie.ID:
@@ -96,7 +97,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 //
 //	api := NewAPI(globalConfig, db, nil)
 //	api.UserView(ctx, recorder, req)
-//	validateError(t, 404, recorder)
+//	validateError(t, http.StatusNotFound, recorder)
 //}
 
 func TestUsersQueryForUserAsUser(t *testing.T) {
@@ -110,7 +111,7 @@ func TestUsersQueryForUserAsUser(t *testing.T) {
 	api := NewAPI(globalConfig, config, db)
 	api.UserView(ctx, recorder, req)
 	user := new(models.User)
-	extractPayload(t, 200, recorder, user)
+	extractPayload(t, http.StatusOK, recorder, user)
 
 	validateUser(t, &testUser, user)
 }
@@ -125,7 +126,7 @@ func TestUsersQueryForUserAsStranger(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.UserView(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestUsersQueryForUserAsAdmin(t *testing.T) {
@@ -139,7 +140,7 @@ func TestUsersQueryForUserAsAdmin(t *testing.T) {
 	NewAPI(globalConfig, config, db).UserView(ctx, recorder, req)
 
 	user := new(models.User)
-	extractPayload(t, 200, recorder, user)
+	extractPayload(t, http.StatusOK, recorder, user)
 	validateUser(t, &testUser, user)
 }
 
@@ -184,7 +185,7 @@ func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
 	req := httptest.NewRequest("GET", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
@@ -209,7 +210,7 @@ func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
 	req := httptest.NewRequest("GET", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
-	validateError(t, 404, recorder)
+	validateError(t, http.StatusNotFound, recorder)
 }
 
 func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
@@ -223,7 +224,7 @@ func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 	NewAPI(globalConfig, config, db).AddressView(ctx, recorder, req)
 
 	addr := new(models.Address)
-	extractPayload(t, 200, recorder, addr)
+	extractPayload(t, http.StatusOK, recorder, addr)
 	validateAddress(t, testAddress, *addr)
 }
 
@@ -236,7 +237,7 @@ func TestUsersDeleteNonExistentUser(t *testing.T) {
 	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
-	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 }
 
@@ -277,7 +278,7 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
-	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
 	// now load it back and it should be soft deleted
@@ -308,7 +309,7 @@ func TestDeleteUserAddress(t *testing.T) {
 	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
 
 	NewAPI(globalConfig, config, db).AddressDelete(ctx, recorder, req)
-	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
 	assert.False(t, db.Unscoped().First(&addr).RecordNotFound())
@@ -329,7 +330,7 @@ func TestCreateAnAddress(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
 
-	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 
 	results := struct {
 		ID string
@@ -359,7 +360,7 @@ func TestCreateInvalidAddress(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
 
-	validateError(t, 400, recorder)
+	validateError(t, http.StatusBadRequest, recorder)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -371,6 +372,6 @@ func queryForAddresses(ctx context.Context, t *testing.T, api *API, id string) [
 
 	api.AddressList(ctx, recorder, req)
 	addrs := []models.Address{}
-	extractPayload(t, 200, recorder, &addrs)
+	extractPayload(t, http.StatusOK, recorder, &addrs)
 	return addrs
 }

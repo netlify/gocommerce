@@ -48,7 +48,7 @@ func (a *API) PaymentListForUser(ctx context.Context, w http.ResponseWriter, r *
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	sendJSON(w, 200, trans)
+	sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentListForOrder is the endpoint for listing transactions for an order. You must be the owner
@@ -82,7 +82,7 @@ func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r 
 	}
 
 	log.Debugf("Returning %d transactions", len(order.Transactions))
-	sendJSON(w, 200, order.Transactions)
+	sendJSON(w, http.StatusOK, order.Transactions)
 }
 
 // PaymentCreate is the endpoint for creating a payment for an order
@@ -164,7 +164,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tr.ProcessorID = processorID
 
 	if err != nil {
-		tr.FailureCode = "500"
+		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		tr.FailureDescription = err.Error()
 		tr.Status = "failed"
 	} else {
@@ -197,7 +197,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		}
 	}()
 
-	sendJSON(w, 200, tr)
+	sendJSON(w, http.StatusOK, tr)
 }
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins
@@ -220,14 +220,14 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
-	sendJSON(w, 200, trans)
+	sendJSON(w, http.StatusOK, trans)
 }
 
 func (a *API) PaymentView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if trans, httpErr := a.getTransaction(ctx); httpErr != nil {
 		sendJSON(w, httpErr.Code, httpErr)
 	} else {
-		sendJSON(w, 200, trans)
+		sendJSON(w, http.StatusOK, trans)
 	}
 }
 
@@ -303,7 +303,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	refundID, err := refund(trans.ProcessorID, params.Amount)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
-		m.FailureCode = "500"
+		m.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		m.FailureDescription = err.Error()
 		m.Status = models.FailedState
 	} else {
@@ -342,7 +342,7 @@ func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r 
 		return
 	}
 
-	sendJSON(w, 200, paymentResult)
+	sendJSON(w, http.StatusOK, paymentResult)
 }
 
 // PayPalGetPayment retrieves information on an authorized paypal payment, including
@@ -359,7 +359,7 @@ func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r 
 // 		return
 // 	}
 
-// 	sendJSON(w, 200, payment)
+// 	sendJSON(w, http.StatusOK, payment)
 // }
 
 // ------------------------------------------------------------------------------------------------
