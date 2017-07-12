@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
+	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/payments"
 	"github.com/pkg/errors"
@@ -84,31 +85,35 @@ func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 	}
 
 	return func(amount uint64, currency string) (string, error) {
-		payment, err := p.client.GetPayment(bp.PaypalID)
-		if err != nil {
-			return "", err
-		}
-		if len(payment.Transactions) != 1 {
-			return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
-		}
-
-		if payment.Transactions[0].Amount == nil {
-			return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
-		}
-
-		transactionValue := fmt.Sprintf("%.2f", float64(amount)/100)
-
-		if transactionValue != payment.Transactions[0].Amount.Total || payment.Transactions[0].Amount.Currency != currency {
-			return "", fmt.Errorf("The Amount in the transaction doesn't match the amount for the order: %v", payment.Transactions[0].Amount)
-		}
-
-		executeResult, err := p.client.ExecuteApprovedPayment(bp.PaypalID, bp.PaypalUserID)
-		if err != nil {
-			return "", err
-		}
-
-		return executeResult.ID, nil
+		return p.charge(bp.PaypalID, bp.PaypalUserID, amount, currency)
 	}, nil
+}
+
+func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount uint64, currency string) (string, error) {
+	payment, err := p.client.GetPayment(paymentID)
+	if err != nil {
+		return "", err
+	}
+	if len(payment.Transactions) != 1 {
+		return "", fmt.Errorf("The paypal payment must have exactly 1 transaction, had %v", len(payment.Transactions))
+	}
+
+	if payment.Transactions[0].Amount == nil {
+		return "", fmt.Errorf("No amount in this transaction %v", payment.Transactions[0])
+	}
+
+	transactionValue := fmt.Sprintf("%.2f", float64(amount)/100)
+
+	if transactionValue != payment.Transactions[0].Amount.Total || payment.Transactions[0].Amount.Currency != currency {
+		return "", fmt.Errorf("The Amount in the transaction doesn't match the amount for the order: %v", payment.Transactions[0].Amount)
+	}
+
+	executeResult, err := p.client.ExecuteApprovedPayment(paymentID, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return executeResult.ID, nil
 }
 
 func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
@@ -118,40 +123,43 @@ func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 
 func (p *paypalPaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
 	config := gcontext.GetConfig(ctx)
-
 	return func(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
-		profile, err := p.getExperience()
-		if err != nil {
-			return nil, errors.Wrap(err, "error creating paypal experience")
-		}
+		return p.preauthorize(config, amount, currency, description)
+	}, nil
+}
 
-		redirectURI := config.SiteURL + "/gocommerce/paypal"
-		cancelURI := config.SiteURL + "/gocommerce/paypal/cancel"
-		paymentResult, err := p.client.CreatePayment(paypalsdk.Payment{
-			Intent: "sale",
-			Payer: &paypalsdk.Payer{
-				PaymentMethod: "paypal",
-			},
-			ExperienceProfileID: profile.ID,
-			Transactions: []paypalsdk.Transaction{paypalsdk.Transaction{
-				Amount: &paypalsdk.Amount{
-					Total:    strconv.FormatUint(amount, 10),
-					Currency: currency,
-				},
-				Description: description,
-			}},
-			RedirectURLs: &paypalsdk.RedirectURLs{
-				ReturnURL: redirectURI,
-				CancelURL: cancelURI,
-			},
-		})
+func (p *paypalPaymentProvider) preauthorize(config *conf.Configuration, amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+	profile, err := p.getExperience()
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating paypal experience")
+	}
 
-		if err != nil {
-			return nil, errors.Wrap(err, "error creating paypal payment")
-		}
-		return &payments.PreauthorizationResult{
-			ID: paymentResult.ID,
-		}, nil
+	redirectURI := config.SiteURL + "/gocommerce/paypal"
+	cancelURI := config.SiteURL + "/gocommerce/paypal/cancel"
+	paymentResult, err := p.client.CreatePayment(paypalsdk.Payment{
+		Intent: "sale",
+		Payer: &paypalsdk.Payer{
+			PaymentMethod: "paypal",
+		},
+		ExperienceProfileID: profile.ID,
+		Transactions: []paypalsdk.Transaction{paypalsdk.Transaction{
+			Amount: &paypalsdk.Amount{
+				Total:    strconv.FormatUint(amount, 10),
+				Currency: currency,
+			},
+			Description: description,
+		}},
+		RedirectURLs: &paypalsdk.RedirectURLs{
+			ReturnURL: redirectURI,
+			CancelURL: cancelURI,
+		},
+	})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "error creating paypal payment")
+	}
+	return &payments.PreauthorizationResult{
+		ID: paymentResult.ID,
 	}, nil
 }
 

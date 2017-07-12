@@ -56,18 +56,22 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 	}
 
 	return func(amount uint64, currency string) (string, error) {
-		ch, err := s.client.Charges.New(&stripe.ChargeParams{
-			Amount:   amount,
-			Source:   &stripe.SourceParams{Token: bp.StripeToken},
-			Currency: stripe.Currency(currency),
-		})
-
-		if err != nil {
-			return "", err
-		}
-
-		return ch.ID, nil
+		return s.charge(bp.StripeToken, amount, currency)
 	}, nil
+}
+
+func (s *stripePaymentProvider) charge(token string, amount uint64, currency string) (string, error) {
+	ch, err := s.client.Charges.New(&stripe.ChargeParams{
+		Amount:   amount,
+		Source:   &stripe.SourceParams{Token: token},
+		Currency: stripe.Currency(currency),
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return ch.ID, nil
 }
 
 func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
