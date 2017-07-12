@@ -444,20 +444,20 @@ func (mp *memProvider) Name() string {
 	return mp.name
 }
 func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request) (payments.Charger, error) {
-	return mp, nil
+	return mp.charge, nil
 }
 func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
-	return mp, nil
+	return mp.refund, nil
 }
 func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
-	return mp, nil
+	return mp.preauthorize, nil
 }
 
-func (mp *memProvider) Charge(amount uint64, currency string) (string, error) {
+func (mp *memProvider) charge(amount uint64, currency string) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
-func (mp *memProvider) Refund(transactionID string, amount uint64) (string, error) {
+func (mp *memProvider) refund(transactionID string, amount uint64) (string, error) {
 	if mp.refundCalls == nil {
 		mp.refundCalls = []refundCall{}
 	}
@@ -469,6 +469,6 @@ func (mp *memProvider) Refund(transactionID string, amount uint64) (string, erro
 	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil
 }
 
-func (mp *memProvider) Preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+func (mp *memProvider) preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
 	return nil, nil
 }

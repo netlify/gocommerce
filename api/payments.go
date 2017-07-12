@@ -91,7 +91,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	config := gcontext.GetConfig(ctx)
 	mailer := gcontext.GetMailer(ctx)
 	provider := gcontext.GetPaymentProvider(ctx)
-	charger, err := provider.NewCharger(ctx, r)
+	charge, err := provider.NewCharger(ctx, r)
 	if err != nil {
 		badRequestError(w, "Error creating payment provider: %v", err)
 		return
@@ -160,7 +160,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	tr := models.NewTransaction(order)
 
 	order.PaymentProcessor = provider.Name()
-	processorID, err := charger.Charge(params.Amount, params.Currency)
+	processorID, err := charge(params.Amount, params.Currency)
 	tr.ProcessorID = processorID
 
 	if err != nil {
@@ -274,7 +274,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	}
 
 	provider := gcontext.GetPaymentProvider(ctx)
-	refunder, err := provider.NewRefunder(ctx, r)
+	refund, err := provider.NewRefunder(ctx, r)
 	if err != nil {
 		badRequestError(w, "Error creating payment provider: %v", err)
 		return
@@ -300,7 +300,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	tx.Create(m)
 	provID := provider.Name()
 	log.Debugf("Starting refund to %s", provID)
-	refundID, err := refunder.Refund(trans.ProcessorID, params.Amount)
+	refundID, err := refund(trans.ProcessorID, params.Amount)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
 		m.FailureCode = "500"
@@ -324,7 +324,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	provider := gcontext.GetPaymentProvider(ctx)
-	auther, err := provider.NewPreauthorizer(ctx, r)
+	preauthorize, err := provider.NewPreauthorizer(ctx, r)
 	if err != nil {
 		badRequestError(w, "Error creating payment provider: %v", err)
 		return
@@ -336,7 +336,7 @@ func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r 
 		return
 	}
 
-	paymentResult, err := auther.Preauthorize(amt, r.FormValue("currency"), r.FormValue("description"))
+	paymentResult, err := preauthorize(amt, r.FormValue("currency"), r.FormValue("description"))
 	if err != nil {
 		internalServerError(w, "Error preauthorizing payment: %v", err)
 		return

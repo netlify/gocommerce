@@ -16,11 +16,6 @@ type stripePaymentProvider struct {
 	client *client.API
 }
 
-type stripeRequestHandler struct {
-	p     *stripePaymentProvider
-	token string
-}
-
 type stripeBodyParams struct {
 	StripeToken string `mapstructure:"stripe_token"`
 }
@@ -60,34 +55,27 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 		return nil, errors.New("Stripe requires a stripe_token for creating a payment")
 	}
 
-	return &stripeRequestHandler{
-		p:     s,
-		token: bp.StripeToken,
+	return func(amount uint64, currency string) (string, error) {
+		ch, err := s.client.Charges.New(&stripe.ChargeParams{
+			Amount:   amount,
+			Source:   &stripe.SourceParams{Token: bp.StripeToken},
+			Currency: stripe.Currency(currency),
+		})
+
+		if err != nil {
+			return "", err
+		}
+
+		return ch.ID, nil
 	}, nil
-}
-
-func (r *stripeRequestHandler) Charge(amount uint64, currency string) (string, error) {
-	ch, err := r.p.client.Charges.New(&stripe.ChargeParams{
-		Amount:   amount,
-		Source:   &stripe.SourceParams{Token: r.token},
-		Currency: stripe.Currency(currency),
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return ch.ID, nil
 }
 
 func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
-	return &stripeRequestHandler{
-		p: s,
-	}, nil
+	return s.refund, nil
 }
 
-func (r *stripeRequestHandler) Refund(transactionID string, amount uint64) (string, error) {
-	ref, err := r.p.client.Refunds.New(&stripe.RefundParams{
+func (s *stripePaymentProvider) refund(transactionID string, amount uint64) (string, error) {
+	ref, err := s.client.Refunds.New(&stripe.RefundParams{
 		Charge: transactionID,
 		Amount: amount,
 	})
