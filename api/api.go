@@ -48,10 +48,9 @@ func NewAPI(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, 
 
 // NewSingleTenantAPIWithVersion creates a single-tenant version of the REST API
 func NewSingleTenantAPIWithVersion(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB, version string) *API {
-	ctx := context.Background()
-	ctx, err := withTenantConfig(ctx, config)
+	ctx, err := withTenantConfig(context.Background(), config)
 	if err != nil {
-		logrus.Fatalf("%+v", err)
+		logrus.WithError(err).Fatal("Failed to get tenant configuration")
 	}
 
 	return NewAPIWithVersion(ctx, globalConfig, db, version)
