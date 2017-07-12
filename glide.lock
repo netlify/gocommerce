@@ -1,5 +1,5 @@
-hash: 960c90b12e9442e2c227201037f8b721d86f90ee832279aa7eec46584529b3da
-updated: 2017-07-12T12:34:24.212552481-04:00
+hash: 806dd82288a2ecf2ce0a513e86f3c62258536155b6afb105cfcf8ad47ff5c412
+updated: 2017-07-12T12:40:07.791843695-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -47,7 +47,7 @@ imports:
 - name: github.com/mattes/vat
   version: 805d21ad07390288471b830934b4c08304774dc6
 - name: github.com/mattn/go-sqlite3
-  version: ca5e3819723d8eeaf170ad510e7da1d6d2e94a08
+  version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
   version: db1efb556f84b25a0a13a04aad883943538ad2e0
 - name: github.com/netlify/mailme
