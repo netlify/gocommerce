@@ -194,7 +194,7 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 		}
 	}
 
-	sendJSON(w, 200, map[string]string{})
+	sendJSON(w, http.StatusOK, map[string]string{})
 }
 
 // OrderList can query based on
@@ -261,7 +261,7 @@ func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Requ
 	}
 
 	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
-	sendJSON(w, 200, orders)
+	sendJSON(w, http.StatusOK, orders)
 }
 
 // OrderView will request a specific order using the 'id' parameter.
@@ -290,7 +290,7 @@ func (a *API) OrderView(ctx context.Context, w http.ResponseWriter, r *http.Requ
 
 	if order.UserID == "" || (order.UserID == claims.ID) || gcontext.IsAdmin(ctx) {
 		log.Debugf("Successfully got order %s", order.ID)
-		sendJSON(w, 200, order)
+		sendJSON(w, http.StatusOK, order)
 	} else {
 		log.WithFields(logrus.Fields{
 			"user_id":       claims.ID,
@@ -411,7 +411,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
-	sendJSON(w, 201, order)
+	sendJSON(w, http.StatusCreated, order)
 }
 
 // OrderUpdate will allow an ADMIN only to update the details of a record
@@ -596,7 +596,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	sendJSON(w, 200, existingOrder)
+	sendJSON(w, http.StatusOK, existingOrder)
 }
 
 // An order's email is determined by a few things. The rules guiding it are:
@@ -708,7 +708,7 @@ func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
 		return nil, fmt.Errorf("Error loading site settings: %v", err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == 200 {
+	if resp.StatusCode == http.StatusOK {
 		decoder := json.NewDecoder(resp.Body)
 		if err := decoder.Decode(settings); err != nil {
 			return nil, fmt.Errorf("Error parsing site settings: %v", err)

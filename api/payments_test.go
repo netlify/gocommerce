@@ -38,7 +38,7 @@ func TestPaymentsOrderForAllAsOwner(t *testing.T) {
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
-	extractPayload(t, 200, w, &trans)
+	extractPayload(t, http.StatusOK, w, &trans)
 	assert.Equal(t, 1, len(trans))
 	validateTransaction(t, firstTransaction, &trans[0])
 }
@@ -58,7 +58,7 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
-	extractPayload(t, 200, w, &trans)
+	extractPayload(t, http.StatusOK, w, &trans)
 	assert.Equal(t, 2, len(trans))
 	for _, tran := range trans {
 		switch tran.ID {
@@ -83,7 +83,7 @@ func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
 
 	// should get a 401 ~ claims are required
-	validateError(t, 401, w)
+	validateError(t, http.StatusUnauthorized, w)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -100,7 +100,7 @@ func TestPaymentsUserForAllAsUser(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
-	extractPayload(t, 200, w, &actual)
+	extractPayload(t, http.StatusOK, w, &actual)
 	validateAllTransactions(t, actual)
 }
 
@@ -115,7 +115,7 @@ func TestPaymentsUserForAllAsAdmin(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
-	extractPayload(t, 200, w, &actual)
+	extractPayload(t, http.StatusOK, w, &actual)
 
 	validateAllTransactions(t, actual)
 }
@@ -131,7 +131,7 @@ func TestPaymentsUserForAllAsAnon(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ claims are required
-	validateError(t, 401, w)
+	validateError(t, http.StatusUnauthorized, w)
 }
 
 func TestPaymentsUserForAllAsStranger(t *testing.T) {
@@ -145,7 +145,7 @@ func TestPaymentsUserForAllAsStranger(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ not the right user
-	validateError(t, 401, w)
+	validateError(t, http.StatusUnauthorized, w)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -160,7 +160,7 @@ func TestPaymentsListAllAsNonAdmin(t *testing.T) {
 	NewAPI(globalConfig, config, nil).PaymentList(ctx, w, r)
 
 	// should get a 401 ~ not the right user
-	validateError(t, 401, w)
+	validateError(t, http.StatusUnauthorized, w)
 }
 
 func TestPaymentsListWithParams(t *testing.T) {
@@ -173,7 +173,7 @@ func TestPaymentsListWithParams(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
-	extractPayload(t, 200, w, &trans)
+	extractPayload(t, http.StatusOK, w, &trans)
 
 	assert.Equal(t, 1, len(trans))
 	validateTransaction(t, firstTransaction, &trans[0])
@@ -189,7 +189,7 @@ func TestPaymentsListNoParams(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
-	extractPayload(t, 200, w, &trans)
+	extractPayload(t, http.StatusOK, w, &trans)
 
 	validateAllTransactions(t, trans)
 }
@@ -203,7 +203,7 @@ func TestPaymentsViewAsNonAdmin(t *testing.T) {
 	NewAPI(globalConfig, config, nil).PaymentView(ctx, w, r)
 
 	// should get a 401 ~ not the right user
-	validateError(t, 401, w)
+	validateError(t, http.StatusUnauthorized, w)
 }
 
 func TestPaymentsView(t *testing.T) {
@@ -217,7 +217,7 @@ func TestPaymentsView(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
 
 	trans := new(models.Transaction)
-	extractPayload(t, 200, w, trans)
+	extractPayload(t, http.StatusOK, w, trans)
 
 	validateTransaction(t, firstTransaction, trans)
 }
@@ -232,7 +232,7 @@ func TestPaymentsViewMissingPayment(t *testing.T) {
 	r := httptest.NewRequest("GET", "http://something", nil)
 	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
 
-	validateError(t, 404, w, "Transaction not found")
+	validateError(t, http.StatusNotFound, w, "Transaction not found")
 }
 
 func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
@@ -241,7 +241,7 @@ func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
 		Currency: "monopoly-money",
 	})
 
-	validateError(t, 400, w, "Currencies do not match")
+	validateError(t, http.StatusBadRequest, w, "Currencies do not match")
 }
 
 func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
@@ -250,7 +250,7 @@ func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 		Currency: "usd",
 	})
 
-	validateError(t, 400, w, "must be between 0 and the total amount")
+	validateError(t, http.StatusBadRequest, w, "must be between 0 and the total amount")
 }
 
 func TestPaymentsRefundPaypal(t *testing.T) {
@@ -284,7 +284,7 @@ func TestPaymentsRefundPaypal(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
-	validateError(t, 400, w, "does not support refunds")
+	validateError(t, http.StatusBadRequest, w, "does not support refunds")
 }
 
 func TestPaymentsRefundUnknownPayment(t *testing.T) {
@@ -304,7 +304,7 @@ func TestPaymentsRefundUnknownPayment(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
-	validateError(t, 404, w)
+	validateError(t, http.StatusNotFound, w)
 }
 
 func TestPaymentsRefundUnpaid(t *testing.T) {
@@ -328,7 +328,7 @@ func TestPaymentsRefundUnpaid(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
-	validateError(t, 400, w)
+	validateError(t, http.StatusBadRequest, w)
 }
 
 func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRecorder, *gorm.DB) {
@@ -367,7 +367,7 @@ func TestPaymentsRefundSuccess(t *testing.T) {
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
 	rsp := new(models.Transaction)
-	extractPayload(t, 200, w, rsp)
+	extractPayload(t, http.StatusOK, w, rsp)
 
 	stored := &models.Transaction{ID: rsp.ID}
 	db.First(stored)

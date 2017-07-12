@@ -52,7 +52,7 @@ func (a *API) SalesReport(ctx context.Context, w http.ResponseWriter, r *http.Re
 		result = append(result, row)
 	}
 
-	sendJSON(w, 200, result)
+	sendJSON(w, http.StatusOK, result)
 }
 
 // ProductsReport list the products sold within a period
@@ -95,5 +95,5 @@ func (a *API) ProductsReport(ctx context.Context, w http.ResponseWriter, r *http
 		result = append(result, row)
 	}
 
-	sendJSON(w, 200, result)
+	sendJSON(w, http.StatusOK, result)
 }

@@ -41,7 +41,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 	api.OrderCreate(ctx, recorder, req)
 
 	order := &models.Order{}
-	extractPayload(t, 201, recorder, order)
+	extractPayload(t, http.StatusCreated, recorder, order)
 
 	var total uint64
 	total = 999
@@ -81,7 +81,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 	api.OrderCreate(ctx, recorder, req)
 
 	order := &models.Order{}
-	extractPayload(t, 201, recorder, order)
+	extractPayload(t, http.StatusCreated, recorder, order)
 
 	var total uint64
 	total = 1069
@@ -114,7 +114,7 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 	api.OrderCreate(ctx, recorder, req)
 
 	order := &models.Order{}
-	extractPayload(t, 201, recorder, order)
+	extractPayload(t, http.StatusCreated, recorder, order)
 
 	var total uint64
 	total = 1105
@@ -141,7 +141,7 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 
 	orders := []models.Order{}
-	extractPayload(t, 200, recorder, &orders)
+	extractPayload(t, http.StatusOK, recorder, &orders)
 	assert.Equal(t, 2, len(orders))
 
 	for _, o := range orders {
@@ -171,7 +171,7 @@ func TestOrderQueryEmailFilterAsTheUser(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 
 	orders := []models.Order{}
-	extractPayload(t, 200, recorder, &orders)
+	extractPayload(t, http.StatusOK, recorder, &orders)
 	assert.Equal(t, 2, len(orders))
 }
 
@@ -186,7 +186,7 @@ func TestEmptyOrderQueryEmailFilterAsTheUser(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 
 	orders := []models.Order{}
-	extractPayload(t, 200, recorder, &orders)
+	extractPayload(t, http.StatusOK, recorder, &orders)
 	assert.Equal(t, 0, len(orders))
 }
 
@@ -201,7 +201,7 @@ func TestOrderQueryItemFilterAsTheUser(t *testing.T) {
 	api.OrderList(ctx, recorder, req)
 
 	orders := []models.Order{}
-	extractPayload(t, 200, recorder, &orders)
+	extractPayload(t, http.StatusOK, recorder, &orders)
 	assert.Equal(t, 1, len(orders))
 }
 
@@ -216,7 +216,7 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
 	orders := []models.Order{}
-	extractPayload(t, 200, recorder, &orders)
+	extractPayload(t, http.StatusOK, recorder, &orders)
 
 	assert.Equal(t, 2, len(orders))
 	for _, o := range orders {
@@ -245,7 +245,7 @@ func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(t, 200, recorder.Code)
+	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "[]\n", recorder.Body.String())
 }
 
@@ -259,8 +259,7 @@ func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(t, 400, recorder.Code)
-	validateError(t, 400, recorder)
+	validateError(t, http.StatusBadRequest, recorder)
 }
 
 func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
@@ -272,8 +271,7 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, nil)
 	api.OrderList(ctx, recorder, req)
-	assert.Equal(t, 401, recorder.Code)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 // -------------------------------------------------------------------------------------------------------------------
@@ -292,7 +290,7 @@ func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
 	order := new(models.Order)
-	extractPayload(t, 200, recorder, order)
+	extractPayload(t, http.StatusOK, recorder, order)
 	validateOrder(t, firstOrder, order)
 	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
 	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
@@ -310,7 +308,7 @@ func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
 	order := new(models.Order)
-	extractPayload(t, 200, recorder, order)
+	extractPayload(t, http.StatusOK, recorder, order)
 	validateOrder(t, firstOrder, order)
 	validateAddress(t, firstOrder.BillingAddress, order.BillingAddress)
 	validateAddress(t, firstOrder.ShippingAddress, order.ShippingAddress)
@@ -327,8 +325,7 @@ func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 	req := httptest.NewRequest("GET", urlForFirstOrder, nil)
 
 	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
-	assert.Equal(t, 401, recorder.Code)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderQueryForAMissingOrder(t *testing.T) {
@@ -342,7 +339,7 @@ func TestOrderQueryForAMissingOrder(t *testing.T) {
 	req := httptest.NewRequest("GET", "https://not-real/does-not-exist", nil)
 
 	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
-	validateError(t, 404, recorder)
+	validateError(t, http.StatusNotFound, recorder)
 }
 
 func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
@@ -357,7 +354,7 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 
 	// use nil for DB b/c it should *NEVER* be called
 	NewAPI(globalConfig, config, nil).OrderView(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -376,7 +373,7 @@ func TestOrderSetUserIDLogic_AnonymousUserWithNoEmail(t *testing.T) {
 	simpleOrder := models.NewOrder("session", "", "usd")
 	err := setOrderEmail(nil, simpleOrder, nil, testLogger)
 	if !assert.Error(err) {
-		assert.Equal(400, err.Code)
+		assert.Equal(http.StatusBadRequest, err.Code)
 	}
 }
 
@@ -417,7 +414,7 @@ func TestOrderSetUserIDLogic_NewUserNoEmails(t *testing.T) {
 	claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 	err := setOrderEmail(db, simpleOrder, claims, testLogger)
 	if assert.Error(err) {
-		assert.Equal(400, err.Code)
+		assert.Equal(http.StatusBadRequest, err.Code)
 	}
 }
 
@@ -478,7 +475,7 @@ func TestOrderUpdateFields(t *testing.T) {
 		Currency: "monopoly-dollars",
 	})
 	rspOrder := new(models.Order)
-	extractPayload(t, 200, recorder, rspOrder)
+	extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 	saved := new(models.Order)
 	rsp := db.First(saved, "id = ?", firstOrder.ID)
@@ -513,7 +510,7 @@ func TestOrderUpdateAddress_ExistingAddress(t *testing.T) {
 		BillingAddressID: newAddr.ID,
 	})
 	rspOrder := new(models.Order)
-	extractPayload(t, 200, recorder, rspOrder)
+	extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 	saved := new(models.Order)
 	rsp = db.First(saved, "id = ?", firstOrder.ID)
@@ -541,7 +538,7 @@ func TestOrderUpdateAddress_NewAddress(t *testing.T) {
 		ShippingAddress: paramsAddress,
 	})
 	rspOrder := new(models.Order)
-	extractPayload(t, 200, recorder, rspOrder)
+	extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 	saved := new(models.Order)
 	rsp := db.First(saved, "id = ?", firstOrder.ID)
@@ -578,7 +575,7 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.OrderUpdate(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderUpdateWithNoCreds(t *testing.T) {
@@ -601,7 +598,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 
 	api := NewAPI(globalConfig, config, db)
 	api.OrderUpdate(ctx, recorder, req)
-	validateError(t, 401, recorder)
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderUpdateWithNewData(t *testing.T) {
@@ -617,7 +614,7 @@ func TestOrderUpdateWithNewData(t *testing.T) {
 	}
 	recorder := runUpdate(t, db, firstOrder, op)
 	order := &models.Order{}
-	extractPayload(t, 200, recorder, order)
+	extractPayload(t, http.StatusOK, recorder, order)
 
 	assert.Equal(op.MetaData, order.MetaData, "Order metadata should have been updated")
 }

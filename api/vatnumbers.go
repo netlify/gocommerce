@@ -17,7 +17,7 @@ func (a *API) VatnumberLookup(ctx context.Context, w http.ResponseWriter, r *htt
 		return
 	}
 
-	sendJSON(w, 200, map[string]interface{}{
+	sendJSON(w, http.StatusOK, map[string]interface{}{
 		"country": response.CountryCode,
 		"valid":   response.Valid,
 		"company": response.Name,

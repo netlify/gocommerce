@@ -51,7 +51,7 @@ func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		buf := new(bytes.Buffer)
 		buf.ReadFrom(resp.Body)
 		return "", fmt.Errorf("Error generating signature: %v", buf.String())

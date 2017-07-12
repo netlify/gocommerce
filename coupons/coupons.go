@@ -69,7 +69,7 @@ func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("Coupon URL returned %v", resp.StatusCode)
 	}
 
