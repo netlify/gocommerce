@@ -347,6 +347,10 @@ func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRe
 
 func TestPaymentsRefundSuccess(t *testing.T) {
 	db, globalConfig, config := db(t)
+	// unused, but needed to pass safety check
+	config.Payment.ProviderType = "stripe"
+	config.Payment.Stripe.SecretKey = "secret"
+
 	provider := &memProvider{name: payments.StripeProvider}
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
@@ -360,7 +364,7 @@ func TestPaymentsRefundSuccess(t *testing.T) {
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	NewMultiTenantAPI(globalConfig, db).PaymentRefund(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
 	rsp := new(models.Transaction)
 	extractPayload(t, 200, w, rsp)

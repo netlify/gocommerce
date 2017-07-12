@@ -46,11 +46,6 @@ func NewAPI(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, 
 	return NewSingleTenantAPIWithVersion(globalConfig, config, db, defaultVersion)
 }
 
-// NewMultiTenantAPI creates a new REST API to serve multiple tenants.
-func NewMultiTenantAPI(globalConfig *conf.GlobalConfiguration, db *gorm.DB) *API {
-	return NewAPIWithVersion(context.Background(), globalConfig, db, defaultVersion)
-}
-
 // NewSingleTenantAPIWithVersion creates a single-tenant version of the REST API
 func NewSingleTenantAPIWithVersion(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB, version string) *API {
 	ctx := context.Background()
@@ -155,20 +150,6 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = gcontext.WithLogger(ctx, log)
 	ctx = gcontext.WithStartTime(ctx, time.Now())
 
-	instanceID := r.Header.Get("x-nf-id")
-	if instanceID != "" {
-		// TODO populate config
-		// env := r.Header.Get("x-nf-env")
-		// var config *conf.Configuration
-		// var err error
-		// ctx, err = withTenantConfig(ctx, config)
-		// if err != nil {
-		// 	internalServerError(w, err.Error())
-		// 	return nil
-		// }
-	}
-
-	// safety check in case of multi-tenant but missing X-NF-* headers
 	if gcontext.GetPaymentProvider(ctx) == nil {
 		internalServerError(w, "No payment provider configured")
 		return nil
