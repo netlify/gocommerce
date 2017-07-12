@@ -20,9 +20,9 @@ import:
 - package: github.com/spf13/viper
 - package: github.com/netlify/mailme
 - package: github.com/stripe/stripe-go
-  version: v16.3.1
+  version: v24.0.0
   subpackages:
-  - charge
+  - client
 - package: gopkg.in/gomail.v2
   version: 2.0.0
 - package: github.com/mattes/vat
