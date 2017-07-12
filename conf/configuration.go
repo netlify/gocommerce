@@ -13,15 +13,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-// Configuration holds all the confiruation for authlify
-type Configuration struct {
-	SiteURL string `mapstructure:"site_url" json:"site_url"`
-
-	JWT struct {
-		Secret         string `mapstructure:"secret" json:"secret"`
-		AdminGroupName string `mapstructure:"admin_group_name" json:"admin_group_name"`
-	} `mapstructure:"jwt" json:"jwt"`
-
+// GlobalConfiguration holds all the global configuration for gocommerce
+type GlobalConfiguration struct {
 	DB struct {
 		Driver      string `mapstructure:"driver" json:"driver"`
 		ConnURL     string `mapstructure:"url" json:"url"`
@@ -33,10 +26,22 @@ type Configuration struct {
 		Host string `mapstructure:"host" json:"host"`
 		Port int    `mapstructure:"port" json:"port"`
 	} `mapstructure:"api" json:"api"`
+
 	LogConf struct {
 		Level string `mapstructure:"level"`
 		File  string `mapstructure:"file"`
 	} `mapstructure:"log_conf"`
+}
+
+// Configuration holds all the per-tenant configuration for gocommerce
+type Configuration struct {
+	SiteURL string `mapstructure:"site_url" json:"site_url"`
+
+	JWT struct {
+		Secret         string `mapstructure:"secret" json:"secret"`
+		AdminGroupName string `mapstructure:"admin_group_name" json:"admin_group_name"`
+	} `mapstructure:"jwt" json:"jwt"`
+
 	Mailer struct {
 		Host       string `mapstructure:"host" json:"host"`
 		Port       int    `mapstructure:"port" json:"port"`
@@ -54,10 +59,11 @@ type Configuration struct {
 	} `mapstructure:"mailer" json:"mailer"`
 
 	Payment struct {
-		Stripe struct {
+		ProviderType string `mapstructure:"type" json:"type"`
+		Stripe       struct {
 			SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 		} `mapstructure:"stripe" json:"stripe"`
-		Paypal struct {
+		PayPal struct {
 			ClientID string `mapstructure:"client_id" json:"client_id"`
 			Secret   string `mapstructure:"secret" json:"secret"`
 			Env      string `mapstructure:"env" json:"env"`
@@ -85,21 +91,37 @@ type Configuration struct {
 	} `mapstructure:"webhooks" json:"webhooks"`
 }
 
-// Load will construct the config from the file `config.json`
-func Load(configFile string) (*Configuration, error) {
-	viper.SetConfigType("json")
+// Load will construct the core config from the file `config.json`
+func LoadGlobal(configFile string) (*GlobalConfiguration, error) {
+	setupViper(configFile)
 
-	if configFile != "" {
-		viper.SetConfigFile(configFile)
-	} else {
-		viper.SetConfigName("config")
-		viper.AddConfigPath("./")                 // ./config.[json | toml]
-		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
+	if err := viper.ReadInConfig(); err != nil {
+		_, ok := err.(viper.ConfigFileNotFoundError)
+		if !ok {
+			return nil, errors.Wrap(err, "reading configuration from files")
+		}
 	}
 
-	viper.SetEnvPrefix("GOCOMMERCE")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
+	config := new(GlobalConfiguration)
+	if err := viper.Unmarshal(config); err != nil {
+		return nil, errors.Wrap(err, "unmarshaling configuration")
+	}
+
+	config, err := populateGlobalConfig(config)
+	if err != nil {
+		return nil, errors.Wrap(err, "populate config")
+	}
+
+	if err := configureLogging(config); err != nil {
+		return nil, errors.Wrap(err, "configure logging")
+	}
+
+	return validateConfig(config)
+}
+
+// Load loads the per-instance configuration from a file
+func Load(configFile string) (*Configuration, error) {
+	setupViper(configFile)
 
 	if err := viper.ReadInConfig(); err != nil {
 		_, ok := err.(viper.ConfigFileNotFoundError)
@@ -118,18 +140,29 @@ func Load(configFile string) (*Configuration, error) {
 		return nil, errors.Wrap(err, "populate config")
 	}
 
-	if err := configureLogging(config); err != nil {
-		return nil, errors.Wrap(err, "configure logging")
-	}
-
 	if config.JWT.AdminGroupName == "" {
 		config.JWT.AdminGroupName = "admin"
 	}
-
-	return validateConfig(config)
+	return config, nil
 }
 
-func configureLogging(config *Configuration) error {
+func setupViper(configFile string) {
+	viper.SetConfigType("json")
+
+	if configFile != "" {
+		viper.SetConfigFile(configFile)
+	} else {
+		viper.SetConfigName("config")
+		viper.AddConfigPath("./")                 // ./config.[json | toml]
+		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
+	}
+
+	viper.SetEnvPrefix("GOCOMMERCE")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+}
+
+func configureLogging(config *GlobalConfiguration) error {
 	// always use the full timestamp
 	logrus.SetFormatter(&logrus.TextFormatter{
 		FullTimestamp:    true,
@@ -158,7 +191,7 @@ func configureLogging(config *Configuration) error {
 	return nil
 }
 
-func validateConfig(config *Configuration) (*Configuration, error) {
+func validateConfig(config *GlobalConfiguration) (*GlobalConfiguration, error) {
 	if config.DB.ConnURL == "" && os.Getenv("DATABASE_URL") != "" {
 		config.DB.ConnURL = os.Getenv("DATABASE_URL")
 	}

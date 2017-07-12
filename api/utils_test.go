@@ -9,16 +9,20 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/netlify/gocommerce/calculator"
+	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
+	"github.com/netlify/gocommerce/payments"
 )
 
 var dbFiles []string
@@ -39,18 +43,18 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
+func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration) {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
 		panic(err)
 	}
 	dbFiles = append(dbFiles, f.Name())
 
-	config := testConfig()
-	config.DB.Driver = "sqlite3"
-	config.DB.ConnURL = f.Name()
+	globalConfig, config := testConfig()
+	globalConfig.DB.Driver = "sqlite3"
+	globalConfig.DB.ConnURL = f.Name()
 
-	db, err := models.Connect(config)
+	db, err := models.Connect(globalConfig)
 	if err != nil {
 		assert.FailNow(t, "failed to connect to db: "+err.Error())
 	}
@@ -59,27 +63,31 @@ func db(t *testing.T) (*gorm.DB, *conf.Configuration) {
 	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
 	urlWithUserID = fmt.Sprintf("https://not-real/users/%s/orders", testUser.ID)
 
-	return db, config
+	return db, globalConfig, config
 }
 
 func testContext(token *jwt.Token, config *conf.Configuration, adminFlag bool) context.Context {
 	ctx := context.Background()
-	ctx = withConfig(ctx, config)
-	ctx = withRequestID(ctx, "test-request")
-	ctx = withLogger(ctx, testLogger)
-	ctx = withStartTime(ctx, time.Now())
-	ctx = withAdminFlag(ctx, adminFlag)
-	return withToken(ctx, token)
+	ctx = gcontext.WithConfig(ctx, config)
+	ctx = gcontext.WithRequestID(ctx, "test-request")
+	ctx = gcontext.WithLogger(ctx, testLogger)
+	ctx = gcontext.WithStartTime(ctx, time.Now())
+	ctx = gcontext.WithAdminFlag(ctx, adminFlag)
+	return gcontext.WithToken(ctx, token)
 }
 
-func testConfig() *conf.Configuration {
+func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
+	globalConfig := new(conf.GlobalConfiguration)
+	globalConfig.DB.Automigrate = true
+
 	config := new(conf.Configuration)
-	config.DB.Automigrate = true
-	return config
+	config.Payment.ProviderType = payments.StripeProvider
+	config.Payment.Stripe.SecretKey = "secret"
+	return globalConfig, config
 }
 
 func testToken(id, email string) *jwt.Token {
-	claims := &JWTClaims{
+	claims := &claims.JWTClaims{
 		ID:    id,
 		Email: email,
 	}
@@ -122,6 +130,7 @@ func loadTestData(db *gorm.DB) {
 
 	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
 	firstOrder.UserID = testUser.ID
+	firstOrder.PaymentProcessor = "stripe"
 	firstTransaction = models.NewTransaction(firstOrder)
 	firstTransaction.ProcessorID = "stripe"
 	firstTransaction.Amount = 100
@@ -140,7 +149,9 @@ func loadTestData(db *gorm.DB) {
 
 	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
 	secondOrder.UserID = testUser.ID
+	secondOrder.PaymentProcessor = "paypal"
 	secondTransaction = models.NewTransaction(secondOrder)
+	secondTransaction.ProcessorID = "paypal"
 	secondLineItem1 = models.LineItem{
 		ID:          21,
 		OrderID:     secondOrder.ID,
@@ -183,6 +194,8 @@ func loadTestData(db *gorm.DB) {
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
 	secondOrder.User = &testUser
+	secondTransaction.Amount = secondOrder.Total
+	secondTransaction.Status = models.PaidState
 	db.Create(&secondLineItem1)
 	db.Create(&secondLineItem2)
 	db.Create(secondTransaction)
@@ -207,12 +220,9 @@ func getTestAddress() *models.Address {
 // VALIDATORS
 // ------------------------------------------------------------------------------------------------
 
-func validateError(t *testing.T, code int, recorder *httptest.ResponseRecorder) {
+func validateError(t *testing.T, code int, recorder *httptest.ResponseRecorder, msgs ...string) {
 	assert := assert.New(t)
-	if code != recorder.Code {
-		assert.Fail(fmt.Sprintf("code mismatch: expected %d vs actual %d", code, recorder.Code))
-		return
-	}
+	require.Equal(t, code, recorder.Code, "code mismatch: %v", recorder.Body)
 
 	errRsp := make(map[string]interface{})
 	err := json.NewDecoder(recorder.Body).Decode(&errRsp)
@@ -222,8 +232,12 @@ func validateError(t *testing.T, code int, recorder *httptest.ResponseRecorder) 
 	assert.True(exists)
 	assert.EqualValues(code, errcode)
 
-	_, exists = errRsp["msg"]
+	msg, exists := errRsp["msg"]
 	assert.True(exists)
+
+	for _, m := range msgs {
+		assert.Contains(msg, m, "msg must contain")
+	}
 }
 
 func validateUser(t *testing.T, expected *models.User, actual *models.User) {
@@ -249,12 +263,8 @@ func validateAddress(t *testing.T, expected models.Address, actual models.Addres
 // HELPERS
 // ------------------------------------------------------------------------------------------------
 func extractPayload(t *testing.T, code int, recorder *httptest.ResponseRecorder, what interface{}) {
-	if recorder.Code == code {
-		err := json.NewDecoder(recorder.Body).Decode(what)
-		if !assert.NoError(t, err) {
-			assert.FailNow(t, "Failed to extract body")
-		}
-	} else {
-		assert.FailNow(t, fmt.Sprintf("Unexpected code: %v - expected: %v", recorder.Code, code))
-	}
+	require.Equal(t, code, recorder.Code, "code mismatch: %v", recorder.Body)
+
+	err := json.NewDecoder(recorder.Body).Decode(what)
+	require.NoError(t, err, "Failed to extract body")
 }

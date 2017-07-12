@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,15 +10,16 @@ import (
 
 	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"errors"
 
 	"fmt"
 
-	"context"
-
 	"github.com/jinzhu/gorm"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
+	"github.com/netlify/gocommerce/payments"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -25,14 +27,14 @@ import (
 // ------------------------------------------------------------------------------------------------
 
 func TestPaymentsOrderForAllAsOwner(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken(testUser.ID, ""), config, false)
 	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
+	r := httptest.NewRequest("GET", "http://something", nil)
 
-	NewAPI(config, db, nil, nil, nil).PaymentListForOrder(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
@@ -42,7 +44,7 @@ func TestPaymentsOrderForAllAsOwner(t *testing.T) {
 }
 
 func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 	anotherTransaction := models.NewTransaction(firstOrder)
 	db.Create(anotherTransaction)
 	defer db.Unscoped().Delete(anotherTransaction)
@@ -50,9 +52,9 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
+	r := httptest.NewRequest("GET", "http://something", nil)
 
-	NewAPI(config, db, nil, nil, nil).PaymentListForOrder(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
 
 	// we should have gotten back a list of transactions
 	trans := []models.Transaction{}
@@ -71,14 +73,14 @@ func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
 }
 
 func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(nil, config, false)
 	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentListForOrder(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
 
 	// should get a 401 ~ claims are required
 	validateError(t, 401, w)
@@ -88,14 +90,14 @@ func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
 // List by USER
 // ------------------------------------------------------------------------------------------------
 func TestPaymentsUserForAllAsUser(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken(testUser.ID, ""), config, false)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentListForUser(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
@@ -103,14 +105,14 @@ func TestPaymentsUserForAllAsUser(t *testing.T) {
 }
 
 func TestPaymentsUserForAllAsAdmin(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentListForUser(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	actual := []models.Transaction{}
 	extractPayload(t, 200, w, &actual)
@@ -119,28 +121,28 @@ func TestPaymentsUserForAllAsAdmin(t *testing.T) {
 }
 
 func TestPaymentsUserForAllAsAnon(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(nil, config, false)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentListForUser(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ claims are required
 	validateError(t, 401, w)
 }
 
 func TestPaymentsUserForAllAsStranger(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("stranger-danger", ""), config, false)
 	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentListForUser(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
@@ -150,25 +152,25 @@ func TestPaymentsUserForAllAsStranger(t *testing.T) {
 // List with params
 // ------------------------------------------------------------------------------------------------
 func TestPaymentsListAllAsNonAdmin(t *testing.T) {
-	config := testConfig()
+	globalConfig, config := testConfig()
 	ctx := testContext(testToken("stranger-danger", ""), config, false)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, nil, nil, nil, nil).PaymentList(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, nil).PaymentList(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
 }
 
 func TestPaymentsListWithParams(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something?processor_id=stripe", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentList(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something?processor_id=stripe", nil)
+	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
@@ -178,13 +180,13 @@ func TestPaymentsListWithParams(t *testing.T) {
 }
 
 func TestPaymentsListNoParams(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentList(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
 
 	trans := []models.Transaction{}
 	extractPayload(t, 200, w, &trans)
@@ -193,26 +195,26 @@ func TestPaymentsListNoParams(t *testing.T) {
 }
 
 func TestPaymentsViewAsNonAdmin(t *testing.T) {
-	config := testConfig()
+	globalConfig, config := testConfig()
 	ctx := testContext(testToken("stranger-danger", ""), config, false)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, nil, nil, nil, nil).PaymentView(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, nil).PaymentView(ctx, w, r)
 
 	// should get a 401 ~ not the right user
 	validateError(t, 401, w)
 }
 
 func TestPaymentsView(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentView(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
 
 	trans := new(models.Transaction)
 	extractPayload(t, 200, w, trans)
@@ -221,77 +223,100 @@ func TestPaymentsView(t *testing.T) {
 }
 
 func TestPaymentsViewMissingPayment(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", "nonsense")
 
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("GET", "http://something", nil)
-	NewAPI(config, db, nil, nil, nil).PaymentView(ctx, w, r)
+	r := httptest.NewRequest("GET", "http://something", nil)
+	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
 
-	validateError(t, 404, w)
+	validateError(t, 404, w, "Transaction not found")
 }
 
 func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
 	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:      1,
-		Currency:    "monopoly-money",
-		StripeToken: "123",
+		Amount:   1,
+		Currency: "monopoly-money",
 	})
 
-	validateError(t, 400, w)
-}
-
-func TestPaymentsRefundMissingStripeToken(t *testing.T) {
-	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:      1,
-		Currency:    firstTransaction.ID,
-		StripeToken: "",
-	})
-	validateError(t, 400, w)
+	validateError(t, 400, w, "Currencies do not match")
 }
 
 func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:      1000,
-		Currency:    firstTransaction.Currency,
-		StripeToken: "123",
+		Amount:   1000,
+		Currency: "usd",
 	})
 
-	validateError(t, 400, w)
+	validateError(t, 400, w, "must be between 0 and the total amount")
+}
+
+func TestPaymentsRefundPaypal(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Content-Type", "application/json")
+		fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+	}))
+	defer server.Close()
+
+	db, globalConfig, config := db(t)
+	config.Payment.ProviderType = payments.PayPalProvider
+	config.Payment.PayPal.ClientID = "clientid"
+	config.Payment.PayPal.Secret = "secret"
+	config.Payment.PayPal.Env = server.URL
+	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx = kami.SetParam(ctx, "pay_id", secondTransaction.ID)
+	prov, err := createPaymentProvider(config)
+	require.Nil(t, err)
+	ctx = gcontext.WithPaymentProvider(ctx, prov)
+
+	params := &paypalPaymentParams{
+		Amount:       1,
+		Currency:     secondTransaction.Currency,
+		PaypalID:     "123",
+		PaypalUserID: "456",
+	}
+
+	body, _ := json.Marshal(params)
+	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	w := httptest.NewRecorder()
+
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
+
+	validateError(t, 400, w, "does not support refunds")
 }
 
 func TestPaymentsRefundUnknownPayment(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", "nothign")
 
-	params := &PaymentParams{
+	params := &stripePaymentParams{
 		Amount:      1,
 		Currency:    firstTransaction.Currency,
 		StripeToken: "123",
 	}
 
 	body, _ := json.Marshal(params)
-	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 
-	NewAPI(config, db, nil, nil, nil).PaymentRefund(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
 	validateError(t, 404, w)
 }
 
 func TestPaymentsRefundUnpaid(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 	firstTransaction.Status = models.PendingState
 	db.Save(firstTransaction)
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = context.WithValue(ctx, payerKey, nil)
+	ctx = gcontext.WithPaymentProvider(ctx, nil)
 
-	params := &PaymentParams{
+	params := &stripePaymentParams{
 		Amount:      1,
 		Currency:    firstTransaction.Currency,
 		StripeToken: "123",
@@ -299,43 +324,47 @@ func TestPaymentsRefundUnpaid(t *testing.T) {
 
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 
-	NewAPI(config, db, nil, nil, nil).PaymentRefund(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
 	validateError(t, 400, w)
 }
 
 func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRecorder, *gorm.DB) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = context.WithValue(ctx, payerKey, nil)
+	ctx = gcontext.WithPaymentProvider(ctx, nil)
 
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
 
-	NewAPI(config, db, nil, nil, nil).PaymentRefund(ctx, w, r)
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 	return w, db
 }
 
 func TestPaymentsRefundSuccess(t *testing.T) {
-	db, config := db(t)
-	provider := &memProvider{}
+	db, globalConfig, config := db(t)
+	// unused, but needed to pass safety check
+	config.Payment.ProviderType = "stripe"
+	config.Payment.Stripe.SecretKey = "secret"
+
+	provider := &memProvider{name: payments.StripeProvider}
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = withPayer(ctx, StripeChargerType, provider)
+	ctx = gcontext.WithPaymentProvider(ctx, provider)
 
-	params := &PaymentParams{
+	params := &stripePaymentParams{
 		Amount:      1,
 		Currency:    firstTransaction.Currency,
 		StripeToken: "123",
 	}
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
-	r, _ := http.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	NewAPI(config, db, nil, nil, nil).PaymentRefund(ctx, w, r)
+	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
+	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
 	rsp := new(models.Transaction)
 	extractPayload(t, 200, w, rsp)
@@ -388,8 +417,22 @@ func validateAllTransactions(t *testing.T, trans []models.Transaction) {
 	}
 }
 
+type stripePaymentParams struct {
+	Amount      uint64
+	Currency    string
+	StripeToken string `json:"stripe_token"`
+}
+
+type paypalPaymentParams struct {
+	Amount       uint64
+	Currency     string
+	PaypalID     string
+	PaypalUserID string
+}
+
 type memProvider struct {
 	refundCalls []refundCall
+	name        string
 }
 
 type refundCall struct {
@@ -397,18 +440,35 @@ type refundCall struct {
 	id     string
 }
 
-func (mp *memProvider) charge(amount uint64, currency, token, payerID string) (string, error) {
+func (mp *memProvider) Name() string {
+	return mp.name
+}
+func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request) (payments.Charger, error) {
+	return mp.charge, nil
+}
+func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
+	return mp.refund, nil
+}
+func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
+	return mp.preauthorize, nil
+}
+
+func (mp *memProvider) charge(amount uint64, currency string) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
-func (mp *memProvider) refund(amount uint64, id string) (string, error) {
+func (mp *memProvider) refund(transactionID string, amount uint64) (string, error) {
 	if mp.refundCalls == nil {
 		mp.refundCalls = []refundCall{}
 	}
 	mp.refundCalls = append(mp.refundCalls, refundCall{
 		amount: amount,
-		id:     id,
+		id:     transactionID,
 	})
 
 	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil
+}
+
+func (mp *memProvider) preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+	return nil, nil
 }

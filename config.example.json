@@ -23,6 +23,7 @@
     }
   },
   "payment": {
+    "type": "stripe",
     "stripe": {
       "secret_key": "Your secret key"
     },

@@ -1,10 +1,10 @@
 config.json
 gorm.db
-netlify-commerce
 gocommerce
 
 vendor/
 .idea
+.vscode
 *.iml
 
 .DS_Store

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -9,36 +8,37 @@ import (
 
 	"github.com/guregu/kami"
 	"github.com/netlify/gocommerce/conf"
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNoCoupons(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	ctx := testContext(nil, config, false)
 	ctx = kami.SetParam(ctx, "code", "coupon-code")
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://example.org", nil)
+	req := httptest.NewRequest("GET", "https://example.org", nil)
 
-	NewAPI(config, db, nil, nil, nil).CouponView(ctx, recorder, req)
+	NewAPI(globalConfig, config, db).CouponView(ctx, recorder, req)
 	validateError(t, 404, recorder)
 }
 
 func TestSimpleCouponLookup(t *testing.T) {
-	db, config := db(t)
+	db, globalConfig, config := db(t)
 
 	startTestCouponURLs(config)
 
 	ctx := testContext(nil, config, false)
 	ctx = kami.SetParam(ctx, "code", "coupon-code")
-	ctx = context.WithValue(ctx, couponsKey, NewCouponCacheFromUrl(config))
+	ctx = gcontext.WithCoupons(ctx, config)
 
 	recorder := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "https://example.org", nil)
+	req := httptest.NewRequest("GET", "https://example.org", nil)
 
-	NewAPI(config, db, nil, nil, nil).CouponView(ctx, recorder, req)
+	NewAPI(globalConfig, config, db).CouponView(ctx, recorder, req)
 	coupon := &models.Coupon{}
 	extractPayload(t, 200, recorder, coupon)
 	assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
