@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
@@ -746,8 +747,8 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 	assert.Equal(expected.State, actual.State)
 	assert.Equal(expected.ShippingAddressID, actual.ShippingAddressID)
 	assert.Equal(expected.BillingAddressID, actual.BillingAddressID)
-	assert.Equal(expected.CreatedAt.Unix(), actual.CreatedAt.Unix())
-	assert.Equal(expected.UpdatedAt.Unix(), actual.UpdatedAt.Unix())
+	assert.WithinDuration(expected.CreatedAt, actual.CreatedAt, time.Duration(1)*time.Second)
+	assert.WithinDuration(expected.UpdatedAt, actual.UpdatedAt, time.Duration(1)*time.Second)
 	assert.Equal(expected.VATNumber, actual.VATNumber)
 
 	// we don't return the actual user
