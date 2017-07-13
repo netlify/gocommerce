@@ -254,9 +254,15 @@ func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 }
 
 func TestPaymentsRefundPaypal(t *testing.T) {
+	refundID := "4CF18861HF410323U"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+		if r.URL.Path == "/v1/oauth2/token" {
+			w.Header().Add("Content-Type", "application/json")
+			fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+		} else if r.URL.Path == "/v1/payments/sale/"+secondTransaction.ProcessorID+"/refund" {
+			w.Header().Add("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"`+refundID+`"}`)
+		}
 	}))
 	defer server.Close()
 
@@ -284,7 +290,9 @@ func TestPaymentsRefundPaypal(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
-	validateError(t, http.StatusBadRequest, w, "does not support refunds")
+	rsp := models.Transaction{}
+	extractPayload(t, http.StatusOK, w, &rsp)
+	assert.Equal(t, refundID, rsp.ProcessorID)
 }
 
 func TestPaymentsRefundUnknownPayment(t *testing.T) {
@@ -436,8 +444,9 @@ type memProvider struct {
 }
 
 type refundCall struct {
-	amount uint64
-	id     string
+	amount   uint64
+	id       string
+	currency string
 }
 
 func (mp *memProvider) Name() string {
@@ -457,13 +466,14 @@ func (mp *memProvider) charge(amount uint64, currency string) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
-func (mp *memProvider) refund(transactionID string, amount uint64) (string, error) {
+func (mp *memProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
 	if mp.refundCalls == nil {
 		mp.refundCalls = []refundCall{}
 	}
 	mp.refundCalls = append(mp.refundCalls, refundCall{
-		amount: amount,
-		id:     transactionID,
+		amount:   amount,
+		id:       transactionID,
+		currency: currency,
 	})
 
 	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil

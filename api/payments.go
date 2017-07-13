@@ -300,7 +300,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 	tx.Create(m)
 	provID := provider.Name()
 	log.Debugf("Starting refund to %s", provID)
-	refundID, err := refund(trans.ProcessorID, params.Amount)
+	refundID, err := refund(trans.ProcessorID, params.Amount, params.Currency)
 	if err != nil {
 		log.WithError(err).Info("Failed to refund value")
 		m.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)

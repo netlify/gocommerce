@@ -23,7 +23,7 @@ type Provider interface {
 type Charger func(amount uint64, currency string) (string, error)
 
 // Refunder wraps the Refund method which refunds payments with the provider.
-type Refunder func(transactionID string, amount uint64) (string, error)
+type Refunder func(transactionID string, amount uint64, currency string) (string, error)
 
 // Preauthorizer wraps the Preauthorize method which pre-authorizes a payment
 // with the provider.
