@@ -6,3 +6,4 @@ RUN useradd -m netlify && cd /go/src/github.com/netlify/gocommerce && make deps 
 
 USER netlify
 CMD ["gocommerce"]
+EXPOSE 8080
