@@ -1,5 +1,5 @@
 config.json
-gorm.db
+*.db
 gocommerce
 
 vendor/

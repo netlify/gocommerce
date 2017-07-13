@@ -8,8 +8,7 @@ import (
 
 // AddressRequest is the raw address data
 type AddressRequest struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	Name string `json:"name"`
 
 	Company  string `json:"company"`
 	Address1 string `json:"address1"`
@@ -41,11 +40,11 @@ func (Address) TableName() string {
 // Validate validates the AddressRequest model
 func (a AddressRequest) Validate() error {
 	required := map[string]string{
-		"last name": a.LastName,
-		"address":   a.Address1,
-		"country":   a.Country,
-		"city":      a.City,
-		"zip":       a.Zip,
+		"name":    a.Name,
+		"address": a.Address1,
+		"country": a.Country,
+		"city":    a.City,
+		"zip":     a.Zip,
 	}
 
 	missing := []string{}

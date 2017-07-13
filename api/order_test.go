@@ -33,7 +33,7 @@ func TestOrderCreate(t *testing.T) {
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
-				"first_name": "Test", "last_name": "User",
+				"name": "Test User",
 				"address1": "610 22nd Street",
 				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
 			},
@@ -60,7 +60,7 @@ func TestOrderCreate(t *testing.T) {
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
-				"first_name": "Test", "last_name": "User",
+				"name": "Test User",
 				"address1": "Branengebranen",
 				"city": "Berlin", "country": "Germany", "zip": "94107"
 			},
@@ -86,7 +86,7 @@ func TestOrderCreate(t *testing.T) {
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
-				"first_name": "Test", "last_name": "User",
+				"name": "Test User",
 				"address1": "Branengebranen",
 				"city": "Berlin", "country": "Germany", "zip": "94107"
 			},
