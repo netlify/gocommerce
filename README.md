@@ -32,7 +32,7 @@ the order is legitimate before using Stripe to charge the client.
 
 The metadata can be anywhere on the page, and goes in a script tag in this format:
 
-<script id="gocommerce-product" type="application/json">
+<script class="gocommerce-product" type="application/json">
 {"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
 </script>
 
