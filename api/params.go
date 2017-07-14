@@ -11,6 +11,11 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
+type sortDirection string
+
+const ascending sortDirection = "asc"
+const descending sortDirection = "desc"
+
 var sortFields = map[string]string{
 	"created_at": "created_at",
 	"updated_at": "updated_at",
@@ -63,8 +68,7 @@ func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 }
 
 func sortField(value string) string {
-	field, _ := sortFields[value]
-	return field
+	return sortFields[value]
 }
 
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
@@ -99,18 +103,18 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 			if field == "" {
 				return nil, fmt.Errorf("bad field for sort '%v'", field)
 			}
-			dir := "asc"
+			dir := ascending
 			if len(parts) == 2 {
 				switch strings.ToLower(parts[1]) {
-				case "asc":
-					dir = "asc"
-				case "desc":
-					dir = "desc"
+				case string(ascending):
+					dir = ascending
+				case string(descending):
+					dir = descending
 				default:
 					return nil, fmt.Errorf("bad direction for sort '%v', only 'asc' and 'desc' allowed", parts[1])
 				}
 			}
-			query = query.Order(field + " " + dir)
+			query = query.Order(field + " " + string(dir))
 		}
 	} else {
 		fmt.Println("Sorting by created_at desc")

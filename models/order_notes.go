@@ -2,6 +2,7 @@ package models
 
 import "time"
 
+// OrderNote model which represent notes on a model.
 type OrderNote struct {
 	ID int64 `json:"-"`
 
@@ -14,6 +15,7 @@ type OrderNote struct {
 	DeletedAt *time.Time `json:"-"`
 }
 
+// TableName returns the database table name for the OrderNote model.
 func (OrderNote) TableName() string {
 	return tableName("orders_notes")
 }

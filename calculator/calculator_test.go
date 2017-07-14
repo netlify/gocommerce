@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type TestItem struct {
@@ -183,7 +184,7 @@ func TestPricingItems(t *testing.T) {
 
 func TestMemberDiscounts(t *testing.T) {
 	settings := &Settings{PricesIncludeTaxes: true, MemberDiscounts: []*MemberDiscount{&MemberDiscount{
-		Claims: map[string]string{"app_metadata.plan": "member"},
+		Claims:     map[string]string{"app_metadata.plan": "member"},
 		Percentage: 10,
 	}}}
 	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
@@ -194,7 +195,7 @@ func TestMemberDiscounts(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Total)
 
 	claims := map[string]interface{}{}
-	json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims)
+	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
 
 	price = CalculatePrice(settings, claims, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
 

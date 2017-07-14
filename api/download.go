@@ -11,8 +11,9 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-const MaxIPsPerDay = 50
+const maxIPsPerDay = 50
 
+// DownloadURL returns a signed URL to download a purchased asset.
 func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	id := kami.Param(ctx, "id")
 	log := gcontext.GetLogger(ctx).WithField("download_id", id)
@@ -66,9 +67,14 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 	var count uint64
 	for rows.Next() {
-		rows.Scan(&count)
+		err = rows.Scan(&count)
+		if err != nil {
+			log.WithError(err).Warnf("Error while signing download: %s", err)
+			internalServerError(w, "Error signing download: %v", err)
+			return
+		}
 	}
-	if count > MaxIPsPerDay {
+	if count > maxIPsPerDay {
 		unauthorizedError(w, "This download has been accessed from too many IPs within the last day")
 		return
 	}
@@ -87,6 +93,7 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, http.StatusOK, download)
 }
 
+// DownloadList lists all purchased downloads for an order or a user.
 func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	orderID := kami.Param(ctx, "order_id")
 	log := gcontext.GetLogger(ctx)

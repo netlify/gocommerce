@@ -6,11 +6,13 @@ import (
 	"time"
 )
 
+// FixedAmount represents an amount and currency pair
 type FixedAmount struct {
 	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
+// Coupon represents a discount redeemable with a code.
 type Coupon struct {
 	Code string `json:"code"`
 
@@ -24,6 +26,7 @@ type Coupon struct {
 	Claims       map[string]interface{} `json:"claims,omitempty"`
 }
 
+// Valid returns whether a coupon is valid or not.
 func (c *Coupon) Valid() bool {
 	if c.StartDate != nil && time.Now().Before(*c.StartDate) {
 		return false
@@ -34,6 +37,7 @@ func (c *Coupon) Valid() bool {
 	return true
 }
 
+// ValidForType returns whether a coupon applies to a specific product type.
 func (c *Coupon) ValidForType(productType string) bool {
 	if c == nil {
 		return false
@@ -52,14 +56,18 @@ func (c *Coupon) ValidForType(productType string) bool {
 	return false
 }
 
+// ValidForPrice returns whether a coupon applies to a specific amount.
 func (c *Coupon) ValidForPrice(currency string, price uint64) bool {
 	// TODO: Support for coupons based on amount
 	return true
 }
 
+// PercentageDiscount returns the percentage discount of a Coupon.
 func (c *Coupon) PercentageDiscount() uint64 {
 	return c.Percentage
 }
+
+// FixedDiscount returns the amount of fixed discount for a Coupon.
 func (c *Coupon) FixedDiscount(currency string) uint64 {
 	if c.FixedAmount != nil {
 		for _, discount := range c.FixedAmount {

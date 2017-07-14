@@ -1,11 +1,11 @@
 package assetstores
 
-type NOOPProvider struct{}
+type noopProvider struct{}
 
-func NewNOOPProvider() (*NOOPProvider, error) {
-	return &NOOPProvider{}, nil
+func newNoopProvider() (*noopProvider, error) {
+	return &noopProvider{}, nil
 }
 
-func (n *NOOPProvider) SignURL(url string) (string, error) {
+func (n *noopProvider) SignURL(url string) (string, error) {
 	return url, nil
 }

@@ -52,6 +52,7 @@ func tableName(defaultName string) string {
 	return defaultName
 }
 
+// AutoMigrate runs the gorm automigration for all models
 func AutoMigrate(db *gorm.DB) error {
 	db = db.AutoMigrate(Address{},
 		LineItem{},

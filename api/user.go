@@ -70,15 +70,15 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	i := 0
 	for rows.Next() {
 		var id, email string
-		var created_at, updated_at time.Time
-		var order_count int64
-		err := rows.Scan(&id, &email, &created_at, &updated_at, &order_count)
+		var createdAt, updatedAt time.Time
+		var orderCount int64
+		err := rows.Scan(&id, &email, &createdAt, &updatedAt, &orderCount)
 		if err != nil {
 			log.WithError(err).Warn("Error while querying the database")
 			internalServerError(w, "Failed to execute request")
 			return
 		}
-		users[i].OrderCount = order_count
+		users[i].OrderCount = orderCount
 		i++
 	}
 
@@ -339,7 +339,7 @@ func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTT
 
 	isAdmin := gcontext.IsAdmin(ctx)
 	if isAdmin {
-		ctx = gcontext.WithLogger(ctx, log.WithField("admin_id", claims.ID))
+		gcontext.WithLogger(ctx, log.WithField("admin_id", claims.ID))
 	}
 
 	if claims.ID != userID && !isAdmin {

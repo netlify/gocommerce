@@ -7,6 +7,7 @@ import (
 	"github.com/netlify/gocommerce/claims"
 )
 
+// Price represents the total price of all line items.
 type Price struct {
 	Items []ItemPrice
 
@@ -16,6 +17,7 @@ type Price struct {
 	Total    uint64
 }
 
+// ItemPrice is the price of a single line item.
 type ItemPrice struct {
 	Quantity uint64
 
@@ -25,12 +27,14 @@ type ItemPrice struct {
 	Total    uint64
 }
 
+// Settings represent the site-wide settings for price calculation.
 type Settings struct {
 	PricesIncludeTaxes bool              `json:"prices_include_taxes"`
 	Taxes              []*Tax            `json:"taxes"`
 	MemberDiscounts    []*MemberDiscount `json:"member_discounts"`
 }
 
+// Tax represents a tax, potentially specific to countries and product types.
 type Tax struct {
 	Percentage   uint64   `json:"percentage"`
 	ProductTypes []string `json:"product_types"`
@@ -42,11 +46,14 @@ type taxAmount struct {
 	percentage uint64
 }
 
+// FixedMemberDiscount represents a fixed discount given to members.
 type FixedMemberDiscount struct {
 	Amount   string `json:"amount"`
 	Currency string `json:"currency"`
 }
 
+// MemberDiscount represents a discount given to members, either fixed
+// or a percentage.
 type MemberDiscount struct {
 	Claims       map[string]string      `json:"claims"`
 	Percentage   uint64                 `json:"percentage"`
@@ -54,6 +61,7 @@ type MemberDiscount struct {
 	ProductTypes []string               `json:"product_types"`
 }
 
+// ValidForType returns whether a member discount is valid for a product type.
 func (d *MemberDiscount) ValidForType(productType string) bool {
 	if d.ProductTypes == nil || len(d.ProductTypes) == 0 {
 		return true
@@ -66,6 +74,7 @@ func (d *MemberDiscount) ValidForType(productType string) bool {
 	return false
 }
 
+// Item is the interface for a single line item needed to do price calculation.
 type Item interface {
 	PriceInLowestUnit() uint64
 	ProductType() string
@@ -74,6 +83,7 @@ type Item interface {
 	GetQuantity() uint64
 }
 
+// Coupon is the interface for a coupon needed to do price calculation.
 type Coupon interface {
 	ValidForType(string) bool
 	ValidForPrice(string, uint64) bool
@@ -81,9 +91,10 @@ type Coupon interface {
 	FixedDiscount(string) uint64
 }
 
-func (c *MemberDiscount) FixedDiscount(currency string) uint64 {
-	if c.FixedAmount != nil {
-		for _, discount := range c.FixedAmount {
+// FixedDiscount returns what the fixed discount amount is for a particular currency.
+func (d *MemberDiscount) FixedDiscount(currency string) uint64 {
+	if d.FixedAmount != nil {
+		for _, discount := range d.FixedAmount {
 			if discount.Currency == currency {
 				amount, _ := strconv.ParseFloat(discount.Amount, 64)
 				return rint(amount * 100)
@@ -94,6 +105,7 @@ func (c *MemberDiscount) FixedDiscount(currency string) uint64 {
 	return 0
 }
 
+// AppliesTo determines if the tax applies to the country AND product type provided.
 func (t *Tax) AppliesTo(country, productType string) bool {
 	applies := true
 	if t.ProductTypes != nil && len(t.ProductTypes) > 0 {
@@ -120,6 +132,8 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 	return applies
 }
 
+// CalculatePrice will calculate the final total price. It takes into account
+// currency, country, coupons, and discounts.
 func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, country, currency string, coupon Coupon, items []Item) Price {
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes

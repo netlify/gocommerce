@@ -96,7 +96,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	mux.Get("/downloads", api.DownloadList)
 	mux.Get("/orders/:order_id/downloads", api.DownloadList)
 
-	mux.Get("/vatnumbers/:number", api.VatnumberLookup)
+	mux.Get("/vatnumbers/:number", api.VatNumberLookup)
 
 	mux.Get("/payments", api.PaymentList)
 	mux.Get("/payments/:pay_id", api.PaymentView)

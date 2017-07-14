@@ -6,7 +6,10 @@ import (
 	"github.com/pborman/uuid"
 )
 
+// ChargeTransactionType is the charge transaction type.
 const ChargeTransactionType = "charge"
+
+// RefundTransactionType is the refund transaction type.
 const RefundTransactionType = "refund"
 
 // Transaction is an transaction with a payment provider
@@ -33,6 +36,7 @@ type Transaction struct {
 	DeletedAt *time.Time `json:"-"`
 }
 
+// TableName returns the database table name for the Transaction model.
 func (Transaction) TableName() string {
 	return tableName("transactions")
 }

@@ -22,19 +22,19 @@ import (
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
 const MaxConcurrentLookups = 10
 
-type OrderLineItem struct {
+type orderLineItem struct {
 	Sku      string                 `json:"sku"`
 	Path     string                 `json:"path"`
 	Quantity uint64                 `json:"quantity"`
-	Addons   []OrderAddon           `json:"addons"`
+	Addons   []orderAddon           `json:"addons"`
 	MetaData map[string]interface{} `json:"meta"`
 }
 
-type OrderAddon struct {
+type orderAddon struct {
 	Sku string `json:"sku"`
 }
 
-type OrderParams struct {
+type orderRequestParams struct {
 	SessionID string `json:"session_id"`
 
 	Email string `json:"email"`
@@ -51,7 +51,7 @@ type OrderParams struct {
 
 	MetaData map[string]interface{} `json:"meta"`
 
-	LineItems []*OrderLineItem `json:"line_items"`
+	LineItems []*orderLineItem `json:"line_items"`
 
 	Currency string `json:"currency"`
 
@@ -60,7 +60,7 @@ type OrderParams struct {
 	CouponCode string `json:"coupon"`
 }
 
-type ReceiptParams struct {
+type receiptParams struct {
 	Email string `json:"email"`
 }
 
@@ -148,12 +148,13 @@ func (a *API) ClaimOrders(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, http.StatusNoContent, "")
 }
 
+// ResendOrderReceipt resends the email receipt for an order
 func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	id := kami.Param(ctx, "order_id")
 	log := gcontext.GetLogger(ctx)
 	claims := gcontext.GetClaims(ctx)
 
-	params := &ReceiptParams{}
+	params := &receiptParams{}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
@@ -208,6 +209,7 @@ func (a *API) ResendOrderReceipt(ctx context.Context, w http.ResponseWriter, r *
 //  - email
 //  - items
 
+// OrderList lists orders selected by the query parameters provided.
 func (a *API) OrderList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := gcontext.GetLogger(ctx)
 
@@ -305,7 +307,7 @@ func (a *API) OrderCreate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	log := gcontext.GetLogger(ctx)
 	config := gcontext.GetConfig(ctx)
 
-	params := &OrderParams{Currency: "USD"}
+	params := &orderRequestParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
@@ -433,7 +435,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	orderParams := new(OrderParams)
+	orderParams := new(orderRequestParams)
 	err := json.NewDecoder(r.Body).Decode(orderParams)
 	if err != nil {
 		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
@@ -559,7 +561,7 @@ func (a *API) OrderUpdate(ctx context.Context, w http.ResponseWriter, r *http.Re
 	//
 	// handle the line items
 	//
-	updatedItems := make(map[string]*OrderLineItem)
+	updatedItems := make(map[string]*orderLineItem)
 	for _, item := range orderParams.LineItems {
 		updatedItems[item.Sku] = item
 	}
@@ -640,7 +642,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	return nil
 }
 
-func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*OrderLineItem) *HTTPError {
+func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) *HTTPError {
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
@@ -655,7 +657,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		order.LineItems = append(order.LineItems, lineItem)
 		sem <- 1
 		wg.Add(1)
-		go func(item *models.LineItem, orderItem *OrderLineItem) {
+		go func(item *models.LineItem, orderItem *orderLineItem) {
 			defer func() {
 				wg.Done()
 				<-sem
@@ -751,7 +753,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	return address, nil
 }
 
-func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *OrderLineItem) error {
+func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *orderLineItem) error {
 	config := gcontext.GetConfig(ctx)
 	jwtClaims := gcontext.GetClaimsAsMap(ctx)
 	resp, err := a.httpClient.Get(config.SiteURL + item.Path)

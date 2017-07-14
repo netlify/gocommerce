@@ -6,7 +6,9 @@ import (
 )
 
 const (
+	// StripeProvider is the string identifier for the Stripe payment provider.
 	StripeProvider = "stripe"
+	// PayPalProvider is the string identifier for the PayPal payment provider.
 	PayPalProvider = "paypal"
 )
 

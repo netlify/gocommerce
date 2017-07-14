@@ -6,6 +6,7 @@ import (
 	"time"
 )
 
+// AddressRequest is the raw address data
 type AddressRequest struct {
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
@@ -19,6 +20,7 @@ type AddressRequest struct {
 	Zip      string `json:"zip"`
 }
 
+// Address is a stored address, reusable with an ID.
 type Address struct {
 	AddressRequest
 
@@ -31,10 +33,12 @@ type Address struct {
 	DeletedAt *time.Time `json:"deleted_at"`
 }
 
+// TableName returns the table name used for the Address model
 func (Address) TableName() string {
 	return tableName("addresses")
 }
 
+// Validate validates the AddressRequest model
 func (a AddressRequest) Validate() error {
 	required := map[string]string{
 		"last name": a.LastName,

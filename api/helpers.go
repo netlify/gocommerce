@@ -4,22 +4,19 @@ import (
 	"encoding/json"
 	"net/http"
 
-	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/netlify/gocommerce/claims"
+	"github.com/Sirupsen/logrus"
 )
 
 func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	encoder := json.NewEncoder(w)
-	encoder.Encode(obj)
-}
-
-func userIDFromToken(token *jwt.Token) string {
-	if token == nil {
-		return ""
+	b, err := json.Marshal(obj)
+	if err != nil {
+		logrus.WithError(err).Errorf("Error encoding json response: %v", obj)
+		// not using internalServerError here to avoid a potential infinite loop
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"code":500,"msg":"Error encoding json response: ` + err.Error() + `"}`))
+		return
 	}
-
-	claims := token.Claims.(*claims.JWTClaims)
-	return claims.ID
+	w.WriteHeader(status)
+	w.Write(b)
 }

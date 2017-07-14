@@ -13,11 +13,12 @@ import (
 	"github.com/pborman/uuid"
 )
 
-const MaxConcurrentHooks = 5
-const MaxRetries = 5
-const RetryPeriod = 30 * time.Second
-const SignatureExpiration = 5 * time.Minute
+const maxConcurrentHooks = 5
+const maxRetries = 5
+const retryPeriod = 30 * time.Second
+const signatureExpiration = 5 * time.Minute
 
+// Hook represents a webhook.
 type Hook struct {
 	ID uint64
 
@@ -46,10 +47,12 @@ type Hook struct {
 	CompletedAt *time.Time
 }
 
+// TableName returns the database table name for the Hook model.
 func (Hook) TableName() string {
 	return tableName("hooks")
 }
 
+// NewHook creates a Hook model.
 func NewHook(hookType, url, userID, secret string, payload interface{}) *Hook {
 	json, _ := json.Marshal(payload)
 	return &Hook{
@@ -61,6 +64,7 @@ func NewHook(hookType, url, userID, secret string, payload interface{}) *Hook {
 	}
 }
 
+// Trigger creates and executes the HTTP request for a Hook.
 func (h *Hook) Trigger(client *http.Client, log *logrus.Entry) (*http.Response, error) {
 	log.Infof("Triggering hook %v: %v", h.ID, h.URL)
 	h.Tries++
@@ -72,7 +76,7 @@ func (h *Hook) Trigger(client *http.Client, log *logrus.Entry) (*http.Response, 
 	if h.Secret != "" {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub": h.UserID,
-			"exp": time.Now().Add(SignatureExpiration),
+			"exp": time.Now().Add(signatureExpiration),
 		})
 		tokenString, err := token.SignedString([]byte(h.Secret))
 		if err != nil {
@@ -100,13 +104,13 @@ func (h *Hook) handleError(db *gorm.DB, log *logrus.Entry, resp *http.Response, 
 	}
 
 	now := time.Now()
-	if h.Tries >= MaxRetries {
-		log.Errorf("Hook %v failed more than %v times. %v. Giving up.", h.ID, MaxRetries, err)
+	if h.Tries >= maxRetries {
+		log.Errorf("Hook %v failed more than %v times. %v. Giving up.", h.ID, maxRetries, err)
 		h.Failed = true
 		h.Done = true
 		h.CompletedAt = &now
 	} else {
-		runAfter := now.Add(time.Duration(h.Tries) * RetryPeriod)
+		runAfter := now.Add(time.Duration(h.Tries) * retryPeriod)
 		h.RunAfter = &runAfter
 		log.Errorf("Hook %v failed %v - retrying at %v", h.ID, err, runAfter)
 	}
@@ -127,10 +131,11 @@ func (h *Hook) handleSuccess(db *gorm.DB, log *logrus.Entry, resp *http.Response
 	db.Save(h)
 }
 
+// RunHooks creates a goroutine that triggers stored webhooks every 5 seconds.
 func RunHooks(db *gorm.DB, log *logrus.Entry) {
 	go func() {
 		id := uuid.NewRandom().String()
-		sem := make(chan bool, MaxConcurrentHooks)
+		sem := make(chan bool, maxConcurrentHooks)
 		table := Hook{}.TableName()
 		client := &http.Client{}
 		for {

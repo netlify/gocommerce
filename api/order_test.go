@@ -44,8 +44,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
 
-	var total uint64
-	total = 999
+	var total uint64 = 999
 	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 	assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 999, was %v", order.Total))
 	if len(order.LineItems) != 1 {
@@ -84,10 +83,8 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
 
-	var total uint64
-	total = 1069
-	var taxes uint64
-	taxes = 70
+	var total uint64 = 1069
+	var taxes uint64 = 70
 	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 	assert.Equal(t, "Germany", order.ShippingAddress.Country)
 	assert.Equal(t, "Germany", order.BillingAddress.Country)
@@ -117,10 +114,8 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
 
-	var total uint64
-	total = 1105
-	var taxes uint64
-	taxes = 106
+	var total uint64 = 1105
+	var taxes uint64 = 106
 	assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 	assert.Equal(t, "Germany", order.ShippingAddress.Country)
 	assert.Equal(t, "Germany", order.BillingAddress.Country)
@@ -247,7 +242,7 @@ func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "[]\n", recorder.Body.String())
+	assert.Equal(t, "[]", recorder.Body.String())
 }
 
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
@@ -471,7 +466,7 @@ func TestOrderUpdateFields(t *testing.T) {
 	defer db.Save(firstOrder)
 	assert := assert.New(t)
 
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
+	recorder := runUpdate(t, db, firstOrder, &orderRequestParams{
 		Email:    "mrfreeze@dc.com",
 		Currency: "monopoly-dollars",
 	})
@@ -504,17 +499,17 @@ func TestOrderUpdateAddress_ExistingAddress(t *testing.T) {
 	newAddr := getTestAddress()
 	newAddr.ID = "new-addr"
 	newAddr.UserID = firstOrder.UserID
-	rsp := db.Create(newAddr)
+	db.Create(newAddr)
 	defer db.Unscoped().Delete(newAddr)
 
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
+	recorder := runUpdate(t, db, firstOrder, &orderRequestParams{
 		BillingAddressID: newAddr.ID,
 	})
 	rspOrder := new(models.Order)
 	extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 	saved := new(models.Order)
-	rsp = db.First(saved, "id = ?", firstOrder.ID)
+	rsp := db.First(saved, "id = ?", firstOrder.ID)
 	assert.False(rsp.RecordNotFound())
 
 	// now we load the addresses
@@ -534,7 +529,7 @@ func TestOrderUpdateAddress_NewAddress(t *testing.T) {
 	assert := assert.New(t)
 
 	paramsAddress := getTestAddress()
-	recorder := runUpdate(t, db, firstOrder, &OrderParams{
+	recorder := runUpdate(t, db, firstOrder, &orderRequestParams{
 		// should create a new address associated with the order's user
 		ShippingAddress: paramsAddress,
 	})
@@ -561,7 +556,7 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
-	params := &OrderParams{
+	params := &orderRequestParams{
 		Email:    "mrfreeze@dc.com",
 		Currency: "monopoly-dollars",
 	}
@@ -584,7 +579,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 	ctx := testContext(nil, config, false)
 	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
-	params := &OrderParams{
+	params := &orderRequestParams{
 		Email:    "mrfreeze@dc.com",
 		Currency: "monopoly-dollars",
 	}
@@ -605,7 +600,7 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 func TestOrderUpdateWithNewData(t *testing.T) {
 	db, _, _ := db(t)
 	assert := assert.New(t)
-	op := &OrderParams{
+	op := &orderRequestParams{
 		MetaData: map[string]interface{}{
 			"thing":       float64(1),
 			"red":         "fish",
@@ -709,7 +704,7 @@ func TestClaimOrdersMultipleTimes(t *testing.T) {
 // HELPERS
 // -------------------------------------------------------------------------------------------------------------------
 
-func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *OrderParams) *httptest.ResponseRecorder {
+func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *orderRequestParams) *httptest.ResponseRecorder {
 	globalConfig, config := testConfig()
 	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
 	ctx = kami.SetParam(ctx, "id", order.ID)
