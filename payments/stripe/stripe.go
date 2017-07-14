@@ -79,7 +79,7 @@ func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 	return s.refund, nil
 }
 
-func (s *stripePaymentProvider) refund(transactionID string, amount uint64) (string, error) {
+func (s *stripePaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
 	ref, err := s.client.Refunds.New(&stripe.RefundParams{
 		Charge: transactionID,
 		Amount: amount,

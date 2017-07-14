@@ -118,8 +118,19 @@ func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount u
 }
 
 func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
-	// TODO ~ refund via paypal #58
-	return nil, errors.New("PayPal provider does not support refunds")
+	return p.refund, nil
+}
+
+func (p *paypalPaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+	amt := &paypalsdk.Amount{
+		Total:    strconv.FormatUint(amount, 10),
+		Currency: currency,
+	}
+	ref, err := p.client.RefundSale(transactionID, amt)
+	if err != nil {
+		return "", err
+	}
+	return ref.ID, nil
 }
 
 func (p *paypalPaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {

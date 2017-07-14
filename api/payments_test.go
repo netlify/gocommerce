@@ -254,9 +254,22 @@ func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 }
 
 func TestPaymentsRefundPaypal(t *testing.T) {
+	var loginCount, refundCount int
+	refundID := "4CF18861HF410323U"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+		switch r.URL.Path {
+		case "/v1/oauth2/token":
+			w.Header().Add("Content-Type", "application/json")
+			fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+			loginCount++
+		case "/v1/payments/sale/" + secondTransaction.ProcessorID + "/refund":
+			w.Header().Add("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"`+refundID+`"}`)
+			refundCount++
+		default:
+			w.WriteHeader(500)
+			t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -284,7 +297,12 @@ func TestPaymentsRefundPaypal(t *testing.T) {
 
 	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
 
-	validateError(t, http.StatusBadRequest, w, "does not support refunds")
+	rsp := models.Transaction{}
+	extractPayload(t, http.StatusOK, w, &rsp)
+	assert.Equal(t, refundID, rsp.ProcessorID)
+	// this is 2 because we manually create a PayPal provider to pass in our test context.
+	assert.Equal(t, 2, loginCount, "too many login calls")
+	assert.Equal(t, 1, refundCount, "too many refund calls")
 }
 
 func TestPaymentsRefundUnknownPayment(t *testing.T) {
@@ -436,8 +454,9 @@ type memProvider struct {
 }
 
 type refundCall struct {
-	amount uint64
-	id     string
+	amount   uint64
+	id       string
+	currency string
 }
 
 func (mp *memProvider) Name() string {
@@ -457,13 +476,14 @@ func (mp *memProvider) charge(amount uint64, currency string) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
-func (mp *memProvider) refund(transactionID string, amount uint64) (string, error) {
+func (mp *memProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
 	if mp.refundCalls == nil {
 		mp.refundCalls = []refundCall{}
 	}
 	mp.refundCalls = append(mp.refundCalls, refundCall{
-		amount: amount,
-		id:     transactionID,
+		amount:   amount,
+		id:       transactionID,
+		currency: currency,
 	})
 
 	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil
