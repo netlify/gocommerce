@@ -17,11 +17,15 @@ import (
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/mailer"
+	"github.com/netlify/netlify-commons/graceful"
+)
+
+const (
+	defaultVersion = "unknown version"
 )
 
 var (
-	defaultVersion = "unknown version"
-	bearerRegexp   = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
+	bearerRegexp = regexp.MustCompile(`^(?:B|b)earer (\S+$)`)
 )
 
 // API is the main REST API
@@ -34,8 +38,16 @@ type API struct {
 }
 
 // ListenAndServe starts the REST API.
-func (a *API) ListenAndServe(hostAndPort string) error {
-	return http.ListenAndServe(hostAndPort, a.handler)
+func (a *API) ListenAndServe(hostAndPort string) {
+	log := logrus.WithField("component", "api")
+	server := graceful.NewGracefulServer(a.handler, log)
+	if err := server.Bind(hostAndPort); err != nil {
+		log.WithError(err).Fatal("http server bind failed")
+	}
+
+	if err := server.Listen(); err != nil {
+		log.WithError(err).Fatal("http server listen failed")
+	}
 }
 
 // NewAPI instantiates a new REST API using the default version.

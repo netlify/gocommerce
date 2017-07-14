@@ -1,5 +1,5 @@
-hash: b62425c7471b673ef332831280c63ff9af072e0bdaf8362077eef50556cf2c4e
-updated: 2017-07-21T15:36:40.198060023-04:00
+hash: d8b5996b295302f678b4559566ba9bcbdb639d4bc3ef033f1ee6b5eb65577d07
+updated: 2017-07-24T11:21:56.156568708-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -46,6 +46,10 @@ imports:
   version: d0303fe809921458f417bcf828397a65db30a7e4
 - name: github.com/netlify/mailme
   version: 3b136431fdebea1d886bbd1a30b23c43e2d8b4d0
+- name: github.com/netlify/netlify-commons
+  version: f68ed34018cacf559b24b1ebe0a1007e938b8f5c
+  subpackages:
+  - graceful
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-toml
