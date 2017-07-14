@@ -1,4 +1,4 @@
-# GoCommerce
+# GoCommerce [![Build Status](https://travis-ci.org/netlify/gocommerce.svg?branch=master)](https://travis-ci.org/netlify/gocommerce)
 
 A small go based API for static e-commerce sites.
 
