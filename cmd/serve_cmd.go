@@ -57,5 +57,5 @@ func serve(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
 
 	models.RunHooks(bgDB, logrus.WithField("component", "hooks"))
 
-	logrus.WithError(api.ListenAndServe(l)).Fatal("Error listening")
+	api.ListenAndServe(l)
 }

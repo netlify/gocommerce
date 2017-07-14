@@ -37,5 +37,5 @@ func multi(config *conf.GlobalConfiguration) {
 
 	models.RunHooks(bgDB, logrus.WithField("component", "hooks"))
 
-	logrus.WithError(api.ListenAndServe(l)).Fatal("Error listening")
+	api.ListenAndServe(l)
 }
