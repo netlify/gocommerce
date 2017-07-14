@@ -12,6 +12,7 @@ func sendJSON(w http.ResponseWriter, status int, obj interface{}) {
 	b, err := json.Marshal(obj)
 	if err != nil {
 		logrus.WithError(err).Errorf("Error encoding json response: %v", obj)
+		// not using internalServerError here to avoid a potential infinite loop
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(`{"code":500,"msg":"Error encoding json response: ` + err.Error() + `"}`))
 		return
