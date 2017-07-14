@@ -242,7 +242,7 @@ func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	api := NewAPI(globalConfig, config, db)
 	api.OrderList(ctx, recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "[]\n", recorder.Body.String())
+	assert.Equal(t, "[]", recorder.Body.String())
 }
 
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
