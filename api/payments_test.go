@@ -254,14 +254,21 @@ func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
 }
 
 func TestPaymentsRefundPaypal(t *testing.T) {
+	var loginCount, refundCount int
 	refundID := "4CF18861HF410323U"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v1/oauth2/token" {
+		switch r.URL.Path {
+		case "/v1/oauth2/token":
 			w.Header().Add("Content-Type", "application/json")
 			fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
-		} else if r.URL.Path == "/v1/payments/sale/"+secondTransaction.ProcessorID+"/refund" {
+			loginCount++
+		case "/v1/payments/sale/" + secondTransaction.ProcessorID + "/refund":
 			w.Header().Add("Content-Type", "application/json")
 			fmt.Fprint(w, `{"id":"`+refundID+`"}`)
+			refundCount++
+		default:
+			w.WriteHeader(500)
+			t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
 		}
 	}))
 	defer server.Close()
@@ -293,6 +300,9 @@ func TestPaymentsRefundPaypal(t *testing.T) {
 	rsp := models.Transaction{}
 	extractPayload(t, http.StatusOK, w, &rsp)
 	assert.Equal(t, refundID, rsp.ProcessorID)
+	// this is 2 because we manually create a PayPal provider to pass in our test context.
+	assert.Equal(t, 2, loginCount, "too many login calls")
+	assert.Equal(t, 1, refundCount, "too many refund calls")
 }
 
 func TestPaymentsRefundUnknownPayment(t *testing.T) {
