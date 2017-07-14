@@ -9,7 +9,7 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
-const DEFAULT_PER_PAGE = 50
+const defaultPerPage = 50
 
 func calculateTotalPages(perPage, total uint64) uint64 {
 	pages := total / perPage
@@ -42,7 +42,7 @@ func paginate(w http.ResponseWriter, r *http.Request, query *gorm.DB) (offset in
 	queryPage := params.Get("page")
 	queryPerPage := params.Get("per_page")
 	var page uint64 = 1
-	var perPage uint64 = DEFAULT_PER_PAGE
+	var perPage uint64 = defaultPerPage
 	if queryPage != "" {
 		page, err = strconv.ParseUint(queryPage, 10, 64)
 		if err != nil {

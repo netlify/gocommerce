@@ -11,12 +11,14 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-const CacheTime = 1 * time.Minute
+const cacheTime = 1 * time.Minute
 
+// Cache is an interface for how to lookup a coupon based upon the code.
 type Cache interface {
 	Lookup(string) (*models.Coupon, error)
 }
 
+// CouponNotFound is an error when a coupon could not be found.
 type CouponNotFound struct{}
 
 func (CouponNotFound) Error() string {
@@ -37,7 +39,8 @@ type couponCacheFromURL struct {
 	client    *http.Client
 }
 
-func NewCouponCacheFromUrl(config *conf.Configuration) Cache {
+// NewCouponCacheFromURL creates a coupon cache using the provided configuration.
+func NewCouponCacheFromURL(config *conf.Configuration) Cache {
 	return &couponCacheFromURL{
 		url:      config.Coupons.URL,
 		user:     config.Coupons.User,
@@ -48,7 +51,7 @@ func NewCouponCacheFromUrl(config *conf.Configuration) Cache {
 }
 
 func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
-	if c.coupons != nil && time.Now().Before(c.lastFetch.Add(CacheTime)) {
+	if c.coupons != nil && time.Now().Before(c.lastFetch.Add(cacheTime)) {
 		coupon, ok := c.coupons[code]
 		if ok {
 			return coupon, nil

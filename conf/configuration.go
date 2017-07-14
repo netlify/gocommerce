@@ -91,7 +91,7 @@ type Configuration struct {
 	} `mapstructure:"webhooks" json:"webhooks"`
 }
 
-// Load will construct the core config from the file `config.json`
+// LoadGlobal will construct the core config from the file `config.json`
 func LoadGlobal(configFile string) (*GlobalConfiguration, error) {
 	setupViper(configFile)
 

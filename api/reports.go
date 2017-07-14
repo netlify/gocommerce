@@ -7,14 +7,14 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-type SalesRow struct {
+type salesRow struct {
 	Total    uint64 `json:"total"`
 	SubTotal uint64 `json:"subtotal"`
 	Taxes    uint64 `json:"taxes"`
 	Currency string `json:"currency"`
 }
 
-type ProductsRow struct {
+type productsRow struct {
 	Sku      string `json:"sku"`
 	Path     string `json:"path"`
 	Total    uint64 `json:"total"`
@@ -41,9 +41,9 @@ func (a *API) SalesReport(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 	defer rows.Close()
-	result := []*SalesRow{}
+	result := []*salesRow{}
 	for rows.Next() {
-		row := &SalesRow{}
+		row := &salesRow{}
 		err = rows.Scan(&row.Total, &row.SubTotal, &row.Taxes, &row.Currency)
 		if err != nil {
 			internalServerError(w, "Database error: %v", err)
@@ -84,9 +84,9 @@ func (a *API) ProductsReport(ctx context.Context, w http.ResponseWriter, r *http
 		return
 	}
 	defer rows.Close()
-	result := []*ProductsRow{}
+	result := []*productsRow{}
 	for rows.Next() {
-		row := &ProductsRow{}
+		row := &productsRow{}
 		err = rows.Scan(&row.Sku, &row.Path, &row.Total, &row.Currency)
 		if err != nil {
 			internalServerError(w, "Database error: %v", err)

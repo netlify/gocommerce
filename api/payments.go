@@ -200,7 +200,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	sendJSON(w, http.StatusOK, tr)
 }
 
-// PaymentList will list all the payments that meet the criteria. It is only available to admins
+// PaymentList will list all the payments that meet the criteria. It is only available to admins.
 func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log, _, httpErr := requireAdmin(ctx, "")
 	if httpErr != nil {
@@ -223,6 +223,7 @@ func (a *API) PaymentList(ctx context.Context, w http.ResponseWriter, r *http.Re
 	sendJSON(w, http.StatusOK, trans)
 }
 
+// PaymentView returns information about a single payment. It is only available to admins.
 func (a *API) PaymentView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	if trans, httpErr := a.getTransaction(ctx); httpErr != nil {
 		sendJSON(w, httpErr.Code, httpErr)
@@ -231,6 +232,8 @@ func (a *API) PaymentView(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 }
 
+// PaymentRefund refunds a transaction for a specific amount. This allows partial
+// refunds if desired. It is only available to admins.
 func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	config := gcontext.GetConfig(ctx)
 	params := PaymentParams{Currency: "USD"}

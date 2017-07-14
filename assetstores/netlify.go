@@ -3,33 +3,34 @@ package assetstores
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"github.com/pkg/errors"
 )
 
-type NetlifyProvider struct {
+type netlifyProvider struct {
 	client *http.Client
 	token  string
 }
 
-func NewNetlifyProvider(token string) (*NetlifyProvider, error) {
+func newNetlifyProvider(token string) (*netlifyProvider, error) {
 	if token == "" {
 		return nil, errors.New("No access token configured for Netlify")
 	}
 
-	return &NetlifyProvider{
+	return &netlifyProvider{
 		client: &http.Client{},
 		token:  token,
 	}, nil
 }
 
-type NetlifySignature struct {
+type netlifySignature struct {
 	URL string `json:"url"`
 }
 
-func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
+func (n *netlifyProvider) SignURL(downloadURL string) (string, error) {
 	url, err := url.Parse(downloadURL)
 	if err != nil {
 		return "", err
@@ -40,6 +41,9 @@ func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
 	url.Scheme = "https"
 
 	req, err := http.NewRequest("GET", url.String(), nil)
+	if err != nil {
+		return "", errors.Wrap(err, "Error creating signing request")
+	}
 	req.Header.Add("Authorization", "Bearer "+n.token)
 
 	resp, err := n.client.Do(req)
@@ -53,10 +57,12 @@ func (n *NetlifyProvider) SignURL(downloadURL string) (string, error) {
 	}
 	if resp.StatusCode != http.StatusOK {
 		buf := new(bytes.Buffer)
-		buf.ReadFrom(resp.Body)
+		if _, err = buf.ReadFrom(resp.Body); err != nil {
+			return "", fmt.Errorf("Error generating signature")
+		}
 		return "", fmt.Errorf("Error generating signature: %v", buf.String())
 	}
-	signature := &NetlifySignature{}
+	signature := &netlifySignature{}
 	if err := json.NewDecoder(resp.Body).Decode(signature); err != nil {
 		return "", err
 	}

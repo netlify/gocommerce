@@ -12,6 +12,7 @@ import (
 	"github.com/pborman/uuid"
 )
 
+// LineItem is a single item in an Order.
 type LineItem struct {
 	ID      int64  `json:"id"`
 	OrderID string `json:"-"`
@@ -39,6 +40,29 @@ type LineItem struct {
 	DeletedAt *time.Time `json:"-"`
 }
 
+// TableName returns the database table name for the LineItem model.
+func (LineItem) TableName() string {
+	return tableName("line_items")
+}
+
+// BeforeUpdate database callback.
+func (i *LineItem) BeforeUpdate() (err error) {
+	data, err := json.Marshal(i.MetaData)
+	if err == nil {
+		i.RawMetaData = string(data)
+	}
+	return err
+}
+
+// AfterFind database callback.
+func (i *LineItem) AfterFind() (err error) {
+	if i.RawMetaData != "" {
+		return json.Unmarshal([]byte(i.RawMetaData), &i.MetaData)
+	}
+	return err
+}
+
+// PriceItem represent the subcomponent price items of a LineItem.
 type PriceItem struct {
 	ID int64 `json:"id"`
 
@@ -47,27 +71,37 @@ type PriceItem struct {
 	VAT    uint64 `json:"vat"`
 }
 
+// TableName returns the database table name for the PriceItem model.
 func (PriceItem) TableName() string {
 	return tableName("price_items")
 }
 
-// Make sure a PriceItem fullfils the calculator Item interface
+// PriceInLowestUnit implements part of the calculator.Item interface.
 func (i *PriceItem) PriceInLowestUnit() uint64 {
 	return i.Amount
 }
+
+// ProductType implements part of the calculator.Item interface.
 func (i *PriceItem) ProductType() string {
 	return i.Type
 }
+
+// FixedVAT implements part of the calculator.Item interface.
 func (i *PriceItem) FixedVAT() uint64 {
 	return i.VAT
 }
+
+// TaxableItems implements part of the calculator.Item interface.
 func (i *PriceItem) TaxableItems() []calculator.Item {
 	return nil
 }
+
+// GetQuantity implements part of the calculator.Item interface.
 func (i *PriceItem) GetQuantity() uint64 {
 	return 1
 }
 
+// AddonItem are additional items for a LineItem.
 type AddonItem struct {
 	ID int64 `json:"id"`
 
@@ -78,29 +112,12 @@ type AddonItem struct {
 	Price uint64 `json:"price"`
 }
 
+// TableName returns the database table name for the AddonItem model.
 func (AddonItem) TableName() string {
 	return tableName("addon_items")
 }
 
-func (LineItem) TableName() string {
-	return tableName("line_items")
-}
-
-func (l *LineItem) BeforeUpdate() (err error) {
-	data, err := json.Marshal(l.MetaData)
-	if err == nil {
-		l.RawMetaData = string(data)
-	}
-	return err
-}
-
-func (l *LineItem) AfterFind() (err error) {
-	if l.RawMetaData != "" {
-		return json.Unmarshal([]byte(l.RawMetaData), &l.MetaData)
-	}
-	return err
-}
-
+// PriceMetadata model
 type PriceMetadata struct {
 	Amount   string            `json:"amount"`
 	Currency string            `json:"currency"`
@@ -111,12 +128,14 @@ type PriceMetadata struct {
 	cents uint64
 }
 
+// PriceMetaItem model
 type PriceMetaItem struct {
 	Amount string `json:"amount"`
 	Type   string `json:"type"`
 	VAT    uint64 `json:"vat"`
 }
 
+// AddonMetaItem model
 type AddonMetaItem struct {
 	Sku         string          `json:"sku"`
 	Title       string          `json:"title"`
@@ -124,6 +143,7 @@ type AddonMetaItem struct {
 	Prices      []PriceMetadata `json:"prices"`
 }
 
+// LineItemMetadata model
 type LineItemMetadata struct {
 	Sku         string          `json:"sku"`
 	Title       string          `json:"title"`
@@ -138,16 +158,22 @@ type LineItemMetadata struct {
 	Webhook string `json:"webhook"`
 }
 
-// Make sure LineItem is a valid Item for the calculator
+// PriceInLowestUnit implements part of the calculator.Item interface.
 func (i *LineItem) PriceInLowestUnit() uint64 {
 	return i.Price + i.AddonPrice
 }
+
+// ProductType implements part of the calculator.Item interface.
 func (i *LineItem) ProductType() string {
 	return i.Type
 }
+
+// FixedVAT implements part of the calculator.Item interface.
 func (i *LineItem) FixedVAT() uint64 {
 	return i.VAT
 }
+
+// TaxableItems implements part of the calculator.Item interface.
 func (i *LineItem) TaxableItems() []calculator.Item {
 	if i.PriceItems != nil {
 		items := make([]calculator.Item, len(i.PriceItems))
@@ -159,10 +185,12 @@ func (i *LineItem) TaxableItems() []calculator.Item {
 	return nil
 }
 
+// GetQuantity implements part of the calculator.Item interface.
 func (i *LineItem) GetQuantity() uint64 {
 	return i.Quantity
 }
 
+// Process calculates the price of a LineItem.
 func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta *LineItemMetadata) error {
 	i.Sku = meta.Sku
 	i.Title = meta.Title
@@ -209,11 +237,7 @@ func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta
 		order.Downloads = append(order.Downloads, download)
 	}
 
-	if err := i.calculatePrice(userClaims, meta.Prices, order.Currency); err != nil {
-		return err
-	}
-
-	return nil
+	return i.calculatePrice(userClaims, meta.Prices, order.Currency)
 }
 
 func (i *LineItem) calculatePrice(userClaims map[string]interface{}, prices []PriceMetadata, currency string) error {

@@ -7,6 +7,7 @@ import (
 	"github.com/jinzhu/gorm"
 )
 
+// Event represents a change to an order.
 type Event struct {
 	ID uint64 `json:"id"`
 
@@ -24,15 +25,20 @@ type Event struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// TableName returns the database table name for the Event model.
 func (Event) TableName() string {
 	return tableName("events")
 }
 
+// EventType is the type of change that occurred.
 type EventType string
 
 const (
+	// EventCreated is the EventType when an order is created.
 	EventCreated EventType = "created"
+	// EventUpdated is the EventType when an order is updated.
 	EventUpdated EventType = "updated"
+	// EventDeleted is the EventType when an order is deleted.
 	EventDeleted EventType = "deleted"
 )
 

@@ -6,6 +6,7 @@ import (
 	jwt "github.com/dgrijalva/jwt-go"
 )
 
+// JWTClaims represents the JWT claims information.
 type JWTClaims struct {
 	ID           string                 `json:"id"`
 	Email        string                 `json:"email"`

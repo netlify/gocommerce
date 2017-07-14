@@ -33,6 +33,7 @@ func (a *API) lookupCoupon(ctx context.Context, w http.ResponseWriter, code stri
 	return coupon, nil
 }
 
+// CouponView returns information about a single coupon code.
 func (a *API) CouponView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	log := gcontext.GetLogger(ctx)
 	code := kami.Param(ctx, "code")

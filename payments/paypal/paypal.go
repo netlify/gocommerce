@@ -33,6 +33,7 @@ type Config struct {
 	Env      string `mapstructure:"env" json:"env"`
 }
 
+// NewPaymentProvider creates a new PayPal payment provider using the provided configuration.
 func NewPaymentProvider(config Config) (payments.Provider, error) {
 	var paypal *paypalsdk.Client
 	if config.ClientID == "" || config.Secret == "" {

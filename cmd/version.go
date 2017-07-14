@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// Version is the application version.
 var Version string
 
 var versionCmd = cobra.Command{

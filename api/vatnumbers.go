@@ -8,7 +8,8 @@ import (
 	"github.com/mattes/vat"
 )
 
-func (a *API) VatnumberLookup(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+// VatNumberLookup looks up information on a VAT number
+func (a *API) VatNumberLookup(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	number := kami.Param(ctx, "number")
 
 	response, err := vat.CheckVAT(number)

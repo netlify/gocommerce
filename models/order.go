@@ -8,9 +8,16 @@ import (
 	"github.com/pborman/uuid"
 )
 
+// PendingState is the pending state of an Order
 const PendingState = "pending"
+
+// PaidState is the paid state of an Order
 const PaidState = "paid"
+
+// ShippedState is the shipped state of an Order
 const ShippedState = "shipped"
+
+// FailedState is the failed state of an Order
 const FailedState = "failed"
 
 // NumberType | StringType | BoolType are the different types supported in custom data for orders
@@ -20,6 +27,7 @@ const (
 	BoolType
 )
 
+// Order model
 type Order struct {
 	ID string `json:"id"`
 
@@ -52,10 +60,10 @@ type Order struct {
 	Transactions []*Transaction `json:"transactions"`
 	Notes        []*OrderNote   `json:"notes"`
 
-	ShippingAddress   Address `json:"shipping_address",gorm:"ForeignKey:ShippingAddressID"`
+	ShippingAddress   Address `json:"shipping_address" gorm:"ForeignKey:ShippingAddressID"`
 	ShippingAddressID string  `json:"shipping_address_id"`
 
-	BillingAddress   Address `json:"billing_address",gorm:"ForeignKey:BillingAddressID"`
+	BillingAddress   Address `json:"billing_address" gorm:"ForeignKey:BillingAddressID"`
 	BillingAddressID string  `json:"billing_address_id"`
 
 	VATNumber string `json:"vatnumber"`
@@ -70,13 +78,15 @@ type Order struct {
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"-",sql:"index"`
+	DeletedAt *time.Time `json:"-" sql:"index"`
 }
 
+// TableName returns the database table name for the Order model.
 func (Order) TableName() string {
 	return tableName("orders")
 }
 
+// AfterFind database callback.
 func (o *Order) AfterFind() error {
 	if o.RawMetaData != "" {
 		err := json.Unmarshal([]byte(o.RawMetaData), &o.MetaData)
@@ -95,6 +105,7 @@ func (o *Order) AfterFind() error {
 	return nil
 }
 
+// BeforeUpdate database callback.
 func (o *Order) BeforeUpdate() error {
 	if o.MetaData != nil {
 		data, err := json.Marshal(o.MetaData)
@@ -114,6 +125,7 @@ func (o *Order) BeforeUpdate() error {
 	return nil
 }
 
+// NewOrder creates a new pending Order.
 func NewOrder(sessionID, email, currency string) *Order {
 	order := &Order{
 		ID:        uuid.NewRandom().String(),
@@ -127,6 +139,7 @@ func NewOrder(sessionID, email, currency string) *Order {
 	return order
 }
 
+// CalculateTotal calculates the total price of an Order.
 func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]interface{}) {
 	items := make([]calculator.Item, len(o.LineItems))
 	for i, item := range o.LineItems {
@@ -139,13 +152,4 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	o.Taxes = price.Taxes
 	o.Discount = price.Discount
 	o.Total = price.Total
-}
-
-func inList(list []string, candidate string) bool {
-	for _, item := range list {
-		if item == candidate {
-			return true
-		}
-	}
-	return false
 }

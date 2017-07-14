@@ -25,6 +25,7 @@ type Config struct {
 	SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 }
 
+// NewPaymentProvider creates a new Stripe payment provider using the provided configuration.
 func NewPaymentProvider(config Config) (payments.Provider, error) {
 	if config.SecretKey == "" {
 		return nil, errors.New("Stripe configuration missing secret_key")

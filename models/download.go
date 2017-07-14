@@ -6,6 +6,7 @@ import (
 	"github.com/netlify/gocommerce/assetstores"
 )
 
+// Download represents a purchased asset download.
 type Download struct {
 	ID string `json:"id"`
 
@@ -21,13 +22,15 @@ type Download struct {
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"-",sql:"index"`
+	DeletedAt *time.Time `json:"-" sql:"index"`
 }
 
+// TableName returns the database table name for the Download model.
 func (Download) TableName() string {
 	return tableName("downloads")
 }
 
+// SignURL signs a download URL using the provided asset store.
 func (d *Download) SignURL(store assetstores.Store) error {
 	signedURL, err := store.SignURL(d.URL)
 	if err != nil {
