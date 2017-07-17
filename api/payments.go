@@ -95,6 +95,7 @@ func (a *API) PaymentListForOrder(ctx context.Context, w http.ResponseWriter, r 
 
 // PaymentCreate is the endpoint for creating a payment for an order
 func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+	log := getLogger(ctx)
 	params := &PaymentParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
@@ -117,6 +118,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		if result.RecordNotFound() {
 			notFoundError(w, "No order with this ID found")
 		} else {
+			log.WithError(result.Error).Errorf("Error querying database for order %s", orderID)
 			internalServerError(w, fmt.Sprintf("Error during database query: %v", result.Error))
 		}
 		return
@@ -158,6 +160,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
+		log.WithError(err).Errorf("Unable to verify order amount for order %s", orderID)
 		internalServerError(w, fmt.Sprintf("We failed to authorize the amount for this order: %v", err))
 		return
 	}
@@ -191,6 +194,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 
 	if err != nil {
 		tx.Commit()
+		log.WithError(err).Errorf("Error charging order %s", orderID)
 		internalServerError(w, fmt.Sprintf("There was an error charging your card: %v", err))
 		return
 	}
