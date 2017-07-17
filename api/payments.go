@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
@@ -101,7 +102,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	provider := gcontext.GetPaymentProviders(ctx)[params.ProviderType]
+	provider := gcontext.GetPaymentProviders(ctx)[strings.ToLower(params.ProviderType)]
 	if provider == nil {
 		badRequestError(w, "Payment provider '%s' not configured", params.ProviderType)
 		return
@@ -337,7 +338,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	providerType := r.FormValue("provider")
+	providerType := strings.ToLower(r.FormValue("provider"))
 	if providerType == "" {
 		badRequestError(w, "Preauthorizing a payment requires specifying a 'provider'")
 		return
