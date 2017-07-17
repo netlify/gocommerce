@@ -283,6 +283,10 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		sendJSON(w, httpErr.Code, httpErr)
 		return
 	}
+	if order.PaymentProcessor == "" {
+		internalServerError(w, "Order does not specify a payment provider")
+		return
+	}
 
 	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
 	if provider == nil {
