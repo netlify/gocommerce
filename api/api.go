@@ -149,8 +149,8 @@ func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *htt
 	ctx = gcontext.WithLogger(ctx, log)
 	ctx = gcontext.WithStartTime(ctx, time.Now())
 
-	if gcontext.GetPaymentProvider(ctx) == nil {
-		internalServerError(w, "No payment provider configured")
+	if gcontext.GetPaymentProviders(ctx) == nil {
+		internalServerError(w, "No payment providers configured")
 		return nil
 	}
 
@@ -171,11 +171,14 @@ func withTenantConfig(ctx context.Context, config *conf.Configuration) (context.
 	}
 	ctx = gcontext.WithAssetStore(ctx, store)
 
-	prov, err := createPaymentProvider(config)
+	provs, err := createPaymentProviders(config)
 	if err != nil {
-		return nil, errors.Wrap(err, "error creating payment provider")
+		return nil, errors.Wrap(err, "error creating payment providers")
 	}
-	ctx = gcontext.WithPaymentProvider(ctx, prov)
+	if len(provs) == 0 {
+		return nil, errors.Wrap(err, "No payment providers enabled")
+	}
+	ctx = gcontext.WithPaymentProviders(ctx, provs)
 
 	return ctx, nil
 }

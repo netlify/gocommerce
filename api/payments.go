@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/pkg/errors"
-
 	"github.com/Sirupsen/logrus"
 	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
@@ -25,8 +23,9 @@ import (
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
-	Amount   uint64 `json:"amount"`
-	Currency string `json:"currency"`
+	Amount       uint64 `json:"amount"`
+	Currency     string `json:"currency"`
+	ProviderType string `json:"provider"`
 }
 
 // PaymentListForUser is the endpoint for listing transactions for a user.
@@ -90,17 +89,26 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 	log := gcontext.GetLogger(ctx)
 	config := gcontext.GetConfig(ctx)
 	mailer := gcontext.GetMailer(ctx)
-	provider := gcontext.GetPaymentProvider(ctx)
-	charge, err := provider.NewCharger(ctx, r)
+
+	params := PaymentParams{Currency: "USD"}
+	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		badRequestError(w, "Error creating payment provider: %v", err)
+		badRequestError(w, "Could not read params: %v", err)
+		return
+	}
+	if params.ProviderType == "" {
+		badRequestError(w, "Creating a payment requires specifying a 'provider'")
 		return
 	}
 
-	params := PaymentParams{Currency: "USD"}
-	err = json.NewDecoder(r.Body).Decode(&params)
+	provider := getRequestedProvider(ctx, params.ProviderType)
+	if provider == nil {
+		badRequestError(w, "Payment provider '%s' not configured", params.ProviderType)
+		return
+	}
+	charge, err := provider.NewCharger(ctx, r)
 	if err != nil {
-		badRequestError(w, "Could not read params: %v", err)
+		badRequestError(w, "Error creating payment provider: %v", err)
 		return
 	}
 
@@ -276,15 +284,14 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	provider := gcontext.GetPaymentProvider(ctx)
+	provider := getRequestedProvider(ctx, order.PaymentProcessor)
+	if provider == nil {
+		badRequestError(w, "Payment provider '%s' not configured", order.PaymentProcessor)
+		return
+	}
 	refund, err := provider.NewRefunder(ctx, r)
 	if err != nil {
 		badRequestError(w, "Error creating payment provider: %v", err)
-		return
-	}
-
-	if provider.Name() != order.PaymentProcessor {
-		badRequestError(w, "Order does not match configured payment provider")
 		return
 	}
 
@@ -326,7 +333,17 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	provider := gcontext.GetPaymentProvider(ctx)
+	providerType := r.FormValue("provider")
+	if providerType == "" {
+		badRequestError(w, "Preauthorizing a payment requires specifying a 'provider'")
+		return
+	}
+
+	provider := getRequestedProvider(ctx, providerType)
+	if provider == nil {
+		badRequestError(w, "Payment provider '%s' not configured", providerType)
+		return
+	}
 	preauthorize, err := provider.NewPreauthorizer(ctx, r)
 	if err != nil {
 		badRequestError(w, "Error creating payment provider: %v", err)
@@ -458,21 +475,38 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 	return trans, nil
 }
 
-// createPaymentProvider creates an instance of Provider based on the configuration
+// createPaymentProviders creates instance(s) of Provider based on the configuration
 // provided.
-func createPaymentProvider(c *conf.Configuration) (payments.Provider, error) {
-	switch c.Payment.ProviderType {
-	case payments.StripeProvider:
-		return stripe.NewPaymentProvider(stripe.Config{
+func createPaymentProviders(c *conf.Configuration) ([]payments.Provider, error) {
+	provs := []payments.Provider{}
+	if c.Payment.Stripe.Enabled {
+		p, err := stripe.NewPaymentProvider(stripe.Config{
 			SecretKey: c.Payment.Stripe.SecretKey,
 		})
-	case payments.PayPalProvider:
-		return paypal.NewPaymentProvider(paypal.Config{
+		if err != nil {
+			return nil, err
+		}
+		provs = append(provs, p)
+	}
+	if c.Payment.PayPal.Enabled {
+		p, err := paypal.NewPaymentProvider(paypal.Config{
 			Env:      c.Payment.PayPal.Env,
 			ClientID: c.Payment.PayPal.ClientID,
 			Secret:   c.Payment.PayPal.Secret,
 		})
-	default:
-		return nil, errors.Errorf("unknown payment provider: %s", c.Payment.ProviderType)
+		if err != nil {
+			return nil, err
+		}
+		provs = append(provs, p)
 	}
+	return provs, nil
+}
+
+func getRequestedProvider(ctx context.Context, name string) payments.Provider {
+	for _, p := range gcontext.GetPaymentProviders(ctx) {
+		if p.Name() == name {
+			return p
+		}
+	}
+	return nil
 }
