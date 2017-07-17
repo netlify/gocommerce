@@ -101,7 +101,7 @@ func (a *API) PaymentCreate(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	provider := getRequestedProvider(ctx, params.ProviderType)
+	provider := gcontext.GetPaymentProviders(ctx)[params.ProviderType]
 	if provider == nil {
 		badRequestError(w, "Payment provider '%s' not configured", params.ProviderType)
 		return
@@ -284,7 +284,7 @@ func (a *API) PaymentRefund(ctx context.Context, w http.ResponseWriter, r *http.
 		return
 	}
 
-	provider := getRequestedProvider(ctx, order.PaymentProcessor)
+	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
 	if provider == nil {
 		badRequestError(w, "Payment provider '%s' not configured", order.PaymentProcessor)
 		return
@@ -339,7 +339,7 @@ func (a *API) PreauthorizePayment(ctx context.Context, w http.ResponseWriter, r 
 		return
 	}
 
-	provider := getRequestedProvider(ctx, providerType)
+	provider := gcontext.GetPaymentProviders(ctx)[providerType]
 	if provider == nil {
 		badRequestError(w, "Payment provider '%s' not configured", providerType)
 		return
@@ -477,8 +477,8 @@ func queryForTransactions(db *gorm.DB, log *logrus.Entry, clause, id string) ([]
 
 // createPaymentProviders creates instance(s) of Provider based on the configuration
 // provided.
-func createPaymentProviders(c *conf.Configuration) ([]payments.Provider, error) {
-	provs := []payments.Provider{}
+func createPaymentProviders(c *conf.Configuration) (map[string]payments.Provider, error) {
+	provs := map[string]payments.Provider{}
 	if c.Payment.Stripe.Enabled {
 		p, err := stripe.NewPaymentProvider(stripe.Config{
 			SecretKey: c.Payment.Stripe.SecretKey,
@@ -486,7 +486,7 @@ func createPaymentProviders(c *conf.Configuration) ([]payments.Provider, error) 
 		if err != nil {
 			return nil, err
 		}
-		provs = append(provs, p)
+		provs[p.Name()] = p
 	}
 	if c.Payment.PayPal.Enabled {
 		p, err := paypal.NewPaymentProvider(paypal.Config{
@@ -497,16 +497,7 @@ func createPaymentProviders(c *conf.Configuration) ([]payments.Provider, error) 
 		if err != nil {
 			return nil, err
 		}
-		provs = append(provs, p)
+		provs[p.Name()] = p
 	}
 	return provs, nil
-}
-
-func getRequestedProvider(ctx context.Context, name string) payments.Provider {
-	for _, p := range gcontext.GetPaymentProviders(ctx) {
-		if p.Name() == name {
-			return p
-		}
-	}
-	return nil
 }

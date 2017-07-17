@@ -372,7 +372,7 @@ func TestPaymentsRefundSuccess(t *testing.T) {
 	provider := &memProvider{name: payments.StripeProvider}
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProviders(ctx, []payments.Provider{provider})
+	ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
 
 	params := &stripePaymentParams{
 		Amount:      1,
