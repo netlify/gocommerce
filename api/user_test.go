@@ -2,27 +2,31 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/netlify/gocommerce/models"
 )
 
 func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users", nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
+	token := testToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -38,11 +42,17 @@ func TestUsersQueryForAllUsersWithParams(t *testing.T) {
 	}
 	defer db.Unscoped().Delete(&toDie)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx := testContext(nil, config, true)
 
-	req := httptest.NewRequest("GET", "http://junk?email=dc.com", nil)
+	req := httptest.NewRequest("GET", "http://example.com/users?email=dc.com", nil).WithContext(ctx)
 	recorder := httptest.NewRecorder()
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
+
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 
 	users := []models.User{}
 	extractPayload(t, http.StatusOK, recorder, &users)
@@ -60,10 +70,15 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 	defer db.Unscoped().Delete(&toDie)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	ctx := testContext(nil, config, true)
+	req := httptest.NewRequest("GET", "https://example.com/users", nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 
 	users := []models.User{}
 	extractPayload(t, http.StatusOK, recorder, &users)
@@ -93,7 +108,7 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 //
 //	globalConfig := testConfig()
 //	ctx := testContext(testToken(toDie.ID, toDie.Email, nil), globalConfig)
-//	ctx = kami.SetParam(ctx, "user_id", toDie.ID)
+//	chi.RouteContext(ctx).URLParams.Add("user_id", toDie.ID)
 //
 //	api := NewAPI(globalConfig, db, nil)
 //	api.UserView(ctx, recorder, req)
@@ -103,13 +118,17 @@ func TestUsersQueryForAllUsers(t *testing.T) {
 func TestUsersQueryForUserAsUser(t *testing.T) {
 	db, globalConfig, config := db(t)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
 
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	ctx := testContext(nil, config, false)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.UserView(ctx, recorder, req)
+	token := testToken(testUser.ID, testUser.Email)
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
+
 	user := new(models.User)
 	extractPayload(t, http.StatusOK, recorder, user)
 
@@ -119,25 +138,32 @@ func TestUsersQueryForUserAsUser(t *testing.T) {
 func TestUsersQueryForUserAsStranger(t *testing.T) {
 	db, globalConfig, config := db(t)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	ctx := testContext(nil, config, false)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.UserView(ctx, recorder, req)
+	token := testToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestUsersQueryForUserAsAdmin(t *testing.T) {
 	db, globalConfig, config := db(t)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	ctx := testContext(nil, config, true)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).UserView(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 
 	user := new(models.User)
 	extractPayload(t, http.StatusOK, recorder, user)
@@ -152,9 +178,11 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 	db.Create(&second)
 	defer db.Unscoped().Delete(&second)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
 
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), testUser.ID)
+	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), testUser.ID, tokenStr)
 	assert.Equal(t, 2, len(addrs))
 	for _, a := range addrs {
 		assert.Nil(t, a.Validate())
@@ -171,20 +199,28 @@ func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
 
 func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), testUser.ID)
+
+	token := testToken(testUser.ID, "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+
+	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), testUser.ID, tokenStr)
 	assert.Equal(t, 1, len(addrs))
 	validateAddress(t, testAddress, addrs[0])
 }
 
 func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("stranger-danger", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	ctx := testContext(nil, config, false)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID+"/addresses", nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
+	token := testToken("stranger-danger", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -197,31 +233,43 @@ func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
 	db.Create(u)
 	defer db.Unscoped().Delete(u)
 
-	ctx := testContext(testToken(u.ID, ""), config, false)
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), u.ID)
+	token := testToken(u.ID, "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+
+	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), u.ID, tokenStr)
 	assert.Equal(t, 0, len(addrs))
 }
 
 func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("dne", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", "dne")
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	ctx := testContext(nil, config, false)
 
-	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "https://example.com/users/dne/addresses", nil).WithContext(ctx)
+
+	token := testToken("dne", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusNotFound, recorder)
 }
 
 func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
+	ctx := testContext(nil, config, false)
 
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID+"/addresses/"+testAddress.ID, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).AddressView(ctx, recorder, req)
+	token := testToken(testUser.ID, "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 
 	addr := new(models.Address)
 	extractPayload(t, http.StatusOK, recorder, addr)
@@ -230,13 +278,17 @@ func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
 
 func TestUsersDeleteNonExistentUser(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", "dne")
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
+	req := httptest.NewRequest("DELETE", "https://example.com/users/dne", nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 }
@@ -271,13 +323,18 @@ func TestUsersDeleteSingleUser(t *testing.T) {
 		}
 	}()
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", dyingUser.ID)
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
+	req := httptest.NewRequest("DELETE", "https://example.com/users/"+dyingUser.ID, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
+
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
@@ -301,14 +358,18 @@ func TestDeleteUserAddress(t *testing.T) {
 	addr.UserID = testUser.ID
 	db.Create(addr)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-	ctx = kami.SetParam(ctx, "addr_id", addr.ID)
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
+	req := httptest.NewRequest("DELETE", "https://example.com/users/"+testUser.ID+"/addresses/"+addr.ID, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).AddressDelete(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
+
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
@@ -322,13 +383,17 @@ func TestCreateAnAddress(t *testing.T) {
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
+	req := httptest.NewRequest("POST", "https://example.com/users/"+testUser.ID+"/addresses", bytes.NewBuffer(b)).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 
@@ -352,25 +417,29 @@ func TestCreateInvalidAddress(t *testing.T) {
 	b, err := json.Marshal(&addr.AddressRequest)
 	assert.Nil(t, err)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
+	req := httptest.NewRequest("POST", "https://example.com/users/"+testUser.ID+"/addresses", bytes.NewBuffer(b)).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
+	token := testAdminToken("magical-unicorn", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusBadRequest, recorder)
 }
 
 // ------------------------------------------------------------------------------------------------
 
-func queryForAddresses(ctx context.Context, t *testing.T, api *API, id string) []models.Address {
-	ctx = kami.SetParam(ctx, "user_id", id)
+func queryForAddresses(t *testing.T, api *API, id string, tokenStr string) []models.Address {
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/"+id+"/addresses", nil)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
-	api.AddressList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
+
 	addrs := []models.Address{}
 	extractPayload(t, http.StatusOK, recorder, &addrs)
 	return addrs

@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
+	"github.com/stretchr/testify/require"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -28,7 +28,7 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 
 	startTestSite(config)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "https://not-real", strings.NewReader(`{
+	req := httptest.NewRequest("POST", "https://example.com/orders", strings.NewReader(`{
 		"email": "info@example.com",
 		"shipping_address": {
 			"first_name": "Test", "last_name": "User",
@@ -36,10 +36,9 @@ func TestOrderCreationWithSimpleOrder(t *testing.T) {
 			"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
 		},
 		"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
-	}`))
+	}`)).WithContext(ctx)
 	api := NewAPI(globalConfig, config, db)
-
-	api.OrderCreate(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
@@ -67,7 +66,7 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 
 	startTestSite(config)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "https://not-real", strings.NewReader(`{
+	req := httptest.NewRequest("POST", "https://example.com/orders", strings.NewReader(`{
 		"email": "info@example.com",
 		"shipping_address": {
 			"first_name": "Test", "last_name": "User",
@@ -75,10 +74,9 @@ func TestOrderCreationWithTaxes(t *testing.T) {
 			"city": "Berlin", "country": "Germany", "zip": "94107"
 		},
 		"line_items": [{"path": "/simple-product", "quantity": 1}]
-	}`))
+	}`)).WithContext(ctx)
 	api := NewAPI(globalConfig, config, db)
-
-	api.OrderCreate(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
@@ -98,7 +96,7 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 	startTestSite(config)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "https://not-real", strings.NewReader(`{
+	req := httptest.NewRequest("POST", "https://example.com/orders", strings.NewReader(`{
 		"email": "info@example.com",
 		"shipping_address": {
 			"first_name": "Test", "last_name": "User",
@@ -106,10 +104,9 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 			"city": "Berlin", "country": "Germany", "zip": "94107"
 		},
 		"line_items": [{"path": "/bundle-product", "quantity": 1}]
-	}`))
+	}`)).WithContext(ctx)
 	api := NewAPI(globalConfig, config, db)
-
-	api.OrderCreate(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	order := &models.Order{}
 	extractPayload(t, http.StatusCreated, recorder, order)
@@ -129,12 +126,17 @@ func TestOrderCreationForBundleWithTaxes(t *testing.T) {
 func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	ctx := testContext(nil, config, false)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders", nil).WithContext(ctx)
+
+	token := testToken(testUser.ID, testUser.Email)
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	orders := []models.Order{}
 	extractPayload(t, http.StatusOK, recorder, &orders)
@@ -159,12 +161,17 @@ func TestOrderQueryForAllOrdersAsTheUser(t *testing.T) {
 func TestOrderQueryEmailFilterAsTheUser(t *testing.T) {
 	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	ctx := testContext(nil, config, false)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real?email=bruce", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders?email=bruce", nil).WithContext(ctx)
+
+	token := testToken(testUser.ID, testUser.Email)
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	orders := []models.Order{}
 	extractPayload(t, http.StatusOK, recorder, &orders)
@@ -174,12 +181,17 @@ func TestOrderQueryEmailFilterAsTheUser(t *testing.T) {
 func TestEmptyOrderQueryEmailFilterAsTheUser(t *testing.T) {
 	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	ctx := testContext(nil, config, false)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real?email=gmail.com", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders?email=gmail.com", nil).WithContext(ctx)
+
+	token := testToken(testUser.ID, testUser.Email)
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	orders := []models.Order{}
 	extractPayload(t, http.StatusOK, recorder, &orders)
@@ -189,12 +201,17 @@ func TestEmptyOrderQueryEmailFilterAsTheUser(t *testing.T) {
 func TestOrderQueryItemFilterAsTheUser(t *testing.T) {
 	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
+	ctx := testContext(nil, config, false)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real?items=batwing", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders?items=batwing", nil).WithContext(ctx)
+
+	token := testToken(testUser.ID, testUser.Email)
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 
 	orders := []models.Order{}
 	extractPayload(t, http.StatusOK, recorder, &orders)
@@ -204,13 +221,18 @@ func TestOrderQueryItemFilterAsTheUser(t *testing.T) {
 func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
-	ctx = kami.SetParam(ctx, "user_id", "all")
+	ctx := testContext(nil, config, true)
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/all/orders", nil).WithContext(ctx)
+
+	token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
+
 	orders := []models.Order{}
 	extractPayload(t, http.StatusOK, recorder, &orders)
 
@@ -233,29 +255,39 @@ func TestOrderQueryForAllOrdersAsAdmin(t *testing.T) {
 
 func TestOrderQueryForOwnOrdersAsStranger(t *testing.T) {
 	db, globalConfig, config := db(t)
-
-	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders", nil).WithContext(ctx)
+
+	token := testToken("stranger", "stranger-danger@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
+
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "[]", recorder.Body.String())
 }
 
 func TestOrderQueryForAllOrdersNotWithAdminRights(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
-	ctx = kami.SetParam(ctx, "user_id", "all")
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/all/orders", nil).WithContext(ctx)
+
+	token := testToken("stranger", "stranger-danger@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.OrderList(ctx, recorder, req)
-	validateError(t, http.StatusBadRequest, recorder)
+	api.handler.ServeHTTP(recorder, req)
+
+	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
@@ -263,10 +295,11 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/users/all/orders", nil).WithContext(ctx)
 
 	api := NewAPI(globalConfig, config, nil)
-	api.OrderList(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
+
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -276,15 +309,19 @@ func TestOrderQueryForAllOrdersWithNoToken(t *testing.T) {
 
 func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken(testUser.ID, "marp@wayneindustries.com"), config, false)
-
-	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real/"+firstOrder.ID, nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders/"+firstOrder.ID, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
+	token := testToken(testUser.ID, "marp@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	api := NewAPI(globalConfig, config, db)
+	api.handler.ServeHTTP(recorder, req)
+
 	order := new(models.Order)
 	extractPayload(t, http.StatusOK, recorder, order)
 	validateOrder(t, firstOrder, order)
@@ -294,15 +331,17 @@ func TestOrderQueryForAnOrderAsTheUser(t *testing.T) {
 
 func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
-
-	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx := testContext(nil, config, true)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlForFirstOrder, nil)
+	req := httptest.NewRequest("GET", urlForFirstOrder, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
+	token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	order := new(models.Order)
 	extractPayload(t, http.StatusOK, recorder, order)
 	validateOrder(t, firstOrder, order)
@@ -312,29 +351,33 @@ func TestOrderQueryForAnOrderAsAnAdmin(t *testing.T) {
 
 func TestOrderQueryForAnOrderAsAStranger(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
-
-	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlForFirstOrder, nil)
+	req := httptest.NewRequest("GET", urlForFirstOrder, nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
+	token := testToken("stranger", "stranger-danger@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderQueryForAMissingOrder(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("stranger", "stranger-danger@wayneindustries.com"), config, false)
-
-	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", "does-not-exist")
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real/does-not-exist", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders/does-not-exist", nil).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).OrderView(ctx, recorder, req)
+	token := testToken("stranger", "stranger-danger@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusNotFound, recorder)
 }
 
@@ -342,14 +385,10 @@ func TestOrderQueryForAnOrderWithNoToken(t *testing.T) {
 	globalConfig, config := testConfig()
 	ctx := testContext(nil, config, false)
 
-	// have to add it to the context ~ it isn't from the params
-	ctx = kami.SetParam(ctx, "id", "does-not-exist")
-
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://not-real/does-not-exist", nil)
+	req := httptest.NewRequest("GET", "https://example.com/orders/does-not-exist", nil).WithContext(ctx)
 
-	// use nil for DB b/c it should *NEVER* be called
-	NewAPI(globalConfig, config, nil).OrderView(ctx, recorder, req)
+	NewAPI(globalConfig, config, nil).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -553,8 +592,7 @@ func TestOrderUpdateAddress_NewAddress(t *testing.T) {
 
 func TestOrderUpdateAsNonAdmin(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
+	ctx := testContext(nil, config, false)
 
 	params := &orderRequestParams{
 		Email:    "mrfreeze@dc.com",
@@ -562,22 +600,23 @@ func TestOrderUpdateAsNonAdmin(t *testing.T) {
 	}
 
 	updateBody, err := json.Marshal(params)
-	if !assert.NoError(t, err) {
-		assert.FailNow(t, "Failed to setup test "+err.Error())
-	}
+	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlWithUserID, bytes.NewReader(updateBody))
+	req := httptest.NewRequest("PUT", urlForFirstOrder, bytes.NewReader(updateBody)).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.OrderUpdate(ctx, recorder, req)
+	token := testToken("villian", "villian@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
 func TestOrderUpdateWithNoCreds(t *testing.T) {
 	db, globalConfig, config := db(t)
 	ctx := testContext(nil, config, false)
-	ctx = kami.SetParam(ctx, "id", firstOrder.ID)
 
 	params := &orderRequestParams{
 		Email:    "mrfreeze@dc.com",
@@ -585,15 +624,12 @@ func TestOrderUpdateWithNoCreds(t *testing.T) {
 	}
 
 	updateBody, err := json.Marshal(params)
-	if !assert.NoError(t, err) {
-		assert.FailNow(t, "Failed to setup test "+err.Error())
-	}
+	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlForFirstOrder, bytes.NewReader(updateBody))
+	req := httptest.NewRequest("PUT", urlForFirstOrder, bytes.NewReader(updateBody)).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.OrderUpdate(ctx, recorder, req)
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusUnauthorized, recorder)
 }
 
@@ -628,14 +664,17 @@ func TestClaimOrders(t *testing.T) {
 		assert.FailNow(t, "Failed to update email: %v", rsp.Error)
 	}
 
-	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlForFirstOrder, nil)
+	req := httptest.NewRequest("POST", "https://example.com/claim", nil).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.ClaimOrders(ctx, recorder, req)
+	token := testToken("villian", "villian@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
 
 	// validate the DB
@@ -651,27 +690,33 @@ func TestClaimOrders(t *testing.T) {
 
 func TestClaimOrdersNoEmail(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("villian", ""), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlForFirstOrder, nil)
+	req := httptest.NewRequest("POST", "https://example.com/claim", nil).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.ClaimOrders(ctx, recorder, req)
+	token := testToken("villian", "")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusBadRequest, recorder)
 }
 
 func TestClaimOrdersNoID(t *testing.T) {
 	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("", "villian@wayneindustries.com"), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlForFirstOrder, nil)
+	req := httptest.NewRequest("POST", "https://example.com/claim", nil).WithContext(ctx)
 
-	api := NewAPI(globalConfig, config, db)
-	api.ClaimOrders(ctx, recorder, req)
+	token := testToken("", "villian@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	validateError(t, http.StatusBadRequest, recorder)
 }
 
@@ -684,19 +729,23 @@ func TestClaimOrdersMultipleTimes(t *testing.T) {
 		assert.FailNow(t, "Failed to update email: %v", rsp.Error)
 	}
 
-	ctx := testContext(testToken("villian", "villian@wayneindustries.com"), config, false)
+	ctx := testContext(nil, config, false)
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlForFirstOrder, nil)
+	req := httptest.NewRequest("POST", "https://example.com/claim", nil).WithContext(ctx)
+
+	token := testToken("villian", "villian@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 
 	api := NewAPI(globalConfig, config, db)
-	api.ClaimOrders(ctx, recorder, req)
-
+	api.handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
 
 	// run it again
 	recorder = httptest.NewRecorder()
-	api.ClaimOrders(ctx, recorder, req)
+	api.handler.ServeHTTP(recorder, req)
 	assert.Equal(t, http.StatusNoContent, recorder.Code)
 }
 
@@ -706,8 +755,7 @@ func TestClaimOrdersMultipleTimes(t *testing.T) {
 
 func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *orderRequestParams) *httptest.ResponseRecorder {
 	globalConfig, config := testConfig()
-	ctx := testContext(testToken("admin-yo", "admin@wayneindustries.com"), config, true)
-	ctx = kami.SetParam(ctx, "id", order.ID)
+	ctx := testContext(nil, config, true)
 
 	updateBody, err := json.Marshal(params)
 	if !assert.NoError(t, err) {
@@ -715,9 +763,14 @@ func runUpdate(t *testing.T, db *gorm.DB, order *models.Order, params *orderRequ
 	}
 
 	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", fmt.Sprintf("https://not-real/%s", order.ID), bytes.NewReader(updateBody))
+	req := httptest.NewRequest("PUT", fmt.Sprintf("https://example.com/orders/%s", order.ID), bytes.NewReader(updateBody)).WithContext(ctx)
 
-	NewAPI(globalConfig, config, db).OrderUpdate(ctx, recorder, req)
+	token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
+	require.NoError(t, err)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+
+	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
 	return recorder
 }
 

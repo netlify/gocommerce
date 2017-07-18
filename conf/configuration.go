@@ -181,7 +181,7 @@ func configureLogging(config *GlobalConfiguration) error {
 	}
 
 	if config.LogConf.Level != "" {
-		level, err := logrus.ParseLevel(strings.ToUpper(config.LogConf.Level))
+		level, err := logrus.ParseLevel(config.LogConf.Level)
 		if err != nil {
 			return err
 		}

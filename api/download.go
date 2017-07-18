@@ -1,11 +1,10 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"time"
 
-	"github.com/guregu/kami"
+	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
@@ -14,14 +13,15 @@ import (
 const maxIPsPerDay = 50
 
 // DownloadURL returns a signed URL to download a purchased asset.
-func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	id := kami.Param(ctx, "id")
-	log := gcontext.GetLogger(ctx).WithField("download_id", id)
+func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	downloadID := chi.URLParam(r, "download_id")
+	log := logEntrySetField(r, "download_id", downloadID)
 	claims := gcontext.GetClaims(ctx)
 	assets := gcontext.GetAssetStore(ctx)
 
 	download := &models.Download{}
-	if result := a.db.Where("id = ?", id).First(download); result.Error != nil {
+	if result := a.db.Where("id = ?", downloadID).First(download); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
 			notFoundError(w, "Download not found")
@@ -44,11 +44,9 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	if order.UserID != "" {
-		if (order.UserID != claims.ID) && gcontext.IsAdmin(ctx) {
-			unauthorizedError(w, "Not Authorized to access this download")
-			return
-		}
+	if !hasOrderAccess(ctx, order) {
+		unauthorizedError(w, "Not Authorized to access this download")
+		return
 	}
 
 	if order.PaymentState != "paid" {
@@ -94,18 +92,11 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 // DownloadList lists all purchased downloads for an order or a user.
-func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	orderID := kami.Param(ctx, "order_id")
-	log := gcontext.GetLogger(ctx)
-	if orderID != "" {
-		log = log.WithField("order_id", orderID)
-	}
+func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	orderID := getOrderID(ctx)
+	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
-
-	if orderID == "" && (claims == nil || claims.ID == "") {
-		unauthorizedError(w, "Listing all downloads requires authentication")
-		return
-	}
 
 	order := &models.Order{}
 	if orderID != "" {
@@ -123,14 +114,16 @@ func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.R
 		order = nil
 	}
 
-	if order != nil && order.UserID != "" && order.UserID != claims.ID {
-		unauthorizedError(w, "You don't have permission to access this order")
-		return
-	}
+	if order != nil {
+		if !hasOrderAccess(ctx, order) {
+			unauthorizedError(w, "You don't have permission to access this order")
+			return
+		}
 
-	if order != nil && order.PaymentState != "paid" {
-		unauthorizedError(w, "This order has not been completed yet")
-		return
+		if order.PaymentState != "paid" {
+			unauthorizedError(w, "This order has not been completed yet")
+			return
+		}
 	}
 
 	orderTable := models.Order{}.TableName()

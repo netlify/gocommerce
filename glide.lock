@@ -1,5 +1,5 @@
-hash: 806dd82288a2ecf2ce0a513e86f3c62258536155b6afb105cfcf8ad47ff5c412
-updated: 2017-07-12T12:40:07.791843695-04:00
+hash: 4cd4a848b0ab4d025ccae456a47289959c4ea9d392c6f24219b74dfca2ef4674
+updated: 2017-07-17T17:04:56.957858024-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -9,6 +9,8 @@ imports:
   version: 86f7c217d9043ebc6adfd8e2ed04a0bb1e1db651
 - name: github.com/fsnotify/fsnotify
   version: 7d7316ed6e1ed2de075aab8dfc76de5d158d66e1
+- name: github.com/go-chi/chi
+  version: 08660a0ad10a8fa7beab3ad43afe66373d49d06a
 - name: github.com/go-sql-driver/mysql
   version: a732e14c62dde3285440047bba97581bc472ae18
 - name: github.com/golang/protobuf

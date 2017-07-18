@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/netlify/gocommerce/models"
@@ -22,7 +21,7 @@ type productsRow struct {
 }
 
 // SalesReport lists the sales numbers for a period
-func (a *API) SalesReport(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) {
 	query := a.db.
 		Model(&models.Order{}).
 		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency").
@@ -56,7 +55,7 @@ func (a *API) SalesReport(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 // ProductsReport list the products sold within a period
-func (a *API) ProductsReport(ctx context.Context, w http.ResponseWriter, r *http.Request) {
+func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) {
 	ordersTable := models.Order{}.TableName()
 	itemsTable := models.LineItem{}.TableName()
 	query := a.db.

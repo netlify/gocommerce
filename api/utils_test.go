@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"context"
 
@@ -17,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/go-chi/chi"
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"
@@ -59,27 +59,30 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration)
 	}
 
 	loadTestData(db)
-	urlForFirstOrder = fmt.Sprintf("https://not-real/%s", firstOrder.ID)
-	urlWithUserID = fmt.Sprintf("https://not-real/users/%s/orders", testUser.ID)
+	urlForFirstOrder = fmt.Sprintf("https://example.com/orders/%s", firstOrder.ID)
+	urlWithUserID = fmt.Sprintf("https://example.com/users/%s/orders", testUser.ID)
 
 	return db, globalConfig, config
 }
 
 func testContext(token *jwt.Token, config *conf.Configuration, adminFlag bool) context.Context {
 	ctx := context.Background()
+	ctx = context.WithValue(ctx, chi.RouteCtxKey, chi.NewRouteContext())
 	ctx = gcontext.WithConfig(ctx, config)
 	ctx = gcontext.WithRequestID(ctx, "test-request")
-	ctx = gcontext.WithLogger(ctx, testLogger)
-	ctx = gcontext.WithStartTime(ctx, time.Now())
 	ctx = gcontext.WithAdminFlag(ctx, adminFlag)
 	return gcontext.WithToken(ctx, token)
 }
 
 func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
+	logrus.SetLevel(logrus.ErrorLevel)
+
 	globalConfig := new(conf.GlobalConfiguration)
 	globalConfig.DB.Automigrate = true
 
 	config := new(conf.Configuration)
+	config.JWT.Secret = "testsecret"
+	config.JWT.AdminGroupName = "admin"
 	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 	return globalConfig, config
@@ -90,8 +93,18 @@ func testToken(id, email string) *jwt.Token {
 		ID:    id,
 		Email: email,
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+}
+
+func testAdminToken(id, email string) *jwt.Token {
+	claims := &claims.JWTClaims{
+		ID:    id,
+		Email: email,
+		AppMetaData: map[string]interface{}{
+			"roles": []interface{}{"admin"},
+		},
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 }
 
 // ------------------------------------------------------------------------------------------------

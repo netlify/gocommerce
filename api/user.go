@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -9,13 +8,22 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/guregu/kami"
+	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 
-	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
+
+func (a *API) userCtx(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID := chi.URLParam(r, "user_id")
+		logEntrySetField(r, "user_id", userID)
+
+		ctx := withUserID(r.Context(), userID)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
 
 // UserList will return all of the users. It requires admin access.
 // It supports the filters:
@@ -24,14 +32,8 @@ import (
 // email     email
 // user_id   id
 // limit     # of records to return (max)
-func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	_, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserList(w http.ResponseWriter, r *http.Request) {
+	log := getLogEntry(r)
 
 	query, err := parseUserQueryParams(a.db, r.URL.Query())
 	if err != nil {
@@ -89,13 +91,10 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 
 // UserView will return the user specified.
 // If you're an admin you can request a user that is not your self
-func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserView(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := getUserID(ctx)
+	log := getLogEntry(r)
 
 	user := &models.User{
 		ID: userID,
@@ -124,14 +123,10 @@ func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Reque
 }
 
 // AddressList will return the addresses for a given user
-func (a *API) AddressList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) AddressList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := getUserID(ctx)
+	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
@@ -150,14 +145,11 @@ func (a *API) AddressList(ctx context.Context, w http.ResponseWriter, r *http.Re
 }
 
 // AddressView will return a particular address for a given user
-func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, addrID, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) AddressView(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	addrID := chi.URLParam(r, "addr_id")
+	userID := getUserID(ctx)
+	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
@@ -180,13 +172,10 @@ func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Re
 
 // UserDelete will soft delete the user. It requires admin access
 // return errors or 200 and no body
-func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := getUserID(ctx)
+	log := getLogEntry(r)
 	log.Debugf("Starting to delete user %s", userID)
 
 	user := getUser(a.db, userID)
@@ -253,13 +242,11 @@ func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Req
 
 // AddressDelete will soft delete the address associated with that user. It requires admin access
 // return errors or 200 and no body
-func (a *API) AddressDelete(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, addrID, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx).WithField("addr_id", addrID)
+func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	addrID := chi.URLParam(r, "addr_id")
+	userID := getUserID(ctx)
+	log := getLogEntry(r).WithField("addr_id", addrID)
 
 	if getUser(a.db, userID) == nil {
 		log.Warn("requested non-existent user - not an error b/c it is a delete")
@@ -280,13 +267,10 @@ func (a *API) AddressDelete(ctx context.Context, w http.ResponseWriter, r *http.
 }
 
 // CreateNewAddress will create an address associated with that user
-func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := getUserID(ctx)
+	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
 		log.WithError(notFoundError(w, "Couldn't find user "+userID)).Warn("Requested to add an address to a missing user")
@@ -325,38 +309,6 @@ func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *ht
 // -------------------------------------------------------------------------------------------------------------------
 // Helper methods
 // -------------------------------------------------------------------------------------------------------------------
-func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTTPError) {
-	log := gcontext.GetLogger(ctx)
-	userID := kami.Param(ctx, "user_id")
-	addrID := kami.Param(ctx, "addr_id")
-
-	claims := gcontext.GetClaims(ctx)
-	if claims == nil {
-		err := httpError(http.StatusUnauthorized, "No claims provided")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	isAdmin := gcontext.IsAdmin(ctx)
-	if isAdmin {
-		gcontext.WithLogger(ctx, log.WithField("admin_id", claims.ID))
-	}
-
-	if claims.ID != userID && !isAdmin {
-		err := httpError(http.StatusUnauthorized, "Can't access a different user unless you're an admin")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	if adminOnly && !isAdmin {
-		err := httpError(http.StatusUnauthorized, "Admin permissions required")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	return userID, addrID, nil
-}
-
 func getUser(db *gorm.DB, userID string) *models.User {
 	user := &models.User{ID: userID}
 	results := db.Find(user)
@@ -367,7 +319,7 @@ func getUser(db *gorm.DB, userID string) *models.User {
 	return user
 }
 
-func tryDelete(tx *gorm.DB, w http.ResponseWriter, log *logrus.Entry, userID string, face interface{}) error {
+func tryDelete(tx *gorm.DB, w http.ResponseWriter, log logrus.FieldLogger, userID string, face interface{}) error {
 	typeName := reflect.TypeOf(face).String()
 
 	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)

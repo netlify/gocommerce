@@ -12,7 +12,7 @@ type JWTClaims struct {
 	Email        string                 `json:"email"`
 	AppMetaData  map[string]interface{} `json:"app_metadata"`
 	UserMetaData map[string]interface{} `json:"user_metadata"`
-	*jwt.StandardClaims
+	jwt.StandardClaims
 }
 
 // HasClaims is used to determine if a set of userClaims matches the requiredClaims
