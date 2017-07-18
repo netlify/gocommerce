@@ -11,14 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/netlify/gocommerce/conf"
-	"github.com/netlify/gocommerce/payments"
 )
 
 func TestTraceWrapper(t *testing.T) {
 	l, hook := test.NewNullLogger()
 	globalConfig := new(conf.GlobalConfiguration)
 	config := new(conf.Configuration)
-	config.Payment.ProviderType = payments.StripeProvider
+	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 
 	api := NewAPI(globalConfig, config, nil)

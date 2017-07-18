@@ -22,7 +22,6 @@ import (
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
-	"github.com/netlify/gocommerce/payments"
 )
 
 var dbFiles []string
@@ -81,7 +80,7 @@ func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
 	globalConfig.DB.Automigrate = true
 
 	config := new(conf.Configuration)
-	config.Payment.ProviderType = payments.StripeProvider
+	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 	return globalConfig, config
 }

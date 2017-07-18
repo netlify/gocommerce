@@ -23,11 +23,12 @@
     }
   },
   "payment": {
-    "type": "stripe",
     "stripe": {
+      "enabled": true,
       "secret_key": "Your secret key"
     },
     "paypal": {
+      "enabled": true,
       "client_id": "Your client id",
       "secret": "Your secret",
       "env": "sandbox"

@@ -274,15 +274,15 @@ func TestPaymentsRefundPaypal(t *testing.T) {
 	defer server.Close()
 
 	db, globalConfig, config := db(t)
-	config.Payment.ProviderType = payments.PayPalProvider
+	config.Payment.PayPal.Enabled = true
 	config.Payment.PayPal.ClientID = "clientid"
 	config.Payment.PayPal.Secret = "secret"
 	config.Payment.PayPal.Env = server.URL
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", secondTransaction.ID)
-	prov, err := createPaymentProvider(config)
+	provs, err := createPaymentProviders(config)
 	require.Nil(t, err)
-	ctx = gcontext.WithPaymentProvider(ctx, prov)
+	ctx = gcontext.WithPaymentProviders(ctx, provs)
 
 	params := &paypalPaymentParams{
 		Amount:       1,
@@ -332,7 +332,7 @@ func TestPaymentsRefundUnpaid(t *testing.T) {
 
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProvider(ctx, nil)
+	ctx = gcontext.WithPaymentProviders(ctx, nil)
 
 	params := &stripePaymentParams{
 		Amount:      1,
@@ -353,7 +353,7 @@ func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRe
 	db, globalConfig, config := db(t)
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProvider(ctx, nil)
+	ctx = gcontext.WithPaymentProviders(ctx, nil)
 
 	body, _ := json.Marshal(params)
 	w := httptest.NewRecorder()
@@ -366,13 +366,13 @@ func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRe
 func TestPaymentsRefundSuccess(t *testing.T) {
 	db, globalConfig, config := db(t)
 	// unused, but needed to pass safety check
-	config.Payment.ProviderType = "stripe"
+	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 
 	provider := &memProvider{name: payments.StripeProvider}
 	ctx := testContext(testToken("magical-unicorn", ""), config, true)
 	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProvider(ctx, provider)
+	ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
 
 	params := &stripePaymentParams{
 		Amount:      1,

@@ -153,14 +153,14 @@ func GetAssetStore(ctx context.Context) assetstores.Store {
 	return obj.(assetstores.Store)
 }
 
-// WithPaymentProvider adds the payment provider to the context.
-func WithPaymentProvider(ctx context.Context, prov payments.Provider) context.Context {
-	return context.WithValue(ctx, paymentProviderKey, prov)
+// WithPaymentProviders adds the payment providers to the context.
+func WithPaymentProviders(ctx context.Context, provs map[string]payments.Provider) context.Context {
+	return context.WithValue(ctx, paymentProviderKey, provs)
 }
 
-// GetPaymentProvider reads the payment provider from the context
-func GetPaymentProvider(ctx context.Context) payments.Provider {
-	provs, _ := ctx.Value(paymentProviderKey).(payments.Provider)
+// GetPaymentProviders reads the payment providers from the context
+func GetPaymentProviders(ctx context.Context) map[string]payments.Provider {
+	provs, _ := ctx.Value(paymentProviderKey).(map[string]payments.Provider)
 	return provs
 }
 

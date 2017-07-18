@@ -59,11 +59,12 @@ type Configuration struct {
 	} `mapstructure:"mailer" json:"mailer"`
 
 	Payment struct {
-		ProviderType string `mapstructure:"type" json:"type"`
-		Stripe       struct {
+		Stripe struct {
+			Enabled   bool   `mapstructure:"enabled" json:"enabled"`
 			SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 		} `mapstructure:"stripe" json:"stripe"`
 		PayPal struct {
+			Enabled  bool   `mapstructure:"enabled" json:"enabled"`
 			ClientID string `mapstructure:"client_id" json:"client_id"`
 			Secret   string `mapstructure:"secret" json:"secret"`
 			Env      string `mapstructure:"env" json:"env"`
