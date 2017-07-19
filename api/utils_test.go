@@ -3,12 +3,12 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
-
-	"context"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
@@ -16,19 +16,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/go-chi/chi"
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"
-	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
 
+const baseURL = "https://example.com"
+
 var dbFiles []string
 var testLogger = logrus.NewEntry(logrus.StandardLogger())
-
-var urlWithUserID string
-var urlForFirstOrder string
 
 func TestMain(m *testing.M) {
 	dbFiles = []string{}
@@ -59,19 +56,7 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration)
 	}
 
 	loadTestData(db)
-	urlForFirstOrder = fmt.Sprintf("https://example.com/orders/%s", firstOrder.ID)
-	urlWithUserID = fmt.Sprintf("https://example.com/users/%s/orders", testUser.ID)
-
 	return db, globalConfig, config
-}
-
-func testContext(token *jwt.Token, config *conf.Configuration, adminFlag bool) context.Context {
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, chi.RouteCtxKey, chi.NewRouteContext())
-	ctx = gcontext.WithConfig(ctx, config)
-	ctx = gcontext.WithRequestID(ctx, "test-request")
-	ctx = gcontext.WithAdminFlag(ctx, adminFlag)
-	return gcontext.WithToken(ctx, token)
 }
 
 func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
@@ -110,25 +95,35 @@ func testAdminToken(id, email string) *jwt.Token {
 // ------------------------------------------------------------------------------------------------
 // TEST DATA
 // ------------------------------------------------------------------------------------------------
-var testUser models.User
-var testAddress models.Address
 
-var firstOrder *models.Order
-var firstTransaction *models.Transaction
-var firstLineItem models.LineItem
+var testData = setupTestData()
+var testUserToken = testToken(testData.testUser.ID, testData.testUser.Email)
 
-var secondOrder *models.Order
-var secondTransaction *models.Transaction
-var secondLineItem1 models.LineItem
-var secondLineItem2 models.LineItem
+type TestData struct {
+	urlWithUserID    string
+	urlForFirstOrder string
 
-func loadTestData(db *gorm.DB) {
-	testUser = models.User{
+	testUser    *models.User
+	testAddress models.Address
+
+	firstOrder       *models.Order
+	firstTransaction *models.Transaction
+	firstLineItem    *models.LineItem
+
+	secondOrder       *models.Order
+	secondTransaction *models.Transaction
+	secondLineItem1   *models.LineItem
+	secondLineItem2   *models.LineItem
+}
+
+func setupTestData() *TestData {
+	testUser := &models.User{
 		ID:    "i-am-batman",
 		Email: "bruce@wayneindustries.com",
 	}
 
-	testAddress = models.Address{
+	testAddress := models.Address{
+		ID: "first-address",
 		AddressRequest: models.AddressRequest{
 			LastName: "wayne",
 			Address1: "123 cave way",
@@ -136,18 +131,17 @@ func loadTestData(db *gorm.DB) {
 			City:     "gotham",
 			Zip:      "324234",
 		},
-		ID:   "first-address",
-		User: &testUser,
+		User: testUser,
 	}
 
-	firstOrder = models.NewOrder("session1", testUser.Email, "usd")
+	firstOrder := models.NewOrder("session1", testUser.Email, "usd")
 	firstOrder.UserID = testUser.ID
 	firstOrder.PaymentProcessor = "stripe"
-	firstTransaction = models.NewTransaction(firstOrder)
+	firstTransaction := models.NewTransaction(firstOrder)
 	firstTransaction.ProcessorID = "stripe"
 	firstTransaction.Amount = 100
 	firstTransaction.Status = models.PaidState
-	firstLineItem = models.LineItem{
+	firstLineItem := &models.LineItem{
 		ID:          11,
 		OrderID:     firstOrder.ID,
 		Title:       "batwing",
@@ -159,12 +153,20 @@ func loadTestData(db *gorm.DB) {
 		Path:        "/i/believe/i/can/fly",
 	}
 
-	secondOrder = models.NewOrder("session2", testUser.Email, "usd")
+	firstOrder.ID = "first-order"
+	firstOrder.LineItems = []*models.LineItem{firstLineItem}
+	firstOrder.CalculateTotal(&calculator.Settings{}, nil)
+	firstOrder.BillingAddress = testAddress
+	firstOrder.ShippingAddress = testAddress
+	firstOrder.User = testUser
+	firstTransaction.ID = "first-trans"
+
+	secondOrder := models.NewOrder("session2", testUser.Email, "usd")
 	secondOrder.UserID = testUser.ID
 	secondOrder.PaymentProcessor = "paypal"
-	secondTransaction = models.NewTransaction(secondOrder)
+	secondTransaction := models.NewTransaction(secondOrder)
 	secondTransaction.ProcessorID = "paypal"
-	secondLineItem1 = models.LineItem{
+	secondLineItem1 := &models.LineItem{
 		ID:          21,
 		OrderID:     secondOrder.ID,
 		Title:       "tumbler",
@@ -175,7 +177,7 @@ func loadTestData(db *gorm.DB) {
 		Quantity:    2,
 		Path:        "/i/crush/villians/dreams",
 	}
-	secondLineItem2 = models.LineItem{
+	secondLineItem2 := &models.LineItem{
 		ID:          22,
 		OrderID:     secondOrder.ID,
 		Title:       "utility belt",
@@ -187,31 +189,48 @@ func loadTestData(db *gorm.DB) {
 		Path:        "/i/hold/the/universe/on/my/waist",
 	}
 
-	db.Create(&testUser)
-	db.Create(&testAddress)
-
-	firstOrder.ID = "first-order"
-	firstOrder.LineItems = []*models.LineItem{&firstLineItem}
-	firstOrder.CalculateTotal(&calculator.Settings{}, nil)
-	firstOrder.BillingAddress = testAddress
-	firstOrder.ShippingAddress = testAddress
-	firstOrder.User = &testUser
-	db.Create(&firstLineItem)
-	db.Create(firstTransaction)
-	db.Create(firstOrder)
-
 	secondOrder.ID = "second-order"
-	secondOrder.LineItems = []*models.LineItem{&secondLineItem1, &secondLineItem2}
+	secondOrder.LineItems = []*models.LineItem{secondLineItem1, secondLineItem2}
 	secondOrder.CalculateTotal(&calculator.Settings{}, nil)
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
-	secondOrder.User = &testUser
+	secondOrder.User = testUser
+	secondTransaction.ID = "second-trans"
 	secondTransaction.Amount = secondOrder.Total
 	secondTransaction.Status = models.PaidState
-	db.Create(&secondLineItem1)
-	db.Create(&secondLineItem2)
-	db.Create(secondTransaction)
-	db.Create(secondOrder)
+
+	return &TestData{
+		fmt.Sprintf("/users/%s/orders", testUser.ID),
+		fmt.Sprintf("/orders/%s", firstOrder.ID),
+
+		testUser,
+		testAddress,
+
+		firstOrder,
+		firstTransaction,
+		firstLineItem,
+
+		secondOrder,
+		secondTransaction,
+		secondLineItem1,
+		secondLineItem2,
+	}
+}
+
+func loadTestData(db *gorm.DB) {
+	testData = setupTestData()
+
+	db.Create(testData.testUser)
+	db.Create(&testData.testAddress)
+
+	db.Create(testData.firstLineItem)
+	db.Create(testData.firstTransaction)
+	db.Create(testData.firstOrder)
+
+	db.Create(testData.secondLineItem1)
+	db.Create(testData.secondLineItem2)
+	db.Create(testData.secondTransaction)
+	db.Create(testData.secondOrder)
 }
 
 func getTestAddress() *models.Address {
@@ -278,5 +297,38 @@ func extractPayload(t *testing.T, code int, recorder *httptest.ResponseRecorder,
 	require.Equal(t, code, recorder.Code, "code mismatch: %v", recorder.Body)
 
 	err := json.NewDecoder(recorder.Body).Decode(what)
-	require.NoError(t, err, "Failed to extract body")
+	require.NoError(t, err, "Failed to extract body: %s", string(recorder.Body.Bytes()))
+}
+
+type RouteTest struct {
+	DB           *gorm.DB
+	GlobalConfig *conf.GlobalConfiguration
+	Config       *conf.Configuration
+	T            *testing.T
+}
+
+func NewRouteTest(t *testing.T) *RouteTest {
+	db, globalConfig, config := db(t)
+	return &RouteTest{db, globalConfig, config, t}
+}
+
+func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, token *jwt.Token) *httptest.ResponseRecorder {
+	recorder := httptest.NewRecorder()
+	req := httptest.NewRequest(method, baseURL+url, body)
+
+	if token != nil {
+		require.NoError(r.T, signHTTPRequest(req, token, r.Config.JWT.Secret))
+	}
+	NewAPI(r.GlobalConfig, r.Config, r.DB).handler.ServeHTTP(recorder, req)
+
+	return recorder
+}
+
+func signHTTPRequest(req *http.Request, token *jwt.Token, jwtSecret string) error {
+	tokenStr, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+	return nil
 }

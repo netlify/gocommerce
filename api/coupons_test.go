@@ -6,46 +6,32 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/netlify/gocommerce/conf"
-	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNoCoupons(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, false)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.org/coupons/coupon-code", nil).WithContext(ctx)
+func TestCouponView(t *testing.T) {
+	t.Run("NotFound", func(t *testing.T) {
+		test := NewRouteTest(t)
+		recorder := test.TestEndpoint(http.MethodGet, "/coupons/coupon-code", nil, nil)
+		validateError(t, http.StatusNotFound, recorder)
+	})
+	t.Run("Simple", func(t *testing.T) {
+		test := NewRouteTest(t)
+		server := startTestCouponURLs()
+		defer server.Close()
+		test.Config.Coupons.URL = server.URL
 
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusNotFound, recorder)
+		recorder := test.TestEndpoint(http.MethodGet, "/coupons/coupon-code", nil, nil)
+		coupon := &models.Coupon{}
+		extractPayload(t, http.StatusOK, recorder, coupon)
+		assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
+		assert.Equal(t, "coupon-code", coupon.Code, "Expected coupon code to be 'coupon-code'")
+	})
 }
 
-func TestSimpleCouponLookup(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	startTestCouponURLs(config)
-
-	ctx := testContext(nil, config, false)
-	ctx = gcontext.WithCoupons(ctx, config)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.org/coupons/coupon-code", nil).WithContext(ctx)
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	coupon := &models.Coupon{}
-	extractPayload(t, http.StatusOK, recorder, coupon)
-	assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
-	assert.Equal(t, "coupon-code", coupon.Code, "Expected coupon code to be 'coupon-code'")
-}
-
-func TestApplyingACoupon(t *testing.T) {
-
-}
-
-func startTestCouponURLs(config *conf.Configuration) {
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+func startTestCouponURLs() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintln(w, `{
       "coupons": {
@@ -55,6 +41,4 @@ func startTestCouponURLs(config *conf.Configuration) {
       }
     }`)
 	}))
-
-	config.Coupons.URL = ts.URL
 }

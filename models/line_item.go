@@ -47,6 +47,11 @@ func (LineItem) TableName() string {
 
 // BeforeUpdate database callback.
 func (i *LineItem) BeforeUpdate() (err error) {
+	if len(i.MetaData) == 0 {
+		i.RawMetaData = ""
+		return nil
+	}
+
 	data, err := json.Marshal(i.MetaData)
 	if err == nil {
 		i.RawMetaData = string(data)

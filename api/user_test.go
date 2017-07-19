@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,433 +13,287 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, false)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/users", nil).WithContext(ctx)
-
-	token := testToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
-}
-
-func TestUsersQueryForAllUsersWithParams(t *testing.T) {
-	db, globalConfig, config := db(t)
-	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-	}
-	rsp := db.Create(&toDie)
-	if rsp.Error != nil {
-		assert.FailNow(t, "failed b/c of db error: "+rsp.Error.Error())
-	}
-	defer db.Unscoped().Delete(&toDie)
-
-	ctx := testContext(nil, config, true)
-
-	req := httptest.NewRequest("GET", "http://example.com/users?email=dc.com", nil).WithContext(ctx)
-	recorder := httptest.NewRecorder()
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	users := []models.User{}
-	extractPayload(t, http.StatusOK, recorder, &users)
-	assert.Equal(t, 1, len(users))
-	assert.Equal(t, "villian", users[0].ID)
-}
-
-func TestUsersQueryForAllUsers(t *testing.T) {
-	db, globalConfig, config := db(t)
-	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-	}
-	db.Create(&toDie)
-	defer db.Unscoped().Delete(&toDie)
-
-	recorder := httptest.NewRecorder()
-	ctx := testContext(nil, config, true)
-	req := httptest.NewRequest("GET", "https://example.com/users", nil).WithContext(ctx)
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	users := []models.User{}
-	extractPayload(t, http.StatusOK, recorder, &users)
-	for _, u := range users {
-		switch u.ID {
-		case toDie.ID:
-			assert.Equal(t, "twoface@dc.com", u.Email)
-		case testUser.ID:
-			assert.Equal(t, testUser.Email, u.Email)
-		default:
-			assert.Fail(t, "unexpected user %v\n", u)
+func TestUsersList(t *testing.T) {
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "villian",
+			Email: "twoface@dc.com",
 		}
-	}
-}
+		rsp := test.DB.Create(&toDie)
+		require.NoError(t, rsp.Error, "DB Error")
+		defer test.DB.Unscoped().Delete(&toDie)
 
-//func TestUsersQueryForDeletedUser(t *testing.T) {
-//	toDie := models.User{
-//		ID:    "def-should-not-exist",
-//		Email: "twoface@dc.com",
-//	}
-//	db.Create(&toDie)
-//	db.Delete(&toDie) // soft delete
-//	defer db.Unscoped().Delete(&toDie)
-//
-//	recorder := httptest.NewRecorder()
-//	req := httptest.NewRequest("GET", urlWithUserID, nil)
-//
-//	globalConfig := testConfig()
-//	ctx := testContext(testToken(toDie.ID, toDie.Email, nil), globalConfig)
-//	chi.RouteContext(ctx).URLParams.Add("user_id", toDie.ID)
-//
-//	api := NewAPI(globalConfig, db, nil)
-//	api.UserView(ctx, recorder, req)
-//	validateError(t, http.StatusNotFound, recorder)
-//}
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
 
-func TestUsersQueryForUserAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-
-	ctx := testContext(nil, config, false)
-	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
-
-	token := testToken(testUser.ID, testUser.Email)
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	user := new(models.User)
-	extractPayload(t, http.StatusOK, recorder, user)
-
-	validateUser(t, &testUser, user)
-}
-
-func TestUsersQueryForUserAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-	ctx := testContext(nil, config, false)
-
-	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
-
-	token := testToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
-}
-
-func TestUsersQueryForUserAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-	ctx := testContext(nil, config, true)
-
-	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID, nil).WithContext(ctx)
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	user := new(models.User)
-	extractPayload(t, http.StatusOK, recorder, user)
-	validateUser(t, &testUser, user)
-}
-
-func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
-	second := getTestAddress()
-	second.UserID = testUser.ID
-	assert.Nil(t, second.Validate())
-	db.Create(&second)
-	defer db.Unscoped().Delete(&second)
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-
-	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), testUser.ID, tokenStr)
-	assert.Equal(t, 2, len(addrs))
-	for _, a := range addrs {
-		assert.Nil(t, a.Validate())
-		switch a.ID {
-		case second.ID:
-			validateAddress(t, *second, a)
-		case testAddress.ID:
-			validateAddress(t, testAddress, a)
-		default:
-			assert.Fail(t, fmt.Sprintf("Unexpected address: %+v", a))
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 2)
+		for _, u := range users {
+			switch u.ID {
+			case toDie.ID:
+				assert.Equal(t, "twoface@dc.com", u.Email)
+			case testData.testUser.ID:
+				assert.Equal(t, testData.testUser.Email, u.Email)
+			default:
+				assert.Fail(t, "unexpected user %v\n", u)
+			}
 		}
-	}
+	})
+	t.Run("WithParams", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "villian",
+			Email: "twoface@dc.com",
+		}
+		rsp := test.DB.Create(&toDie)
+		require.NoError(t, rsp.Error, "DB Error")
+		defer test.DB.Unscoped().Delete(&toDie)
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users?email=dc.com", nil, token)
+
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 1)
+		assert.Equal(t, "villian", users[0].ID)
+	})
 }
 
-func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
+func TestUsersView(t *testing.T) {
+	url := "/users/" + testData.testUser.ID
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testUserToken
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	token := testToken(testUser.ID, "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
+		user := new(models.User)
+		extractPayload(t, http.StatusOK, recorder, user)
+		validateUser(t, testData.testUser, user)
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), testUser.ID, tokenStr)
-	assert.Equal(t, 1, len(addrs))
-	validateAddress(t, testAddress, addrs[0])
+		user := new(models.User)
+		extractPayload(t, http.StatusOK, recorder, user)
+		validateUser(t, testData.testUser, user)
+	})
+	t.Run("Deleted", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "def-should-not-exist",
+			Email: "twoface@dc.com",
+		}
+		test.DB.Create(&toDie)
+		test.DB.Delete(&toDie) // soft delete
+		defer test.DB.Unscoped().Delete(&toDie)
+
+		token := testToken(toDie.ID, toDie.Email)
+		recorder := test.TestEndpoint(http.MethodGet, "/users/"+toDie.ID, nil, token)
+		validateError(t, http.StatusNotFound, recorder)
+	})
 }
 
-func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, false)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID+"/addresses", nil).WithContext(ctx)
+func TestUserAddressesList(t *testing.T) {
+	url := "/users/" + testData.testUser.ID + "/addresses"
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		second := getTestAddress()
+		second.UserID = testData.testUser.ID
+		assert.Nil(t, second.Validate())
+		test.DB.Create(&second)
+		defer test.DB.Unscoped().Delete(&second)
 
-	token := testToken("stranger-danger", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		assert.Len(t, addrs, 2)
+		for _, a := range addrs {
+			assert.Nil(t, a.Validate())
+			switch a.ID {
+			case second.ID:
+				validateAddress(t, *second, a)
+			case testData.testAddress.ID:
+				validateAddress(t, testData.testAddress, a)
+			default:
+				assert.Fail(t, fmt.Sprintf("Unexpected address: %+v", a))
+			}
+		}
+	})
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken(testData.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		require.Len(t, addrs, 1)
+		validateAddress(t, testData.testAddress, addrs[0])
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("NoAddresses", func(t *testing.T) {
+		test := NewRouteTest(t)
+		u := models.User{
+			ID:    "temporary",
+			Email: "junk@junk.com",
+		}
+		test.DB.Create(u)
+		defer test.DB.Unscoped().Delete(u)
+
+		token := testToken(u.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users/"+u.ID+"/addresses", nil, token)
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		assert.Len(t, addrs, 0)
+	})
+	t.Run("MissingUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("dne", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users/dne/addresses", nil, token)
+		validateError(t, http.StatusNotFound, recorder)
+	})
 }
 
-func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
-	db, globalConfig, config := db(t)
-	u := models.User{
-		ID:    "temporary",
-		Email: "junk@junk.com",
-	}
-	db.Create(u)
-	defer db.Unscoped().Delete(u)
+func TestUserAddressView(t *testing.T) {
+	url := "/users/" + testData.testUser.ID + "/addresses/" + testData.testAddress.ID
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken(testData.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	token := testToken(u.ID, "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-
-	addrs := queryForAddresses(t, NewAPI(globalConfig, config, db), u.ID, tokenStr)
-	assert.Equal(t, 0, len(addrs))
+		addr := new(models.Address)
+		extractPayload(t, http.StatusOK, recorder, addr)
+		validateAddress(t, testData.testAddress, *addr)
+	})
 }
 
-func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, false)
+func TestUserDelete(t *testing.T) {
+	t.Run("NonExistentUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users/dne", nil, token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/users/dne/addresses", nil).WithContext(ctx)
-
-	token := testToken("dne", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusNotFound, recorder)
-}
-
-func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, false)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/users/"+testUser.ID+"/addresses/"+testAddress.ID, nil).WithContext(ctx)
-
-	token := testToken(testUser.ID, "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	addr := new(models.Address)
-	extractPayload(t, http.StatusOK, recorder, addr)
-	validateAddress(t, testAddress, *addr)
-}
-
-func TestUsersDeleteNonExistentUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(nil, config, true)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", "https://example.com/users/dne", nil).WithContext(ctx)
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "", recorder.Body.String())
-}
-
-func TestUsersDeleteSingleUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
-	dyingAddr := getTestAddress()
-	dyingAddr.UserID = dyingUser.ID
-	dyingOrder := models.NewOrder("session2", dyingUser.Email, "usd")
-	dyingOrder.UserID = dyingUser.ID
-	dyingTransaction := models.NewTransaction(dyingOrder)
-	dyingTransaction.UserID = dyingUser.ID
-	dyingLineItem := models.LineItem{
-		ID:          123,
-		OrderID:     dyingOrder.ID,
-		Title:       "coffin",
-		Sku:         "123-cough-cough-123",
-		Type:        "home",
-		Description: "nappytimeplace",
-		Price:       100,
-		Quantity:    1,
-		Path:        "/right/to/the/grave",
-	}
-	items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
-	for _, i := range items {
-		db.Create(i)
-	}
-	defer func() {
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+	})
+	t.Run("SingleUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
+		dyingAddr := getTestAddress()
+		dyingAddr.UserID = dyingUser.ID
+		dyingOrder := models.NewOrder("session2", dyingUser.Email, "usd")
+		dyingOrder.UserID = dyingUser.ID
+		dyingTransaction := models.NewTransaction(dyingOrder)
+		dyingTransaction.UserID = dyingUser.ID
+		dyingLineItem := models.LineItem{
+			ID:          123,
+			OrderID:     dyingOrder.ID,
+			Title:       "coffin",
+			Sku:         "123-cough-cough-123",
+			Type:        "home",
+			Description: "nappytimeplace",
+			Price:       100,
+			Quantity:    1,
+			Path:        "/right/to/the/grave",
+		}
+		items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
 		for _, i := range items {
-			db.Unscoped().Delete(i)
+			test.DB.Create(i)
 		}
-	}()
+		defer func() {
+			for _, i := range items {
+				test.DB.Unscoped().Delete(i)
+			}
+		}()
 
-	ctx := testContext(nil, config, true)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users/"+dyingUser.ID, nil, token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", "https://example.com/users/"+dyingUser.ID, nil).WithContext(ctx)
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
 
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "", recorder.Body.String())
-
-	// now load it back and it should be soft deleted
-	//found := &models.User{ID: dyingUser.ID}
-	assert.False(t, db.Unscoped().First(&dyingUser).RecordNotFound())
-	assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingAddr).RecordNotFound())
-	assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
-	assert.False(t, db.Unscoped().First(dyingOrder).RecordNotFound())
-	assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingTransaction).RecordNotFound())
-	assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingLineItem).RecordNotFound())
-	assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+		// now load it back and it should be soft deleted
+		//found := &models.User{ID: dyingUser.ID}
+		assert.False(t, test.DB.Unscoped().First(&dyingUser).RecordNotFound())
+		assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingAddr).RecordNotFound())
+		assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(dyingOrder).RecordNotFound())
+		assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingTransaction).RecordNotFound())
+		assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingLineItem).RecordNotFound())
+		assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+	})
 }
 
-func TestDeleteUserAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
+func TestUserAddressDelete(t *testing.T) {
+	test := NewRouteTest(t)
 	addr := getTestAddress()
-	addr.UserID = testUser.ID
-	db.Create(addr)
-
-	ctx := testContext(nil, config, true)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", "https://example.com/users/"+testUser.ID+"/addresses/"+addr.ID, nil).WithContext(ctx)
+	addr.UserID = testData.testUser.ID
+	test.DB.Create(addr)
 
 	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
+	recorder := test.TestEndpoint(http.MethodDelete, "/users/"+testData.testUser.ID+"/addresses/"+addr.ID, nil, token)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
-	assert.False(t, db.Unscoped().First(&addr).RecordNotFound())
+	assert.False(t, test.DB.Unscoped().First(&addr).RecordNotFound())
 	assert.NotNil(t, addr.DeletedAt)
 }
 
-func TestCreateAnAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
-	addr := getTestAddress()
-	b, err := json.Marshal(&addr.AddressRequest)
-	assert.Nil(t, err)
+func TestUserAddressCreate(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		test := NewRouteTest(t)
+		addr := getTestAddress()
+		b, err := json.Marshal(&addr.AddressRequest)
+		require.NoError(t, err)
 
-	ctx := testContext(nil, config, true)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+testData.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "https://example.com/users/"+testUser.ID+"/addresses", bytes.NewBuffer(b)).WithContext(ctx)
+		results := struct {
+			ID string
+		}{}
+		extractPayload(t, http.StatusOK, recorder, &results)
 
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
+		// now pull off the address from the DB
+		dbAddr := &models.Address{ID: results.ID, UserID: testData.testUser.ID}
+		rsp := test.DB.First(dbAddr)
+		assert.False(t, rsp.RecordNotFound())
+	})
+	t.Run("Invalid", func(t *testing.T) {
+		test := NewRouteTest(t)
+		addr := getTestAddress()
+		addr.LastName = "" // required field
+		b, err := json.Marshal(&addr.AddressRequest)
+		require.NoError(t, err)
 
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-
-	assert.Equal(t, http.StatusOK, recorder.Code)
-
-	results := struct {
-		ID string
-	}{}
-	err = json.Unmarshal(recorder.Body.Bytes(), &results)
-	assert.Nil(t, err)
-
-	// now pull off the address from the DB
-	dbAddr := &models.Address{ID: results.ID, UserID: testUser.ID}
-	rsp := db.First(dbAddr)
-	assert.False(t, rsp.RecordNotFound())
-}
-
-func TestCreateInvalidAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
-	addr := getTestAddress()
-	addr.LastName = "" // required field
-
-	b, err := json.Marshal(&addr.AddressRequest)
-	assert.Nil(t, err)
-
-	ctx := testContext(nil, config, true)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", "https://example.com/users/"+testUser.ID+"/addresses", bytes.NewBuffer(b)).WithContext(ctx)
-
-	token := testAdminToken("magical-unicorn", "")
-	tokenStr, err := token.SignedString([]byte(config.JWT.Secret))
-	require.NoError(t, err)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	NewAPI(globalConfig, config, db).handler.ServeHTTP(recorder, req)
-	validateError(t, http.StatusBadRequest, recorder)
-}
-
-// ------------------------------------------------------------------------------------------------
-
-func queryForAddresses(t *testing.T, api *API, id string, tokenStr string) []models.Address {
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", "https://example.com/users/"+id+"/addresses", nil)
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
-
-	api.handler.ServeHTTP(recorder, req)
-
-	addrs := []models.Address{}
-	extractPayload(t, http.StatusOK, recorder, &addrs)
-	return addrs
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+testData.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
+		validateError(t, http.StatusBadRequest, recorder)
+	})
 }
