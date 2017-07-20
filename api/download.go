@@ -13,7 +13,7 @@ import (
 const maxIPsPerDay = 50
 
 // DownloadURL returns a signed URL to download a purchased asset.
-func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) {
+func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	downloadID := chi.URLParam(r, "download_id")
 	log := logEntrySetField(r, "download_id", downloadID)
@@ -24,34 +24,28 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) {
 	if result := a.db.Where("id = ?", downloadID).First(download); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Download not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Download not found")
 		}
-		return
+		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	order := &models.Order{}
 	if result := a.db.Where("id = ?", download.OrderID).First(order); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Download order not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Download order not found")
 		}
-		return
+		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		unauthorizedError(w, "Not Authorized to access this download")
-		return
+		return unauthorizedError("Not Authorized to access this download")
 	}
 
 	if order.PaymentState != "paid" {
-		unauthorizedError(w, "This download has not been paid yet")
-		return
+		return unauthorizedError("This download has not been paid yet")
 	}
 
 	rows, err := a.db.Model(&models.Event{}).
@@ -60,27 +54,23 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) {
 		Rows()
 	if err != nil {
 		log.WithError(err).Warnf("Error while signing download: %s", err)
-		internalServerError(w, "Error signing download: %v", err)
-		return
+		return internalServerError("Error signing download: %v", err)
 	}
 	var count uint64
 	for rows.Next() {
 		err = rows.Scan(&count)
 		if err != nil {
 			log.WithError(err).Warnf("Error while signing download: %s", err)
-			internalServerError(w, "Error signing download: %v", err)
-			return
+			return internalServerError("Error signing download: %v", err)
 		}
 	}
 	if count > maxIPsPerDay {
-		unauthorizedError(w, "This download has been accessed from too many IPs within the last day")
-		return
+		return unauthorizedError("This download has been accessed from too many IPs within the last day")
 	}
 
 	if err := download.SignURL(assets); err != nil {
 		log.WithError(err).Warnf("Error while signing download: %s", err)
-		internalServerError(w, "Error signing download: %v", err)
-		return
+		return internalServerError("Error signing download: %v", err)
 	}
 
 	tx := a.db.Begin()
@@ -88,11 +78,11 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) {
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, order.ID, models.EventUpdated, []string{"download"})
 	tx.Commit()
 
-	sendJSON(w, http.StatusOK, download)
+	return sendJSON(w, http.StatusOK, download)
 }
 
 // DownloadList lists all purchased downloads for an order or a user.
-func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) {
+func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	orderID := getOrderID(ctx)
 	log := getLogEntry(r)
@@ -103,12 +93,10 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) {
 		if result := a.db.Where("id = ?", orderID).First(order); result.Error != nil {
 			if result.RecordNotFound() {
 				log.Debug("Requested record that doesn't exist")
-				notFoundError(w, "Download order not found")
-			} else {
-				log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-				internalServerError(w, "Error during database query: %v", result.Error)
+				return notFoundError("Download order not found")
 			}
-			return
+			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+			return internalServerError("Error during database query: %v", result.Error)
 		}
 	} else {
 		order = nil
@@ -116,13 +104,11 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) {
 
 	if order != nil {
 		if !hasOrderAccess(ctx, order) {
-			unauthorizedError(w, "You don't have permission to access this order")
-			return
+			return unauthorizedError("You don't have permission to access this order")
 		}
 
 		if order.PaymentState != "paid" {
-			unauthorizedError(w, "This order has not been completed yet")
-			return
+			return unauthorizedError("This order has not been completed yet")
 		}
 	}
 
@@ -138,18 +124,16 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) {
 
 	offset, limit, err := paginate(w, r, query.Model(&models.Download{}))
 	if err != nil {
-		badRequestError(w, "Bad Pagination Parameters: %v", err)
-		return
+		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
 	var downloads []models.Download
 	query.LogMode(true)
 	if result := query.Offset(offset).Limit(limit).Find(&downloads); result.Error != nil {
 		log.WithError(result.Error).Warn("Error while querying database")
-		internalServerError(w, "Error during database query: %v", result.Error)
-		return
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	log.WithField("download_count", len(downloads)).Debugf("Successfully retrieved %d downloads", len(downloads))
-	sendJSON(w, http.StatusOK, downloads)
+	return sendJSON(w, http.StatusOK, downloads)
 }

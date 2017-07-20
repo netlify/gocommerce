@@ -21,7 +21,7 @@ type productsRow struct {
 }
 
 // SalesReport lists the sales numbers for a period
-func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) {
+func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 	query := a.db.
 		Model(&models.Order{}).
 		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency").
@@ -30,14 +30,12 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) {
 
 	query, err := parseTimeQueryParams(query, r.URL.Query())
 	if err != nil {
-		badRequestError(w, err.Error())
-		return
+		return badRequestError(err.Error())
 	}
 
 	rows, err := query.Rows()
 	if err != nil {
-		internalServerError(w, "Database error: %v", err)
-		return
+		return internalServerError("Database error: %v", err)
 	}
 	defer rows.Close()
 	result := []*salesRow{}
@@ -45,17 +43,16 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) {
 		row := &salesRow{}
 		err = rows.Scan(&row.Total, &row.SubTotal, &row.Taxes, &row.Currency)
 		if err != nil {
-			internalServerError(w, "Database error: %v", err)
-			return
+			return internalServerError("Database error: %v", err)
 		}
 		result = append(result, row)
 	}
 
-	sendJSON(w, http.StatusOK, result)
+	return sendJSON(w, http.StatusOK, result)
 }
 
 // ProductsReport list the products sold within a period
-func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) {
+func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 	ordersTable := models.Order{}.TableName()
 	itemsTable := models.LineItem{}.TableName()
 	query := a.db.
@@ -67,8 +64,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) {
 
 	from, to, err := getTimeQueryParams(r.URL.Query())
 	if err != nil {
-		badRequestError(w, err.Error())
-		return
+		return badRequestError(err.Error())
 	}
 	if from != nil {
 		query = query.Where("orders.created_at >= ?", from)
@@ -79,8 +75,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := query.Rows()
 	if err != nil {
-		internalServerError(w, "Database error: %v", err)
-		return
+		return internalServerError("Database error: %v", err)
 	}
 	defer rows.Close()
 	result := []*productsRow{}
@@ -88,11 +83,10 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) {
 		row := &productsRow{}
 		err = rows.Scan(&row.Sku, &row.Path, &row.Total, &row.Currency)
 		if err != nil {
-			internalServerError(w, "Database error: %v", err)
-			return
+			return internalServerError("Database error: %v", err)
 		}
 		result = append(result, row)
 	}
 
-	sendJSON(w, http.StatusOK, result)
+	return sendJSON(w, http.StatusOK, result)
 }

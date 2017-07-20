@@ -33,22 +33,21 @@ type PaymentParams struct {
 
 // PaymentListForUser is the endpoint for listing transactions for a user.
 // The ID in the claim and the ID in the path must match (or have admin override)
-func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) {
+func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	userID := getUserID(ctx)
 
 	trans, httpErr := queryForTransactions(a.db, log, "user_id = ?", userID)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
+		return httpErr
 	}
-	sendJSON(w, http.StatusOK, trans)
+	return sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentListForOrder is the endpoint for listing transactions for an order. You must be the owner
 // of the order (user_id) or an admin. Listing the payments for an anon order.
-func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) {
+func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	orderID := getOrderID(ctx)
@@ -56,14 +55,12 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) {
 
 	order, httpErr := queryForOrder(a.db, orderID, log)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
+		return httpErr
 	}
 
 	if !hasOrderAccess(ctx, order) {
 		log.Warnf("Attempt to access order as %s, but order.UserID is %s", claims.ID, order.UserID)
-		unauthorizedError(w, "You don't have access to this order")
-		return
+		return unauthorizedError("You don't have access to this order")
 	}
 
 	// additional check for anonymous orders: only allow admins
@@ -71,16 +68,15 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) {
 	if order.UserID == "" && !isAdmin {
 		// anon order ~ only accessible by an admin
 		log.Warn("Queried for an anonymous order but not as admin")
-		unauthorizedError(w, "Anonymous orders must be accessed by admins")
-		return
+		return unauthorizedError("Anonymous orders must be accessed by admins")
 	}
 
 	log.Debugf("Returning %d transactions", len(order.Transactions))
-	sendJSON(w, http.StatusOK, order.Transactions)
+	return sendJSON(w, http.StatusOK, order.Transactions)
 }
 
 // PaymentCreate is the endpoint for creating a payment for an order
-func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
+func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	config := gcontext.GetConfig(ctx)
@@ -89,23 +85,19 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
 	params := PaymentParams{Currency: "USD"}
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		badRequestError(w, "Could not read params: %v", err)
-		return
+		return badRequestError("Could not read params: %v", err)
 	}
 	if params.ProviderType == "" {
-		badRequestError(w, "Creating a payment requires specifying a 'provider'")
-		return
+		return badRequestError("Creating a payment requires specifying a 'provider'")
 	}
 
 	provider := gcontext.GetPaymentProviders(ctx)[strings.ToLower(params.ProviderType)]
 	if provider == nil {
-		badRequestError(w, "Payment provider '%s' not configured", params.ProviderType)
-		return
+		return badRequestError("Payment provider '%s' not configured", params.ProviderType)
 	}
 	charge, err := provider.NewCharger(ctx, r)
 	if err != nil {
-		badRequestError(w, "Error creating payment provider: %v", err)
-		return
+		return badRequestError("Error creating payment provider: %v", err)
 	}
 
 	orderID := getOrderID(ctx)
@@ -115,23 +107,19 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
 	if result := tx.Preload("LineItems").Preload("BillingAddress").First(order, "id = ?", orderID); result.Error != nil {
 		tx.Rollback()
 		if result.RecordNotFound() {
-			notFoundError(w, "No order with this ID found")
-		} else {
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("No order with this ID found")
 		}
-		return
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	if order.PaymentState == models.PaidState {
 		tx.Rollback()
-		badRequestError(w, "This order has already been paid")
-		return
+		return badRequestError("This order has already been paid")
 	}
 
 	if order.Currency != params.Currency {
 		tx.Rollback()
-		badRequestError(w, "Currencies doesn't match - %v vs %v", order.Currency, params.Currency)
-		return
+		return badRequestError("Currencies doesn't match - %v vs %v", order.Currency, params.Currency)
 	}
 
 	token := gcontext.GetToken(ctx)
@@ -144,22 +132,19 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
 	} else {
 		if token == nil {
 			tx.Rollback()
-			unauthorizedError(w, "You must be logged in to pay for this order")
-			return
+			return unauthorizedError("You must be logged in to pay for this order")
 		}
 		claims := token.Claims.(*claims.JWTClaims)
 		if order.UserID != claims.ID {
 			tx.Rollback()
-			unauthorizedError(w, "You must be logged in to pay for this order")
-			return
+			return unauthorizedError("You must be logged in to pay for this order")
 		}
 	}
 
 	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
-		internalServerError(w, "We failed to authorize the amount for this order: %v", err)
-		return
+		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
 	tr := models.NewTransaction(order)
 
@@ -178,8 +163,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		tx.Commit()
-		internalServerError(w, "There was an error charging your card: %v", err)
-		return
+		return internalServerError("There was an error charging your card: %v", err)
 	}
 
 	order.PaymentState = models.PaidState
@@ -201,94 +185,82 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	sendJSON(w, http.StatusOK, tr)
+	return sendJSON(w, http.StatusOK, tr)
 }
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins.
-func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) {
+func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
 	query, err := parsePaymentQueryParams(a.db, r.URL.Query())
 	if err != nil {
 		log.WithError(err).Info("Malformed request")
-		badRequestError(w, err.Error())
-		return
+		return badRequestError(err.Error())
 	}
 
 	trans, httpErr := queryForTransactions(query, log, "", "")
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
+		return httpErr
 	}
-	sendJSON(w, http.StatusOK, trans)
+	return sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentView returns information about a single payment. It is only available to admins.
-func (a *API) PaymentView(w http.ResponseWriter, r *http.Request) {
-	if trans, httpErr := a.getTransaction(r); httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-	} else {
-		sendJSON(w, http.StatusOK, trans)
+func (a *API) PaymentView(w http.ResponseWriter, r *http.Request) error {
+	trans, httpErr := a.getTransaction(r)
+	if httpErr != nil {
+		return httpErr
 	}
+	return sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentRefund refunds a transaction for a specific amount. This allows partial
 // refunds if desired. It is only available to admins.
-func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) {
+func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	config := gcontext.GetConfig(ctx)
 	params := PaymentParams{Currency: "USD"}
 	err := json.NewDecoder(r.Body).Decode(&params)
 	if err != nil {
-		badRequestError(w, "Could not read params: %v", err)
-		return
+		return badRequestError("Could not read params: %v", err)
 	}
 
 	trans, httpErr := a.getTransaction(r)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
+		return httpErr
 	}
 
 	if trans.Currency != params.Currency {
-		badRequestError(w, "Currencies do not match - %v vs %v", trans.Currency, params.Currency)
-		return
+		return badRequestError("Currencies do not match - %v vs %v", trans.Currency, params.Currency)
 	}
 
 	if params.Amount <= 0 || params.Amount > trans.Amount {
-		badRequestError(w, "The balance of the refund must be between 0 and the total amount")
-		return
+		return badRequestError("The balance of the refund must be between 0 and the total amount")
 	}
 
 	if trans.FailureCode != "" {
-		badRequestError(w, "Can't refund a failed transaction")
-		return
+		return badRequestError("Can't refund a failed transaction")
 	}
 
 	if trans.Status != models.PaidState {
-		badRequestError(w, "Can't refund a transaction that hasn't been paid")
-		return
+		return badRequestError("Can't refund a transaction that hasn't been paid")
 	}
 
 	log := getLogEntry(r)
 	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
 	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
+		return httpErr
 	}
 	if order.PaymentProcessor == "" {
-		internalServerError(w, "Order does not specify a payment provider")
-		return
+		return internalServerError("Order does not specify a payment provider")
 	}
 
 	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
 	if provider == nil {
-		badRequestError(w, "Payment provider '%s' not configured", order.PaymentProcessor)
-		return
+		return badRequestError("Payment provider '%s' not configured", order.PaymentProcessor)
 	}
 	refund, err := provider.NewRefunder(ctx, r)
 	if err != nil {
-		badRequestError(w, "Error creating payment provider: %v", err)
-		return
+		return badRequestError("Error creating payment provider: %v", err)
 	}
 
 	// ok make the refund
@@ -324,43 +296,38 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) {
 		tx.Save(hook)
 	}
 	tx.Commit()
-	sendJSON(w, http.StatusOK, m)
+	return sendJSON(w, http.StatusOK, m)
 }
 
 // PreauthorizePayment creates a new payment that can be authorized in the browser
-func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) {
+func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	providerType := strings.ToLower(r.FormValue("provider"))
 	if providerType == "" {
-		badRequestError(w, "Preauthorizing a payment requires specifying a 'provider'")
-		return
+		return badRequestError("Preauthorizing a payment requires specifying a 'provider'")
 	}
 
 	provider := gcontext.GetPaymentProviders(ctx)[providerType]
 	if provider == nil {
-		badRequestError(w, "Payment provider '%s' not configured", providerType)
-		return
+		return badRequestError("Payment provider '%s' not configured", providerType)
 	}
 	preauthorize, err := provider.NewPreauthorizer(ctx, r)
 	if err != nil {
-		badRequestError(w, "Error creating payment provider: %v", err)
-		return
+		return badRequestError("Error creating payment provider: %v", err)
 	}
 
 	// TODO it is odd that this is the only method using FORM values
 	amt, err := strconv.ParseUint(r.FormValue("amount"), 10, 64)
 	if err != nil {
-		internalServerError(w, "Error parsing amount: %v", err)
-		return
+		return internalServerError("Error parsing amount: %v", err)
 	}
 
 	paymentResult, err := preauthorize(amt, r.FormValue("currency"), r.FormValue("description"))
 	if err != nil {
-		internalServerError(w, "Error preauthorizing payment: %v", err)
-		return
+		return internalServerError("Error preauthorizing payment: %v", err)
 	}
 
-	sendJSON(w, http.StatusOK, paymentResult)
+	return sendJSON(w, http.StatusOK, paymentResult)
 }
 
 // PayPalGetPayment retrieves information on an authorized paypal payment, including
@@ -378,13 +345,13 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) {
 // 		return
 // 	}
 
-// 	sendJSON(w, http.StatusOK, payment)
+// 	return sendJSON(w, http.StatusOK, payment)
 // }
 
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
-func (a *API) getTransaction(r *http.Request) (*models.Transaction, *HTTPError) {
+func (a *API) getTransaction(r *http.Request) (*models.Transaction, HTTPError) {
 	payID := chi.URLParam(r, "payment_id")
 
 	log := getLogEntry(r)
@@ -392,11 +359,11 @@ func (a *API) getTransaction(r *http.Request) (*models.Transaction, *HTTPError) 
 	if rsp := a.db.First(trans); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find transaction %s", payID)
-			return nil, httpError(http.StatusNotFound, "Transaction not found")
+			return nil, notFoundError("Transaction not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for transaction '%s'", payID)
-		return nil, httpError(http.StatusInternalServerError, "Error while querying for transactions")
+		return nil, internalServerError("Error while querying for transactions")
 	}
 
 	return trans, nil
@@ -410,30 +377,30 @@ func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint
 	return nil
 }
 
-func queryForOrder(db *gorm.DB, orderID string, log logrus.FieldLogger) (*models.Order, *HTTPError) {
+func queryForOrder(db *gorm.DB, orderID string, log logrus.FieldLogger) (*models.Order, HTTPError) {
 	order := &models.Order{}
 	if rsp := db.Preload("Transactions").Find(order, "id = ?", orderID); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find order %s", orderID)
-			return nil, httpError(http.StatusNotFound, "Order not found")
+			return nil, notFoundError("Order not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for order %s", orderID)
-		return nil, httpError(http.StatusInternalServerError, "Error while querying for order")
+		return nil, internalServerError("Error while querying for order")
 	}
 	return order, nil
 }
 
-func queryForTransactions(db *gorm.DB, log logrus.FieldLogger, clause, id string) ([]models.Transaction, *HTTPError) {
+func queryForTransactions(db *gorm.DB, log logrus.FieldLogger, clause, id string) ([]models.Transaction, HTTPError) {
 	trans := []models.Transaction{}
 	if rsp := db.Find(&trans, clause, id); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			log.Infof("Failed to find transactions that meet criteria '%s' '%s'", clause, id)
-			return nil, httpError(http.StatusNotFound, "Transactions not found")
+			return nil, notFoundError("Transactions not found")
 		}
 
 		log.WithError(rsp.Error).Warnf("Error while querying for transactions '%s' '%s'", clause, id)
-		return nil, httpError(http.StatusInternalServerError, "Error while querying for transactions")
+		return nil, internalServerError("Error while querying for transactions")
 	}
 
 	return trans, nil

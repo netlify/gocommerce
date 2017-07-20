@@ -231,7 +231,8 @@ func TestPaymentsRefund(t *testing.T) {
 		require.NoError(t, err)
 		w := httptest.NewRecorder()
 		r := httptest.NewRequest("POST", url, bytes.NewBuffer(body))
-		signHTTPRequest(r, testAdminToken("magical-unicorn", ""), test.Config.JWT.Secret)
+		err = signHTTPRequest(r, testAdminToken("magical-unicorn", ""), test.Config.JWT.Secret)
+		require.NoError(t, err)
 
 		NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, defaultVersion).handler.ServeHTTP(w, r)
 

@@ -75,32 +75,28 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
-func (a *API) orderCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		orderID := chi.URLParam(r, "order_id")
-		logEntrySetField(r, "order_id", orderID)
+func (a *API) orderCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	orderID := chi.URLParam(r, "order_id")
+	logEntrySetField(r, "order_id", orderID)
 
-		ctx := withOrderID(r.Context(), orderID)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	ctx := withOrderID(r.Context(), orderID)
+	return ctx, nil
 }
 
 // ClaimOrders will look for any orders with no user id belonging to an email and claim them
-func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) {
+func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 
 	claims := gcontext.GetClaims(ctx)
 	if claims.Email == "" {
-		badRequestError(w, "Must provide an email in the token to claim orders")
 		log.Info("Claim request made with missing email")
-		return
+		return badRequestError("Must provide an email in the token to claim orders")
 	}
 
 	if claims.ID == "" {
-		badRequestError(w, "Must provide a ID in the token to claim orders")
 		log.Info("Claim request made with missing the ID")
-		return
+		return badRequestError("Must provide a ID in the token to claim orders")
 	}
 
 	log = log.WithFields(logrus.Fields{
@@ -117,9 +113,8 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) {
 
 	orders := []models.Order{}
 	if res := query.Find(&orders); res.Error != nil {
-		internalServerError(w, "Failed to query for orders with email: %s", claims.Email)
 		log.WithError(res.Error).Warn("Failed to make query for orders")
-		return
+		return internalServerError("Failed to query for orders with email: %s", claims.Email)
 	}
 
 	tx := a.db.Begin()
@@ -127,34 +122,31 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) {
 	// create the user
 	user := models.User{Email: claims.Email, ID: claims.ID}
 	if res := tx.FirstOrCreate(&user); res.Error != nil {
-		internalServerError(w, "Failed to create user with ID %s", claims.ID)
 		log.WithError(res.Error).Warnf("Failed to creat new user: %+v", user)
 		tx.Rollback()
-		return
+		return internalServerError("Failed to create user with ID %s", claims.ID)
 	}
 
 	for _, o := range orders {
 		o.UserID = user.ID
 		if res := tx.Save(&o); res.Error != nil {
-			internalServerError(w, "Failed to update an order with user ID %s", user.ID)
 			log.WithError(res.Error).WithField("order_id", o.ID).Warn("Failed to save order")
 			tx.Rollback()
-			return
+			return internalServerError("Failed to update an order with user ID %s", user.ID)
 		}
 	}
 
 	if rsp := tx.Commit(); rsp.Error != nil {
-		internalServerError(w, "To update all the orders")
 		log.WithError(rsp.Error).Warn("Failed to close transaction")
-		return
+		return internalServerError("To update all the orders")
 	}
 
 	log.Info("Finished updating ")
-	sendJSON(w, http.StatusNoContent, "")
+	return sendJSON(w, http.StatusNoContent, "")
 }
 
 // ResendOrderReceipt resends the email receipt for an order
-func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) {
+func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	id := getOrderID(ctx)
 	log := getLogEntry(r)
@@ -164,26 +156,22 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) {
 	err := jsonDecoder.Decode(params)
 	if err != nil {
 		log.WithError(err).Infof("Failed to deserialize receipt params: %s", err.Error())
-		badRequestError(w, "Could not read receipt params: %v", err)
-		return
+		return badRequestError("Could not read receipt params: %v", err)
 	}
 
 	order := &models.Order{}
 	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Order not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Order not found")
 		}
-		return
+		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		unauthorizedError(w, "Order History Requires Authentication")
 		log.Info("request made with no claims")
-		return
+		return unauthorizedError("Order History Requires Authentication")
 	}
 
 	if params.Email != "" {
@@ -194,11 +182,13 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) {
 	for _, transaction := range order.Transactions {
 		if transaction.Type == models.ChargeTransactionType {
 			transaction.Order = order
-			mailer.OrderConfirmationMail(transaction)
+			if mailErr := mailer.OrderConfirmationMail(transaction); mailErr != nil {
+				log.WithError(mailErr).Errorf("Error sending order confirmation mail")
+			}
 		}
 	}
 
-	sendJSON(w, http.StatusOK, map[string]string{})
+	return sendJSON(w, http.StatusOK, map[string]string{})
 }
 
 // OrderList can query based on
@@ -213,7 +203,7 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) {
 //  - items
 
 // OrderList lists orders selected by the query parameters provided.
-func (a *API) OrderList(w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
@@ -224,8 +214,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) {
 	query, err = parseOrderParams(query, params)
 	if err != nil {
 		log.WithError(err).Info("Bad query parameters in request")
-		badRequestError(w, "Bad parameters in query: "+err.Error())
-		return
+		return badRequestError("Bad parameters in query: " + err.Error())
 	}
 
 	userID := getUserID(ctx)
@@ -239,25 +228,23 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) {
 
 	offset, limit, err := paginate(w, r, query.Model(&models.Order{}))
 	if err != nil {
-		badRequestError(w, "Bad Pagination Parameters: %v", err)
-		return
+		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
 	var orders []models.Order
 	result := query.Offset(offset).Limit(limit).Find(&orders)
 	if result.Error != nil {
 		log.WithError(err).Warn("Error while querying database")
-		internalServerError(w, "Error during database query: %v", result.Error)
-		return
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
-	sendJSON(w, http.StatusOK, orders)
+	return sendJSON(w, http.StatusOK, orders)
 }
 
 // OrderView will request a specific order using the 'id' parameter.
 // Only the owner of the order, an admin, or an anon order are allowed to be seen
-func (a *API) OrderView(w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	id := getOrderID(ctx)
 	log := getLogEntry(r)
@@ -267,12 +254,10 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) {
 	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Order not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Order not found")
 		}
-		return
+		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
+		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
@@ -280,16 +265,15 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) {
 			"user_id":       claims.ID,
 			"order_user_id": order.UserID,
 		}).Warnf("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
-		unauthorizedError(w, "You don't have access to this order")
-		return
+		return unauthorizedError("You don't have access to this order")
 	}
 
 	log.Debugf("Successfully got order %s", order.ID)
-	sendJSON(w, http.StatusOK, order)
+	return sendJSON(w, http.StatusOK, order)
 }
 
 // OrderCreate endpoint
-func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	config := gcontext.GetConfig(ctx)
 
@@ -298,8 +282,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 	err := jsonDecoder.Decode(params)
 	if err != nil {
 		getLogEntry(r).WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
-		badRequestError(w, "Could not read Order params: %v", err)
-		return
+		return badRequestError("Could not read Order params: %v", err)
 	}
 
 	claims := gcontext.GetClaims(ctx)
@@ -308,11 +291,10 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 	if params.CouponCode != "" {
 		coupon, err := a.lookupCoupon(ctx, w, params.CouponCode)
 		if err != nil {
-			return
+			return err
 		}
 		if !coupon.Valid() {
-			badRequestError(w, "This coupon is not valid at this time")
-			return
+			return badRequestError("This coupon is not valid at this time")
 		}
 
 		order.CouponCode = coupon.Code
@@ -335,28 +317,28 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 	httpError := setOrderEmail(tx, order, claims, log)
 	if httpError != nil {
 		log.WithError(httpError).Info("Failed to set the order email from the token")
-		cleanup(tx, w, httpError)
-		return
+		tx.Rollback()
+		return httpError
 	}
 
 	log.WithField("order_user_id", order.UserID).Debug("Successfully set the order's ID")
 
 	shipping, httpError := a.processAddress(tx, order, "Shipping Address", params.ShippingAddress, params.ShippingAddressID)
 	if httpError != nil {
-		cleanup(tx, w, httpError)
-		return
+		tx.Rollback()
+		return httpError
 	}
 	if shipping == nil {
-		cleanup(tx, w, badRequestError(w, "Shipping Address Required"))
-		return
+		tx.Rollback()
+		return badRequestError("Shipping Address Required")
 	}
 	order.ShippingAddress = *shipping
 	order.ShippingAddressID = shipping.ID
 
 	billing, httpError := a.processAddress(tx, order, "Billing Address", params.BillingAddress, params.BillingAddressID)
 	if httpError != nil {
-		cleanup(tx, w, httpError)
-		return
+		tx.Rollback()
+		return httpError
 	}
 	if billing != nil {
 		order.BillingAddress = *billing
@@ -369,20 +351,20 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 	if params.VATNumber != "" {
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {
-			cleanup(tx, w, internalServerError(w, "Error verifying VAT number %v", err))
-			return
+			tx.Rollback()
+			return internalServerError("Error verifying VAT number %v", err)
 		}
 		if !valid {
-			cleanup(tx, w, badRequestError(w, "Vat number %v is not valid", order.VATNumber))
-			return
+			tx.Rollback()
+			return badRequestError("Vat number %v is not valid", order.VATNumber)
 		}
 		order.VATNumber = params.VATNumber
 	}
 
 	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
 		log.WithError(httpError).Error("Failed to create order line items")
-		cleanup(tx, w, httpError)
-		return
+		tx.Rollback()
+		return httpError
 	}
 
 	log.WithField("subtotal", order.SubTotal).Debug("Successfully processed all the line items")
@@ -396,7 +378,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 	tx.Commit()
 
 	log.Infof("Successfully created order %s", order.ID)
-	sendJSON(w, http.StatusCreated, order)
+	return sendJSON(w, http.StatusCreated, order)
 }
 
 // OrderUpdate will allow an ADMIN only to update the details of a record
@@ -405,7 +387,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) {
 // Addresses can be made by posting a new one directly, OR by referencing one by ID. If
 // both are provided, the one that is made by ID will win out and the other will be ignored.
 // There are also blocks to changing certain fields after the state has been locked
-func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
+func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	orderID := getOrderID(ctx)
 	log := getLogEntry(r)
@@ -417,8 +399,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(orderParams)
 	if err != nil {
 		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
-		badRequestError(w, "Could not read Order Parameters: %v", err)
-		return
+		return badRequestError("Could not read Order Parameters: %v", err)
 	}
 
 	// verify that the order exists
@@ -427,13 +408,11 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	rsp := orderQuery(a.db).First(existingOrder, "id = ?", orderID)
 	if rsp.RecordNotFound() {
 		log.Warn("Update attempted to order that doesn't exist")
-		notFoundError(w, "Failed to find order with id '%s'", orderID)
-		return
+		return notFoundError("Failed to find order with id '%s'", orderID)
 	}
 	if rsp.Error != nil {
 		log.WithError(rsp.Error).Warnf("Failed to query for id '%s'", orderID)
-		internalServerError(w, "Error while querying for order")
-		return
+		return internalServerError("Error while querying for order")
 	}
 
 	alreadyPaid := existingOrder.PaymentState == models.PaidState
@@ -459,8 +438,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	if orderParams.Currency != "" {
 		if alreadyPaid {
 			log.Warn("Tried to update the currency after the order has been paid")
-			badRequestError(w, "Can't update the currency after payment has been processed")
-			return
+			return badRequestError("Can't update the currency after payment has been processed")
 		}
 		log.Debugf("Updating currency from '%v' to '%v'", existingOrder.Currency, orderParams.Currency)
 		existingOrder.Currency = orderParams.Currency
@@ -469,8 +447,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	if orderParams.VATNumber != "" {
 		if alreadyPaid {
 			log.Warn("Tried to update the VAT number after the order has been paid")
-			badRequestError(w, "Can't update the VAT number after payment has been processed")
-			return
+			return badRequestError("Can't update the VAT number after payment has been processed")
 		}
 
 		log.Debugf("Updating vat number from '%v' to '%v'", existingOrder.VATNumber, orderParams.VATNumber)
@@ -488,10 +465,9 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 
 		addr, httpErr := a.processAddress(tx, existingOrder, "Billing Address", orderParams.BillingAddress, orderParams.BillingAddressID)
 		if httpErr != nil {
-
 			log.WithError(httpErr).Warn("Failed to update the billing address")
-			cleanup(tx, w, httpErr)
-			return
+			tx.Rollback()
+			return httpErr
 		}
 		old := existingOrder.BillingAddressID
 		existingOrder.BillingAddress = *addr
@@ -508,8 +484,8 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 		addr, httpErr := a.processAddress(tx, existingOrder, "Shipping Address", orderParams.ShippingAddress, orderParams.ShippingAddressID)
 		if httpErr != nil {
 			log.WithError(httpErr).Warn("Failed to update the shipping address")
-			cleanup(tx, w, httpErr)
-			return
+			tx.Rollback()
+			return httpErr
 		}
 
 		old := existingOrder.ShippingAddressID
@@ -529,8 +505,8 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 		}[orderParams.FulfillmentState]
 		if !ok {
 			log.WithError(err).Warn("Failed to update order data: " + err.Error())
-			cleanup(tx, w, badRequestError(w, "Bad fulfillment state: "+orderParams.FulfillmentState))
-			return
+			tx.Rollback()
+			return badRequestError("Bad fulfillment state: " + orderParams.FulfillmentState)
 		}
 		existingOrder.FulfillmentState = orderParams.FulfillmentState
 		changes = append(changes, "fulfillment_state")
@@ -560,8 +536,8 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	log.Info("Saving order updates")
 	if rsp := tx.Save(existingOrder); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while saving order updates")
-		cleanup(tx, w, internalServerError(w, "Error saving order updates"))
-		return
+		tx.Rollback()
+		return internalServerError("Error saving order updates")
 	}
 
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
@@ -572,11 +548,11 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	if rsp := tx.Commit(); rsp.Error != nil {
 		log.WithError(err).Warn("Problem while committing order updates")
-		cleanup(tx, w, internalServerError(w, "Error committing order updates"))
-		return
+		tx.Rollback()
+		return internalServerError("Error committing order updates")
 	}
 
-	sendJSON(w, http.StatusOK, existingOrder)
+	return sendJSON(w, http.StatusOK, existingOrder)
 }
 
 // An order's email is determined by a few things. The rules guiding it are:
@@ -586,12 +562,12 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) {
 //     if the user doesn't have an email, the one from the order is used
 // 4 - if the order doesn't have an email, but the user does, we will use that one
 //
-func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, log logrus.FieldLogger) *HTTPError {
+func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, log logrus.FieldLogger) HTTPError {
 	if claims == nil {
 		log.Debug("No claims provided, proceeding as an anon request")
 	} else {
 		if claims.ID == "" {
-			return httpError(http.StatusBadRequest, "Token had an invalid ID: %s", claims.ID)
+			return badRequestError("Token had an invalid ID: %s", claims.ID)
 		}
 
 		log = log.WithField("user_id", claims.ID)
@@ -606,7 +582,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 			tx.Create(user)
 		} else if result.Error != nil {
 			log.WithError(result.Error).Warnf("Unexpected error from the db while querying for user id %d", user.ID)
-			return httpError(http.StatusInternalServerError, "Token had an invalid ID: %v", result.Error)
+			return internalServerError("Token had an invalid ID: %v", result.Error)
 		}
 
 		if order.Email == "" {
@@ -615,12 +591,12 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	}
 
 	if order.Email == "" {
-		return httpError(http.StatusBadRequest, "Either the order parameters or the user must provide an email")
+		return badRequestError("Either the order parameters or the user must provide an email")
 	}
 	return nil
 }
 
-func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) *HTTPError {
+func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) HTTPError {
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
@@ -653,29 +629,28 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	wg.Wait()
 
 	if sharedErr.err != nil {
-		return httpError(http.StatusInternalServerError, "Error processing line item: %v", sharedErr.err)
+		return internalServerError("Error processing line item: %v", sharedErr.err)
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
 		if err := tx.Save(&item).Error; err != nil {
-			return httpError(http.StatusInternalServerError, "Error creating line item: %v", err)
+			return internalServerError("Error creating line item: %v", err)
 		}
 	}
 
 	for _, download := range order.Downloads {
 		if err := tx.Create(&download).Error; err != nil {
-			return httpError(http.StatusInternalServerError, "Error creating download item: %v", err)
+			return internalServerError("Error creating download item: %v", err)
 		}
 	}
 
 	settings, err := a.loadSettings(ctx)
 	if err != nil {
-		return httpError(http.StatusInternalServerError, err.Error())
+		return internalServerError(err.Error())
 	}
 
 	order.CalculateTotal(settings, gcontext.GetClaimsAsMap(ctx))
-
 	return nil
 }
 
@@ -698,7 +673,7 @@ func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
 	return settings, nil
 }
 
-func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, *HTTPError) {
+func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, HTTPError) {
 	if address == nil && id == "" {
 		return nil, nil
 	}
@@ -706,11 +681,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	if id != "" {
 		loadedAddress := new(models.Address)
 		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
-			return nil, httpError(http.StatusBadRequest, "Bad %v id: %v, %v", name, id, result.Error)
+			return nil, badRequestError("Bad %v id: %v, %v", name, id, result.Error)
 		}
 
 		if order.UserID != loadedAddress.UserID {
-			return nil, httpError(http.StatusBadRequest, "Can't update the order to an %v that doesn't belong to the user", name)
+			return nil, badRequestError("Can't update the order to an %v that doesn't belong to the user", name)
 		}
 
 		if loadedAddress.UserID == "" {
@@ -722,7 +697,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 
 	// it is a new address we're  making
 	if err := address.Validate(); err != nil {
-		return nil, httpError(http.StatusBadRequest, "Failed to validate %v: %v", name, err.Error())
+		return nil, badRequestError("Failed to validate %v: %v", name, err.Error())
 	}
 
 	// is a valid id that doesn't already belong to a user
@@ -791,13 +766,4 @@ func orderQuery(db *gorm.DB) *gorm.DB {
 		Preload("ShippingAddress").
 		Preload("BillingAddress").
 		Preload("Transactions")
-}
-
-func cleanup(tx *gorm.DB, w http.ResponseWriter, e *HTTPError) {
-	if e != nil {
-		sendJSON(w, e.Code, e)
-		if tx != nil {
-			tx.Rollback()
-		}
-	}
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/rs/cors"
 
 	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
@@ -63,27 +62,27 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		version:    version,
 	}
 
-	r := chi.NewRouter()
+	r := newRouter()
 	r.Use(requestIDCtx)
-	r.Use(newStructuredLogger(logrus.StandardLogger()))
-	r.Use(middleware.Recoverer)
+	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
+	r.Use(recoverer)
 	r.Use(api.instanceConfigCtx)
 	r.Use(withTokenCtx)
 
 	// endpoints
 	r.Get("/", api.Index)
 
-	r.Route("/orders", func(r chi.Router) {
+	r.Route("/orders", func(r *router) {
 		r.With(authRequired).Get("/", api.OrderList)
 		r.Post("/", api.OrderCreate)
 
-		r.Route("/{order_id}", func(r chi.Router) {
+		r.Route("/{order_id}", func(r *router) {
 			r.Use(api.orderCtx)
 			// TODO should anonymous order viewing be allowed?
 			r.With(authRequired).Get("/", api.OrderView)
 			r.With(adminRequired).Put("/", api.OrderUpdate)
 
-			r.Route("/payments", func(r chi.Router) {
+			r.Route("/payments", func(r *router) {
 				r.With(authRequired).Get("/", api.PaymentListForOrder)
 				r.Post("/", api.PaymentCreate)
 			})
@@ -93,11 +92,11 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		})
 	})
 
-	r.Route("/users", func(r chi.Router) {
+	r.Route("/users", func(r *router) {
 		r.Use(authRequired)
 		r.With(adminRequired).Get("/", api.UserList)
 
-		r.Route("/{user_id}", func(r chi.Router) {
+		r.Route("/{user_id}", func(r *router) {
 			r.Use(api.userCtx)
 			r.Use(ensureUserAccess)
 
@@ -107,10 +106,10 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 			r.Get("/payments", api.PaymentListForUser)
 			r.Get("/orders", api.OrderList)
 
-			r.Route("/addresses", func(r chi.Router) {
+			r.Route("/addresses", func(r *router) {
 				r.Get("/", api.AddressList)
 				r.With(adminRequired).Post("/", api.CreateNewAddress)
-				r.Route("/{addr_id}", func(r chi.Router) {
+				r.Route("/{addr_id}", func(r *router) {
 					r.Get("/", api.AddressView)
 					r.With(adminRequired).Delete("/", api.AddressDelete)
 				})
@@ -118,39 +117,39 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		})
 	})
 
-	r.Route("/downloads", func(r chi.Router) {
+	r.Route("/downloads", func(r *router) {
 		r.With(authRequired).Get("/", api.DownloadList)
 		r.Get("/{download_id}", api.DownloadURL)
 	})
 
-	r.Route("/vatnumbers", func(r chi.Router) {
+	r.Route("/vatnumbers", func(r *router) {
 		r.Get("/{vat_number}", api.VatNumberLookup)
 	})
 
-	r.Route("/payments", func(r chi.Router) {
+	r.Route("/payments", func(r *router) {
 		r.Use(adminRequired)
 
 		r.Get("/", api.PaymentList)
-		r.Route("/{payment_id}", func(r chi.Router) {
+		r.Route("/{payment_id}", func(r *router) {
 			r.Get("/", api.PaymentView)
 			r.Post("/refund", api.PaymentRefund)
 		})
 	})
 
-	r.Route("/paypal", func(r chi.Router) {
+	r.Route("/paypal", func(r *router) {
 		r.Post("/", api.PreauthorizePayment)
 		// TODO is this needed? I did not see a use case in the PayPal payment flow.
 		// r.Get("/{payment_id}", api.PayPalGetPayment)
 	})
 
-	r.Route("/reports", func(r chi.Router) {
+	r.Route("/reports", func(r *router) {
 		r.Use(adminRequired)
 
 		r.Get("/sales", api.SalesReport)
 		r.Get("/products", api.ProductsReport)
 	})
 
-	r.Route("/coupons", func(r chi.Router) {
+	r.Route("/coupons", func(r *router) {
 		r.Get("/{coupon_code}", api.CouponView)
 	})
 
@@ -168,27 +167,19 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	return api
 }
 
-func requestIDCtx(next http.Handler) http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		id := uuid.NewRandom().String()
-		ctx := r.Context()
-		ctx = gcontext.WithRequestID(ctx, id)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	}
-	return http.HandlerFunc(fn)
+func requestIDCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	id := uuid.NewRandom().String()
+	ctx := r.Context()
+	ctx = gcontext.WithRequestID(ctx, id)
+	return ctx, nil
 }
 
-func (a *API) instanceConfigCtx(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := r.Context()
-
-		if gcontext.GetPaymentProviders(ctx) == nil {
-			internalServerError(w, "No payment providers configured")
-			return
-		}
-
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func (a *API) instanceConfigCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	ctx := r.Context()
+	if gcontext.GetPaymentProviders(ctx) == nil {
+		return nil, internalServerError("No payment providers configured")
+	}
+	return ctx, nil
 }
 
 func withTenantConfig(ctx context.Context, config *conf.Configuration) (context.Context, error) {
