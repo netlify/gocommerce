@@ -16,27 +16,23 @@ const maxIPsPerDay = 50
 func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	downloadID := chi.URLParam(r, "download_id")
-	log := logEntrySetField(r, "download_id", downloadID)
+	logEntrySetField(r, "download_id", downloadID)
 	claims := gcontext.GetClaims(ctx)
 	assets := gcontext.GetAssetStore(ctx)
 
 	download := &models.Download{}
 	if result := a.db.Where("id = ?", downloadID).First(download); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
 			return notFoundError("Download not found")
 		}
-		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
 		return internalServerError("Error during database query: %v", result.Error)
 	}
 
 	order := &models.Order{}
 	if result := a.db.Where("id = ?", download.OrderID).First(order); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
 			return notFoundError("Download order not found")
 		}
-		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
 		return internalServerError("Error during database query: %v", result.Error)
 	}
 
@@ -53,14 +49,12 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 		Where("order_id = ? and created_at > ? and changes = 'download'", order.ID, time.Now().Add(-24*time.Hour)).
 		Rows()
 	if err != nil {
-		log.WithError(err).Warnf("Error while signing download: %s", err)
 		return internalServerError("Error signing download: %v", err)
 	}
 	var count uint64
 	for rows.Next() {
 		err = rows.Scan(&count)
 		if err != nil {
-			log.WithError(err).Warnf("Error while signing download: %s", err)
 			return internalServerError("Error signing download: %v", err)
 		}
 	}
@@ -69,7 +63,6 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if err := download.SignURL(assets); err != nil {
-		log.WithError(err).Warnf("Error while signing download: %s", err)
 		return internalServerError("Error signing download: %v", err)
 	}
 
@@ -92,10 +85,8 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	if orderID != "" {
 		if result := a.db.Where("id = ?", orderID).First(order); result.Error != nil {
 			if result.RecordNotFound() {
-				log.Debug("Requested record that doesn't exist")
 				return notFoundError("Download order not found")
 			}
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
 			return internalServerError("Error during database query: %v", result.Error)
 		}
 	} else {
@@ -130,7 +121,6 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	var downloads []models.Download
 	query.LogMode(true)
 	if result := query.Offset(offset).Limit(limit).Find(&downloads); result.Error != nil {
-		log.WithError(result.Error).Warn("Error while querying database")
 		return internalServerError("Error during database query: %v", result.Error)
 	}
 

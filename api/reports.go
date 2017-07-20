@@ -35,7 +35,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 
 	rows, err := query.Rows()
 	if err != nil {
-		return internalServerError("Database error: %v", err)
+		return internalServerError("Database error: %v", err).WithInternalError(err)
 	}
 	defer rows.Close()
 	result := []*salesRow{}
@@ -43,7 +43,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 		row := &salesRow{}
 		err = rows.Scan(&row.Total, &row.SubTotal, &row.Taxes, &row.Currency)
 		if err != nil {
-			return internalServerError("Database error: %v", err)
+			return internalServerError("Database error: %v", err).WithInternalError(err)
 		}
 		result = append(result, row)
 	}
@@ -75,7 +75,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 
 	rows, err := query.Rows()
 	if err != nil {
-		return internalServerError("Database error: %v", err)
+		return internalServerError("Database error: %v", err).WithInternalError(err)
 	}
 	defer rows.Close()
 	result := []*productsRow{}
@@ -83,7 +83,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 		row := &productsRow{}
 		err = rows.Scan(&row.Sku, &row.Path, &row.Total, &row.Currency)
 		if err != nil {
-			return internalServerError("Database error: %v", err)
+			return internalServerError("Database error: %v", err).WithInternalError(err)
 		}
 		result = append(result, row)
 	}

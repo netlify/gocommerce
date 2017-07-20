@@ -245,7 +245,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		simpleOrder := models.NewOrder("session", "", "usd")
 		err := setOrderEmail(nil, simpleOrder, nil, testLogger)
 		require.Error(t, err)
-		assert.Equal(t, http.StatusBadRequest, err.Status())
+		assert.Equal(t, http.StatusBadRequest, err.Code)
 	})
 	t.Run("NewUserNoEmailOnRequest", func(t *testing.T) {
 		validateNewUserEmail(
@@ -280,7 +280,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 		err := setOrderEmail(db, simpleOrder, claims, testLogger)
 		require.Error(t, err)
-		assert.Equal(t, http.StatusBadRequest, err.Status())
+		assert.Equal(t, http.StatusBadRequest, err.Code)
 	})
 	t.Run("KnownUserClaimsOnRequest", func(t *testing.T) {
 		db, _, _ := db(t)

@@ -36,8 +36,7 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 
 	query, err := parseUserQueryParams(a.db, r.URL.Query())
 	if err != nil {
-		log.WithError(err).Info("Bad query parameters in request")
-		return badRequestError("Bad parameters in query: " + err.Error())
+		return badRequestError("Bad parameters in query: %v", err)
 	}
 
 	log.Debug("Parsed url params")
@@ -60,8 +59,7 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 
 	rows, err := query.Offset(offset).Limit(limit).Find(&users).Rows()
 	if err != nil {
-		log.WithError(err).Warn("Error while querying the database")
-		return internalServerError("Failed to execute request")
+		return internalServerError("Failed to execute request").WithInternalError(err)
 	}
 	defer rows.Close()
 	i := 0
@@ -71,8 +69,7 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 		var orderCount int64
 		err := rows.Scan(&id, &email, &createdAt, &updatedAt, &orderCount)
 		if err != nil {
-			log.WithError(err).Warn("Error while querying the database")
-			return internalServerError("Failed to execute request")
+			return internalServerError("Failed to execute request").WithInternalError(err)
 		}
 		users[i].OrderCount = orderCount
 		i++
@@ -88,7 +85,6 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := getUserID(ctx)
-	log := getLogEntry(r)
 
 	user := &models.User{
 		ID: userID,
@@ -99,8 +95,7 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if rsp.Error != nil {
-		log.WithError(rsp.Error).Warnf("Failed to query DB: %v", rsp.Error)
-		return internalServerError("Problem searching for user " + userID)
+		return internalServerError("Problem searching for user " + userID).WithInternalError(rsp.Error)
 	}
 
 	if user.DeletedAt != nil {
@@ -117,19 +112,15 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := getUserID(ctx)
-	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
-		err := notFoundError("couldn't find a record for user: " + userID)
-		log.WithError(err).Warn("requested non-existent user")
-		return err
+		return notFoundError("couldn't find a record for user: " + userID)
 	}
 
 	addrs := []models.Address{}
 	results := a.db.Where("user_id = ?", userID).Find(&addrs)
 	if results.Error != nil {
-		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
-		return internalServerError("problem while querying for userID: " + userID)
+		return internalServerError("problem while querying for userID: " + userID).WithInternalError(results.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, &addrs)
@@ -140,12 +131,9 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	addrID := chi.URLParam(r, "addr_id")
 	userID := getUserID(ctx)
-	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
-		err := notFoundError("couldn't find a record for user: " + userID)
-		log.WithError(err).Warn("requested non-existent user")
-		return err
+		return notFoundError("couldn't find a record for user: " + userID)
 	}
 
 	addr := &models.Address{
@@ -154,8 +142,7 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 	}
 	results := a.db.First(addr)
 	if results.Error != nil {
-		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
-		return internalServerError("problem while querying for userID: " + userID)
+		return internalServerError("problem while querying for userID: " + userID).WithInternalError(results.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, &addr)
@@ -181,8 +168,7 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	results := tx.Delete(user)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warn("Failed to find associated orders")
-		return internalServerError("Failed to delete user")
+		return internalServerError("Failed to delete user").WithInternalError(results.Error)
 	}
 	log.Debug("Deleted user")
 
@@ -190,8 +176,7 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	results = tx.Where("user_id = ?", userID).Find(&orders)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warn("Failed to find associated orders")
-		return internalServerError("Failed to delete user")
+		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("failed to find associated orders")
 	}
 
 	log.Debugf("Starting to collect info about %d orders", len(orders))
@@ -204,10 +189,7 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	results = tx.Where("order_id in (?)", orderIDs).Delete(&models.LineItem{})
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).
-			WithField("order_ids", orderIDs).
-			Warnf("Failed to delete line items associated with orders: %v", orderIDs)
-		return internalServerError("Failed to delete user")
+		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("Failed to delete line items associated with orders: %v", orderIDs)
 	}
 	log.Debugf("Deleted %d items", results.RowsAffected)
 
@@ -247,8 +229,7 @@ func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 		log.Warn("Attempted to delete an address that doesn't exist")
 		return nil
 	} else if rsp.Error != nil {
-		log.WithError(rsp.Error).Warn("Error while deleting address")
-		return internalServerError("error while deleting address")
+		return internalServerError("error while deleting address").WithInternalError(rsp.Error)
 	}
 
 	log.Info("deleted address")
@@ -259,24 +240,19 @@ func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := getUserID(ctx)
-	log := getLogEntry(r)
 
 	if getUser(a.db, userID) == nil {
-		err := notFoundError("Couldn't find user " + userID)
-		log.WithError(err).Warn("Requested to add an address to a missing user")
-		return err
+		return notFoundError("Couldn't find user " + userID)
 	}
 
 	addrReq := new(models.AddressRequest)
 	err := json.NewDecoder(r.Body).Decode(addrReq)
 	if err != nil {
-		log.WithError(err).Info("Failed to parse json")
-		return badRequestError("Failed to parse json body")
+		return badRequestError("Failed to parse json body: %v", err)
 	}
 
 	if err := addrReq.Validate(); err != nil {
-		log.WithError(err).Infof("requested address is not valid")
-		return badRequestError("requested address is missing a required field: " + err.Error())
+		return badRequestError("requested address is missing a required field: %v", err)
 	}
 
 	addr := models.Address{
@@ -286,8 +262,7 @@ func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 	}
 	rsp := a.db.Create(&addr)
 	if rsp.Error != nil {
-		log.WithError(rsp.Error).Warnf("Failed to save address %v", addr)
-		return internalServerError("failed to save address")
+		return internalServerError("failed to save address").WithInternalError(rsp.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, &struct{ ID string }{ID: addr.ID})
@@ -313,8 +288,7 @@ func tryDelete(tx *gorm.DB, w http.ResponseWriter, log logrus.FieldLogger, userI
 	results := tx.Where("user_id = ?", userID).Delete(face)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warnf("Failed to delete %s", typeName)
-		return internalServerError("Failed to delete user")
+		return internalServerError("Failed to delete user").WithInternalError(results.Error)
 	}
 
 	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)

@@ -90,12 +90,10 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 
 	claims := gcontext.GetClaims(ctx)
 	if claims.Email == "" {
-		log.Info("Claim request made with missing email")
 		return badRequestError("Must provide an email in the token to claim orders")
 	}
 
 	if claims.ID == "" {
-		log.Info("Claim request made with missing the ID")
 		return badRequestError("Must provide a ID in the token to claim orders")
 	}
 
@@ -113,8 +111,7 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 
 	orders := []models.Order{}
 	if res := query.Find(&orders); res.Error != nil {
-		log.WithError(res.Error).Warn("Failed to make query for orders")
-		return internalServerError("Failed to query for orders with email: %s", claims.Email)
+		return internalServerError("Failed to query for orders with email: %s", claims.Email).WithInternalError(res.Error)
 	}
 
 	tx := a.db.Begin()
@@ -122,26 +119,23 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	// create the user
 	user := models.User{Email: claims.Email, ID: claims.ID}
 	if res := tx.FirstOrCreate(&user); res.Error != nil {
-		log.WithError(res.Error).Warnf("Failed to creat new user: %+v", user)
 		tx.Rollback()
-		return internalServerError("Failed to create user with ID %s", claims.ID)
+		return internalServerError("Failed to create user with ID %s", claims.ID).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
 	}
 
 	for _, o := range orders {
 		o.UserID = user.ID
 		if res := tx.Save(&o); res.Error != nil {
-			log.WithError(res.Error).WithField("order_id", o.ID).Warn("Failed to save order")
 			tx.Rollback()
-			return internalServerError("Failed to update an order with user ID %s", user.ID)
+			return internalServerError("Failed to update an order with user ID %s", user.ID).WithInternalError(res.Error).WithInternalMessage("Failed to update order ID %s", o.ID)
 		}
 	}
 
 	if rsp := tx.Commit(); rsp.Error != nil {
-		log.WithError(rsp.Error).Warn("Failed to close transaction")
-		return internalServerError("To update all the orders")
+		return internalServerError("Failed to update all the orders").WithInternalError(rsp.Error)
 	}
 
-	log.Info("Finished updating ")
+	log.Info("Finished updating")
 	return sendJSON(w, http.StatusNoContent, "")
 }
 
@@ -155,22 +149,18 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
-		log.WithError(err).Infof("Failed to deserialize receipt params: %s", err.Error())
 		return badRequestError("Could not read receipt params: %v", err)
 	}
 
 	order := &models.Order{}
 	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
 			return notFoundError("Order not found")
 		}
-		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-		return internalServerError("Error during database query: %v", result.Error)
+		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		log.Info("request made with no claims")
 		return unauthorizedError("Order History Requires Authentication")
 	}
 
@@ -213,8 +203,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	query := orderQuery(a.db)
 	query, err = parseOrderParams(query, params)
 	if err != nil {
-		log.WithError(err).Info("Bad query parameters in request")
-		return badRequestError("Bad parameters in query: " + err.Error())
+		return badRequestError("Bad parameters in query: %v", err)
 	}
 
 	userID := getUserID(ctx)
@@ -234,8 +223,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	var orders []models.Order
 	result := query.Offset(offset).Limit(limit).Find(&orders)
 	if result.Error != nil {
-		log.WithError(err).Warn("Error while querying database")
-		return internalServerError("Error during database query: %v", result.Error)
+		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
 	}
 
 	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
@@ -253,19 +241,13 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	order := &models.Order{}
 	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
 			return notFoundError("Order not found")
 		}
-		log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-		return internalServerError("Error during database query: %v", result.Error)
+		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		log.WithFields(logrus.Fields{
-			"user_id":       claims.ID,
-			"order_user_id": order.UserID,
-		}).Warnf("Unauthorized access attempted for order %s by %s", order.ID, claims.ID)
-		return unauthorizedError("You don't have access to this order")
+		return unauthorizedError("You don't have access to this order").WithInternalMessage("Unauthorized access attempted for order by %s", claims.ID)
 	}
 
 	log.Debugf("Successfully got order %s", order.ID)
@@ -281,7 +263,6 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	jsonDecoder := json.NewDecoder(r.Body)
 	err := jsonDecoder.Decode(params)
 	if err != nil {
-		getLogEntry(r).WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
 		return badRequestError("Could not read Order params: %v", err)
 	}
 
@@ -352,7 +333,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {
 			tx.Rollback()
-			return internalServerError("Error verifying VAT number %v", err)
+			return internalServerError("Error verifying VAT number %v", err).WithInternalError(err)
 		}
 		if !valid {
 			tx.Rollback()
@@ -398,7 +379,6 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	orderParams := new(orderRequestParams)
 	err := json.NewDecoder(r.Body).Decode(orderParams)
 	if err != nil {
-		log.WithError(err).Infof("Failed to deserialize order params: %s", err.Error())
 		return badRequestError("Could not read Order Parameters: %v", err)
 	}
 
@@ -407,12 +387,10 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 
 	rsp := orderQuery(a.db).First(existingOrder, "id = ?", orderID)
 	if rsp.RecordNotFound() {
-		log.Warn("Update attempted to order that doesn't exist")
 		return notFoundError("Failed to find order with id '%s'", orderID)
 	}
 	if rsp.Error != nil {
-		log.WithError(rsp.Error).Warnf("Failed to query for id '%s'", orderID)
-		return internalServerError("Error while querying for order")
+		return internalServerError("Error while querying for order").WithInternalError(rsp.Error)
 	}
 
 	alreadyPaid := existingOrder.PaymentState == models.PaidState
@@ -437,7 +415,6 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 
 	if orderParams.Currency != "" {
 		if alreadyPaid {
-			log.Warn("Tried to update the currency after the order has been paid")
 			return badRequestError("Can't update the currency after payment has been processed")
 		}
 		log.Debugf("Updating currency from '%v' to '%v'", existingOrder.Currency, orderParams.Currency)
@@ -446,7 +423,6 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	}
 	if orderParams.VATNumber != "" {
 		if alreadyPaid {
-			log.Warn("Tried to update the VAT number after the order has been paid")
 			return badRequestError("Can't update the VAT number after payment has been processed")
 		}
 
@@ -504,7 +480,6 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 			"shipped":  true,
 		}[orderParams.FulfillmentState]
 		if !ok {
-			log.WithError(err).Warn("Failed to update order data: " + err.Error())
 			tx.Rollback()
 			return badRequestError("Bad fulfillment state: " + orderParams.FulfillmentState)
 		}
@@ -535,9 +510,8 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 
 	log.Info("Saving order updates")
 	if rsp := tx.Save(existingOrder); rsp.Error != nil {
-		log.WithError(err).Warn("Problem while saving order updates")
 		tx.Rollback()
-		return internalServerError("Error saving order updates")
+		return internalServerError("Error saving order updates").WithInternalError(rsp.Error)
 	}
 
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
@@ -547,9 +521,8 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 		tx.Save(hook)
 	}
 	if rsp := tx.Commit(); rsp.Error != nil {
-		log.WithError(err).Warn("Problem while committing order updates")
 		tx.Rollback()
-		return internalServerError("Error committing order updates")
+		return internalServerError("Error committing order updates").WithInternalError(rsp.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, existingOrder)
@@ -562,7 +535,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 //     if the user doesn't have an email, the one from the order is used
 // 4 - if the order doesn't have an email, but the user does, we will use that one
 //
-func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, log logrus.FieldLogger) HTTPError {
+func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, log logrus.FieldLogger) *HTTPError {
 	if claims == nil {
 		log.Debug("No claims provided, proceeding as an anon request")
 	} else {
@@ -581,8 +554,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 			user.Email = claims.Email
 			tx.Create(user)
 		} else if result.Error != nil {
-			log.WithError(result.Error).Warnf("Unexpected error from the db while querying for user id %d", user.ID)
-			return internalServerError("Token had an invalid ID: %v", result.Error)
+			return internalServerError("Token had an invalid ID: %v", result.Error).WithInternalError(result.Error)
 		}
 
 		if order.Email == "" {
@@ -596,7 +568,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	return nil
 }
 
-func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) HTTPError {
+func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) *HTTPError {
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
@@ -629,25 +601,25 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	wg.Wait()
 
 	if sharedErr.err != nil {
-		return internalServerError("Error processing line item: %v", sharedErr.err)
+		return internalServerError("Error processing line item: %v", sharedErr.err).WithInternalError(sharedErr.err)
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
 		if err := tx.Save(&item).Error; err != nil {
-			return internalServerError("Error creating line item: %v", err)
+			return internalServerError("Error creating line item: %v", err).WithInternalError(err)
 		}
 	}
 
 	for _, download := range order.Downloads {
 		if err := tx.Create(&download).Error; err != nil {
-			return internalServerError("Error creating download item: %v", err)
+			return internalServerError("Error creating download item: %v", err).WithInternalError(err)
 		}
 	}
 
 	settings, err := a.loadSettings(ctx)
 	if err != nil {
-		return internalServerError(err.Error())
+		return internalServerError(err.Error()).WithInternalError(err)
 	}
 
 	order.CalculateTotal(settings, gcontext.GetClaimsAsMap(ctx))
@@ -673,7 +645,7 @@ func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
 	return settings, nil
 }
 
-func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, HTTPError) {
+func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, address *models.Address, id string) (*models.Address, *HTTPError) {
 	if address == nil && id == "" {
 		return nil, nil
 	}

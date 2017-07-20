@@ -10,45 +10,59 @@ import (
 
 var genericInternalServerErrorResponse = []byte(`{"code":500,"msg":"Internal server error"}`)
 
-// HTTPError represents an error that returns an HTTP status code.
-type HTTPError interface {
-	error
-	Status() int
-}
-
-func badRequestError(fmtString string, args ...interface{}) HTTPError {
+func badRequestError(fmtString string, args ...interface{}) *HTTPError {
 	return httpError(http.StatusBadRequest, fmtString, args...)
 }
 
-func internalServerError(fmtString string, args ...interface{}) HTTPError {
+func internalServerError(fmtString string, args ...interface{}) *HTTPError {
 	return httpError(http.StatusInternalServerError, fmtString, args...)
 }
 
-func notFoundError(fmtString string, args ...interface{}) HTTPError {
+func notFoundError(fmtString string, args ...interface{}) *HTTPError {
 	return httpError(http.StatusNotFound, fmtString, args...)
 }
 
-func unauthorizedError(fmtString string, args ...interface{}) HTTPError {
+func unauthorizedError(fmtString string, args ...interface{}) *HTTPError {
 	return httpError(http.StatusUnauthorized, fmtString, args...)
 }
 
-// StatusError is an error with a message and an HTTP status code.
-type StatusError struct {
-	Code    int    `json:"code"`
-	Message string `json:"msg"`
+// HTTPError is an error with a message and an HTTP status code.
+type HTTPError struct {
+	Code            int    `json:"code"`
+	Message         string `json:"msg"`
+	InternalError   error  `json:"-"`
+	InternalMessage string `json:"-"`
 }
 
-func (e StatusError) Error() string {
+func (e *HTTPError) Error() string {
+	if e.InternalMessage != "" {
+		return e.InternalMessage
+	}
 	return fmt.Sprintf("%d: %s", e.Code, e.Message)
 }
 
-// Status returns the HTTP status code.
-func (e StatusError) Status() int {
-	return e.Code
+// Cause returns the root cause error
+func (e *HTTPError) Cause() error {
+	if e.InternalError != nil {
+		return e.InternalError
+	}
+	return e
 }
 
-func httpError(code int, fmtString string, args ...interface{}) HTTPError {
-	return &StatusError{
+// WithInternalError adds internal error information to the error
+func (e *HTTPError) WithInternalError(err error) *HTTPError {
+	e.InternalError = err
+	return e
+}
+
+// WithInternalMessage adds internal message information to the error
+func (e *HTTPError) WithInternalMessage(fmtString string, args ...interface{}) *HTTPError {
+	e.InternalMessage = fmt.Sprintf(fmtString, args)
+	return e
+}
+
+func httpError(code int, fmtString string, args ...interface{}) *HTTPError {
+	return &HTTPError{
 		Code:    code,
 		Message: fmt.Sprintf(fmtString, args...),
 	}
@@ -69,7 +83,10 @@ func recoverer(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 				debug.PrintStack()
 			}
 
-			se := StatusError{http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError)}
+			se := &HTTPError{
+				Code:    http.StatusInternalServerError,
+				Message: http.StatusText(http.StatusInternalServerError),
+			}
 			handleError(se, w, r)
 		}
 	}()
@@ -78,23 +95,24 @@ func recoverer(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 }
 
 func handleError(err error, w http.ResponseWriter, r *http.Request) {
+	log := getLogEntry(r)
 	switch e := err.(type) {
-	case HTTPError:
-		if e.Status() >= http.StatusInternalServerError {
+	case *HTTPError:
+		if e.Code >= http.StatusInternalServerError {
 			// this will get us the stack trace too
-			getLogEntry(r).WithError(e).Error(e.Error())
+			log.WithError(e.Cause()).Error(e.Error())
 		} else {
-			getLogEntry(r).Warn(e.Error())
+			log.WithError(e.Cause()).Info(e.Error())
 		}
-		if jsonErr := sendJSON(w, e.Status(), e); jsonErr != nil {
+		if jsonErr := sendJSON(w, e.Code, e); jsonErr != nil {
 			handleError(jsonErr, w, r)
 		}
 	default:
-		getLogEntry(r).WithError(e).Errorf("Unhandled server error: %s", e.Error())
+		log.WithError(e).Errorf("Unhandled server error: %s", e.Error())
 		// hide real error details from response to prevent info leaks
 		w.WriteHeader(http.StatusInternalServerError)
 		if _, writeErr := w.Write(genericInternalServerErrorResponse); writeErr != nil {
-			getLogEntry(r).WithError(writeErr).Error("Error writing generic error message")
+			log.WithError(writeErr).Error("Error writing generic error message")
 		}
 	}
 }

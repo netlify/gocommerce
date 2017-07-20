@@ -24,8 +24,7 @@ func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, erro
 
 	matches := bearerRegexp.FindStringSubmatch(authHeader)
 	if len(matches) != 2 {
-		log.Infof("Invalid auth header format: %s", authHeader)
-		return nil, unauthorizedError("Bad authentication header")
+		return nil, unauthorizedError("Bad authentication header").WithInternalMessage("Invalid auth header format: %s", authHeader)
 	}
 
 	token, err := jwt.ParseWithClaims(matches[1], &claims.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
@@ -35,17 +34,13 @@ func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, erro
 		return []byte(config.JWT.Secret), nil
 	})
 	if err != nil {
-		log.WithError(err).Infof("Invalid token")
-		return nil, unauthorizedError("Invalid token")
+		return nil, unauthorizedError("Invalid token").WithInternalError(err)
 	}
 
 	claims := token.Claims.(*claims.JWTClaims)
 	// I'm pretty sure the library is already validating the expiration
 	// if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-	// 	msg := fmt.Sprintf("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
-	// 	log.Info(msg)
-	// 	unauthorizedError(w, msg)
-	// 	return
+	// 	return unauthorizedError("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
 	// }
 
 	isAdmin := false
@@ -75,12 +70,9 @@ func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, erro
 
 func authRequired(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	ctx := r.Context()
-	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
 	if claims == nil {
-		err := unauthorizedError("No claims provided")
-		log.WithError(err).Warn("Illegal access attempt")
-		return nil, err
+		return nil, unauthorizedError("No claims provided")
 	}
 
 	return ctx, nil
@@ -88,14 +80,11 @@ func authRequired(w http.ResponseWriter, r *http.Request) (context.Context, erro
 
 func adminRequired(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	ctx := r.Context()
-	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
 	isAdmin := gcontext.IsAdmin(ctx)
 
 	if claims == nil || !isAdmin {
-		err := unauthorizedError("Admin permissions required")
-		log.WithError(err).Warn("Illegal access attempt")
-		return nil, err
+		return nil, unauthorizedError("Admin permissions required")
 	}
 
 	logEntrySetField(r, "admin_id", claims.ID)
@@ -103,7 +92,6 @@ func adminRequired(w http.ResponseWriter, r *http.Request) (context.Context, err
 }
 
 func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, error) {
-	log := getLogEntry(r)
 	ctx := r.Context()
 	userID := getUserID(ctx)
 
@@ -111,9 +99,7 @@ func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, 
 	claims := gcontext.GetClaims(ctx)
 	isAdmin := gcontext.IsAdmin(ctx)
 	if claims.ID != userID && !isAdmin {
-		err := unauthorizedError("Can't access a different user unless you're an admin")
-		log.WithError(err).Warn("Illegal access attempt")
-		return nil, err
+		return nil, unauthorizedError("Can't access a different user unless you're an admin")
 	}
 	if isAdmin {
 		logEntrySetField(r, "admin_id", claims.ID)
