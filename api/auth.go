@@ -61,7 +61,7 @@ func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, erro
 		"claims_email": claims.Email,
 		"roles":        roles,
 		"is_admin":     isAdmin,
-	}).Info("successfully parsed claims")
+	}).Debug("successfully parsed claims")
 
 	ctx = gcontext.WithAdminFlag(ctx, isAdmin)
 	ctx = gcontext.WithToken(ctx, token)
@@ -93,28 +93,30 @@ func adminRequired(w http.ResponseWriter, r *http.Request) (context.Context, err
 
 func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	ctx := r.Context()
-	userID := getUserID(ctx)
 
 	// ensure userID matches authenticated user OR is admin
 	claims := gcontext.GetClaims(ctx)
-	isAdmin := gcontext.IsAdmin(ctx)
-	if claims.ID != userID && !isAdmin {
-		return nil, unauthorizedError("Can't access a different user unless you're an admin")
-	}
-	if isAdmin {
+	if gcontext.IsAdmin(ctx) {
 		logEntrySetField(r, "admin_id", claims.ID)
+		return ctx, nil
+	}
+
+	userID := getUserID(ctx)
+	if claims.ID != userID {
+		return nil, unauthorizedError("Can't access a different user unless you're an admin")
 	}
 
 	return ctx, nil
 }
 
 func hasOrderAccess(ctx context.Context, order *models.Order) bool {
-	claims := gcontext.GetClaims(ctx)
-
-	if order.UserID != "" {
-		if claims == nil || (order.UserID != claims.ID && !gcontext.IsAdmin(ctx)) {
-			return false
-		}
+	if order.UserID == "" {
+		return true
 	}
-	return true
+	if gcontext.IsAdmin(ctx) {
+		return true
+	}
+
+	claims := gcontext.GetClaims(ctx)
+	return claims != nil && order.UserID == claims.ID
 }
