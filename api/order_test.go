@@ -233,8 +233,17 @@ func TestOrderView(t *testing.T) {
 	})
 	t.Run("Anonymous", func(t *testing.T) {
 		test := NewRouteTest(t)
-		recorder := test.TestEndpoint(http.MethodGet, "/orders/does-not-exist", nil, nil)
-		validateError(t, http.StatusUnauthorized, recorder)
+		test.Data.firstOrder.User = nil
+		test.Data.firstOrder.UserID = ""
+		rsp := test.DB.Save(test.Data.firstOrder)
+		require.NoError(t, rsp.Error, "Failed to update order")
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder, nil, nil)
+
+		order := new(models.Order)
+		extractPayload(t, http.StatusOK, recorder, order)
+		validateOrder(t, test.Data.firstOrder, order)
+		validateAddress(t, test.Data.firstOrder.BillingAddress, order.BillingAddress)
+		validateAddress(t, test.Data.firstOrder.ShippingAddress, order.ShippingAddress)
 	})
 }
 

@@ -236,7 +236,6 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	id := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
-	claims := gcontext.GetClaims(ctx)
 
 	order := &models.Order{}
 	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
@@ -247,7 +246,7 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		return unauthorizedError("You don't have access to this order").WithInternalMessage("Unauthorized access attempted for order by %s", claims.ID)
+		return unauthorizedError("You don't have access to this order")
 	}
 
 	log.Debugf("Successfully got order %s", order.ID)

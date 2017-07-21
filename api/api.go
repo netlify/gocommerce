@@ -78,8 +78,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 
 		r.Route("/{order_id}", func(r *router) {
 			r.Use(api.withOrderID)
-			// TODO should anonymous order viewing be allowed?
-			r.With(authRequired).Get("/", api.OrderView)
+			r.Get("/", api.OrderView)
 			r.With(adminRequired).Put("/", api.OrderUpdate)
 
 			r.Route("/payments", func(r *router) {
