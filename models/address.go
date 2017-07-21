@@ -17,6 +17,10 @@ type AddressRequest struct {
 	Country  string `json:"country"`
 	State    string `json:"state"`
 	Zip      string `json:"zip"`
+
+	// deprecated
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
 }
 
 // Address is a stored address, reusable with an ID.
@@ -39,6 +43,7 @@ func (Address) TableName() string {
 
 // Validate validates the AddressRequest model
 func (a AddressRequest) Validate() error {
+	a.combineNames()
 	required := map[string]string{
 		"name":    a.Name,
 		"address": a.Address1,
@@ -59,4 +64,24 @@ func (a AddressRequest) Validate() error {
 	}
 
 	return nil
+}
+
+// BeforeUpdate database callback.
+func (a *AddressRequest) BeforeUpdate() (err error) {
+	a.combineNames()
+	return err
+}
+
+// AfterFind database callback.
+func (a *AddressRequest) AfterFind() (err error) {
+	a.combineNames()
+	return nil
+}
+
+func (a *AddressRequest) combineNames() {
+	if a.Name == "" {
+		a.Name = strings.TrimSpace(strings.Join([]string{a.FirstName, a.LastName}, " "))
+		a.FirstName = ""
+		a.LastName = ""
+	}
 }
