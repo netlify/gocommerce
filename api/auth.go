@@ -101,7 +101,7 @@ func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, 
 		return ctx, nil
 	}
 
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 	if claims.ID != userID {
 		return nil, unauthorizedError("Can't access a different user unless you're an admin")
 	}

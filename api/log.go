@@ -20,11 +20,13 @@ type structuredLogger struct {
 
 func (l *structuredLogger) NewLogEntry(r *http.Request) chimiddleware.LogEntry {
 	entry := &structuredLoggerEntry{Logger: logrus.NewEntry(l.Logger)}
-	logFields := logrus.Fields{}
-
-	logFields["component"] = "api"
-	logFields["method"] = r.Method
-	logFields["path"] = r.URL.Path
+	logFields := logrus.Fields{
+		"component":   "api",
+		"method":      r.Method,
+		"path":        r.URL.Path,
+		"remote_addr": r.RemoteAddr,
+		"referer":     r.Referer(),
+	}
 
 	if reqID := gcontext.GetRequestID(r.Context()); reqID != "" {
 		logFields["request_id"] = reqID

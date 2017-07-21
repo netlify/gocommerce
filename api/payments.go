@@ -36,7 +36,7 @@ type PaymentParams struct {
 func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 
 	trans, httpErr := queryForTransactions(a.db, log, "user_id = ?", userID)
 	if httpErr != nil {
@@ -50,7 +50,7 @@ func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) error {
 func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
-	orderID := getOrderID(ctx)
+	orderID := gcontext.GetOrderID(ctx)
 	claims := gcontext.GetClaims(ctx)
 
 	order, httpErr := queryForOrder(a.db, orderID, log)
@@ -98,7 +98,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
 
-	orderID := getOrderID(ctx)
+	orderID := gcontext.GetOrderID(ctx)
 	tx := a.db.Begin()
 	order := &models.Order{}
 

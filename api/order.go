@@ -79,7 +79,7 @@ func (a *API) orderCtx(w http.ResponseWriter, r *http.Request) (context.Context,
 	orderID := chi.URLParam(r, "order_id")
 	logEntrySetField(r, "order_id", orderID)
 
-	ctx := withOrderID(r.Context(), orderID)
+	ctx := gcontext.WithOrderID(r.Context(), orderID)
 	return ctx, nil
 }
 
@@ -142,7 +142,7 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 // ResendOrderReceipt resends the email receipt for an order
 func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	id := getOrderID(ctx)
+	id := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 
 	params := &receiptParams{}
@@ -206,7 +206,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
 
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 	if userID == "" {
 		userID = claims.ID
 	}
@@ -234,7 +234,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 // Only the owner of the order, an admin, or an anon order are allowed to be seen
 func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	id := getOrderID(ctx)
+	id := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
 
@@ -370,7 +370,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 // There are also blocks to changing certain fields after the state has been locked
 func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	orderID := getOrderID(ctx)
+	orderID := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
 	config := gcontext.GetConfig(ctx)

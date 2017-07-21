@@ -77,7 +77,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 // DownloadList lists all purchased downloads for an order or a user.
 func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	orderID := getOrderID(ctx)
+	orderID := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
 

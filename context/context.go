@@ -30,6 +30,8 @@ const (
 	mailerKey          = contextKey("mailer")
 	assetStoreKey      = contextKey("asset_store")
 	paymentProviderKey = contextKey("payment-provider")
+	userIDKey          = contextKey("user_id")
+	orderIDKey         = contextKey("order_id")
 )
 
 // WithConfig adds the tenant configuration to the context.
@@ -177,4 +179,26 @@ func IsAdmin(ctx context.Context) bool {
 		return false
 	}
 	return obj.(bool)
+}
+
+// GetUserID reads the user ID from the context.
+func GetUserID(ctx context.Context) string {
+	id, _ := ctx.Value(userIDKey).(string)
+	return id
+}
+
+// WithUserID adds the user ID to the context.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
+// GetOrderID reads the order ID from the context.
+func GetOrderID(ctx context.Context) string {
+	id, _ := ctx.Value(orderIDKey).(string)
+	return id
+}
+
+// WithOrderID adds the order ID to the context.
+func WithOrderID(ctx context.Context, orderID string) context.Context {
+	return context.WithValue(ctx, orderIDKey, orderID)
 }

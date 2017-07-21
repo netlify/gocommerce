@@ -8,11 +8,12 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
 
@@ -20,7 +21,7 @@ func (a *API) userCtx(w http.ResponseWriter, r *http.Request) (context.Context, 
 	userID := chi.URLParam(r, "user_id")
 	logEntrySetField(r, "user_id", userID)
 
-	ctx := withUserID(r.Context(), userID)
+	ctx := gcontext.WithUserID(r.Context(), userID)
 	return ctx, nil
 }
 
@@ -84,7 +85,7 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 // If you're an admin you can request a user that is not your self
 func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 
 	user := &models.User{
 		ID: userID,
@@ -111,7 +112,7 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 // AddressList will return the addresses for a given user
 func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
 		return notFoundError("couldn't find a record for user: " + userID)
@@ -130,7 +131,7 @@ func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	addrID := chi.URLParam(r, "addr_id")
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
 		return notFoundError("couldn't find a record for user: " + userID)
@@ -152,7 +153,7 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 // return errors or 200 and no body
 func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 	log := getLogEntry(r)
 	log.Debugf("Starting to delete user %s", userID)
 
@@ -216,7 +217,7 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	addrID := chi.URLParam(r, "addr_id")
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 	log := getLogEntry(r).WithField("addr_id", addrID)
 
 	if getUser(a.db, userID) == nil {
@@ -239,7 +240,7 @@ func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 // CreateNewAddress will create an address associated with that user
 func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	userID := getUserID(ctx)
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
 		return notFoundError("Couldn't find user " + userID)
