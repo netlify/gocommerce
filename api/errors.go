@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"os"
 	"runtime/debug"
-)
 
-var genericInternalServerErrorResponse = []byte(`{"code":500,"msg":"Internal server error"}`)
+	gcontext "github.com/netlify/gocommerce/context"
+)
 
 func badRequestError(fmtString string, args ...interface{}) *HTTPError {
 	return httpError(http.StatusBadRequest, fmtString, args...)
@@ -32,6 +32,7 @@ type HTTPError struct {
 	Message         string `json:"msg"`
 	InternalError   error  `json:"-"`
 	InternalMessage string `json:"-"`
+	ErrorID         string `json:"error_id,omitempty"`
 }
 
 func (e *HTTPError) Error() string {
@@ -96,9 +97,11 @@ func recoverer(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 
 func handleError(err error, w http.ResponseWriter, r *http.Request) {
 	log := getLogEntry(r)
+	errorID := gcontext.GetRequestID(r.Context())
 	switch e := err.(type) {
 	case *HTTPError:
 		if e.Code >= http.StatusInternalServerError {
+			e.ErrorID = errorID
 			// this will get us the stack trace too
 			log.WithError(e.Cause()).Error(e.Error())
 		} else {
@@ -111,7 +114,7 @@ func handleError(err error, w http.ResponseWriter, r *http.Request) {
 		log.WithError(e).Errorf("Unhandled server error: %s", e.Error())
 		// hide real error details from response to prevent info leaks
 		w.WriteHeader(http.StatusInternalServerError)
-		if _, writeErr := w.Write(genericInternalServerErrorResponse); writeErr != nil {
+		if _, writeErr := w.Write([]byte(`{"code":500,"msg":"Internal server error","error_id":"` + errorID + `"}`)); writeErr != nil {
 			log.WithError(writeErr).Error("Error writing generic error message")
 		}
 	}
