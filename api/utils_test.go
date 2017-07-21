@@ -56,7 +56,7 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration,
 		assert.FailNow(t, "failed to connect to db: "+err.Error())
 	}
 
-	data := loadTestData(db)
+	data := loadTestData(t, db)
 	return db, globalConfig, config, data
 }
 
@@ -228,20 +228,20 @@ func setupTestData() *TestData {
 	}
 }
 
-func loadTestData(db *gorm.DB) *TestData {
+func loadTestData(t *testing.T, db *gorm.DB) *TestData {
 	testData := setupTestData()
 
-	db.Create(testData.testUser)
-	db.Create(&testData.testAddress)
+	require.NoError(t, db.Create(testData.testUser).Error)
+	require.NoError(t, db.Create(&testData.testAddress).Error)
 
-	db.Create(testData.firstLineItem)
-	db.Create(testData.firstTransaction)
-	db.Create(testData.firstOrder)
+	require.NoError(t, db.Create(testData.firstLineItem).Error)
+	require.NoError(t, db.Create(testData.firstTransaction).Error)
+	require.NoError(t, db.Create(testData.firstOrder).Error)
 
-	db.Create(testData.secondLineItem1)
-	db.Create(testData.secondLineItem2)
-	db.Create(testData.secondTransaction)
-	db.Create(testData.secondOrder)
+	require.NoError(t, db.Create(testData.secondLineItem1).Error)
+	require.NoError(t, db.Create(testData.secondLineItem2).Error)
+	require.NoError(t, db.Create(testData.secondTransaction).Error)
+	require.NoError(t, db.Create(testData.secondOrder).Error)
 	return testData
 }
 
