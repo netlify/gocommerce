@@ -46,7 +46,7 @@ func (LineItem) TableName() string {
 }
 
 // BeforeUpdate database callback.
-func (i *LineItem) BeforeUpdate() (err error) {
+func (i *LineItem) BeforeUpdate() error {
 	if len(i.MetaData) == 0 {
 		i.RawMetaData = ""
 		return nil
@@ -60,11 +60,11 @@ func (i *LineItem) BeforeUpdate() (err error) {
 }
 
 // AfterFind database callback.
-func (i *LineItem) AfterFind() (err error) {
+func (i *LineItem) AfterFind() error {
 	if i.RawMetaData != "" {
 		return json.Unmarshal([]byte(i.RawMetaData), &i.MetaData)
 	}
-	return err
+	return nil
 }
 
 // PriceItem represent the subcomponent price items of a LineItem.
