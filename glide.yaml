@@ -5,8 +5,6 @@ import:
   version: v3.0.0
 - package: github.com/go-sql-driver/mysql
   version: v1.2
-- package: github.com/guregu/kami
-  version: v2.1
 - package: github.com/jinzhu/gorm
   version: v1.0
 - package: github.com/lib/pq
