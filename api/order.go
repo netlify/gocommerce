@@ -157,7 +157,7 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 		if result.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
-		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
@@ -223,7 +223,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	var orders []models.Order
 	result := query.Offset(offset).Limit(limit).Find(&orders)
 	if result.Error != nil {
-		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
 	log.WithField("order_count", len(orders)).Debugf("Successfully retrieved %d orders", len(orders))
@@ -243,7 +243,7 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 		if result.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
-		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
 	if !hasOrderAccess(ctx, order) {
@@ -333,7 +333,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {
 			tx.Rollback()
-			return internalServerError("Error verifying VAT number %v", err).WithInternalError(err)
+			return internalServerError("Error verifying VAT number").WithInternalError(err)
 		}
 		if !valid {
 			tx.Rollback()
@@ -554,7 +554,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 			user.Email = claims.Email
 			tx.Create(user)
 		} else if result.Error != nil {
-			return internalServerError("Token had an invalid ID: %v", result.Error).WithInternalError(result.Error)
+			return internalServerError("Token had an invalid ID").WithInternalError(result.Error)
 		}
 
 		if order.Email == "" {
@@ -601,19 +601,19 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 	wg.Wait()
 
 	if sharedErr.err != nil {
-		return internalServerError("Error processing line item: %v", sharedErr.err).WithInternalError(sharedErr.err)
+		return internalServerError("Error processing line item").WithInternalError(sharedErr.err)
 	}
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
 		if err := tx.Save(&item).Error; err != nil {
-			return internalServerError("Error creating line item: %v", err).WithInternalError(err)
+			return internalServerError("Error creating line item").WithInternalError(err)
 		}
 	}
 
 	for _, download := range order.Downloads {
 		if err := tx.Create(&download).Error; err != nil {
-			return internalServerError("Error creating download item: %v", err).WithInternalError(err)
+			return internalServerError("Error creating download item").WithInternalError(err)
 		}
 	}
 
@@ -653,7 +653,7 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	if id != "" {
 		loadedAddress := new(models.Address)
 		if result := tx.First(loadedAddress, "id = ?", id); result.Error != nil {
-			return nil, badRequestError("Bad %v id: %v, %v", name, id, result.Error)
+			return nil, badRequestError("Bad %v id: %v", name, id).WithInternalError(result.Error)
 		}
 
 		if order.UserID != loadedAddress.UserID {

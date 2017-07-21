@@ -23,7 +23,7 @@ func (a *API) lookupCoupon(ctx context.Context, w http.ResponseWriter, code stri
 		case coupons.CouponNotFound:
 			return nil, notFoundError(v.Error())
 		default:
-			return nil, internalServerError("Error fetching coupon: %v", err)
+			return nil, internalServerError("Error fetching coupon").WithInternalError(err)
 		}
 	}
 

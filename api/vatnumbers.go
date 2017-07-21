@@ -13,7 +13,7 @@ func (a *API) VatNumberLookup(w http.ResponseWriter, r *http.Request) error {
 
 	response, err := vat.CheckVAT(number)
 	if err != nil {
-		return internalServerError("Failed to lookup VAT Number: %v", err).WithInternalError(err)
+		return internalServerError("Failed to lookup VAT Number").WithInternalError(err)
 	}
 
 	return sendJSON(w, http.StatusOK, map[string]interface{}{

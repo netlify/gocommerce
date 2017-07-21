@@ -107,7 +107,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		if result.RecordNotFound() {
 			return notFoundError("No order with this ID found")
 		}
-		return internalServerError("Error during database query: %v", result.Error).WithInternalError(result.Error)
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
 	if order.PaymentState == models.PaidState {
@@ -142,7 +142,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	err = a.verifyAmount(ctx, order, params.Amount)
 	if err != nil {
 		tx.Rollback()
-		return internalServerError("We failed to authorize the amount for this order: %v", err).WithInternalError(err)
+		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
 	tr := models.NewTransaction(order)
 

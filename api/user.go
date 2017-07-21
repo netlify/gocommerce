@@ -96,7 +96,7 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if rsp.Error != nil {
-		return internalServerError("Problem searching for user " + userID).WithInternalError(rsp.Error)
+		return internalServerError("Problem searching for user %s", userID).WithInternalError(rsp.Error)
 	}
 
 	if user.DeletedAt != nil {
@@ -121,7 +121,7 @@ func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 	addrs := []models.Address{}
 	results := a.db.Where("user_id = ?", userID).Find(&addrs)
 	if results.Error != nil {
-		return internalServerError("problem while querying for userID: " + userID).WithInternalError(results.Error)
+		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, &addrs)
@@ -143,7 +143,7 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 	}
 	results := a.db.First(addr)
 	if results.Error != nil {
-		return internalServerError("problem while querying for userID: " + userID).WithInternalError(results.Error)
+		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
 
 	return sendJSON(w, http.StatusOK, &addr)
