@@ -1,5 +1,5 @@
-hash: ff032ee932207bc587ba91a411a44bb373845bbddfc2fc7f88b3943554388439
-updated: 2017-07-21T15:32:31.058753676-04:00
+hash: b62425c7471b673ef332831280c63ff9af072e0bdaf8362077eef50556cf2c4e
+updated: 2017-07-21T15:36:40.198060023-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -55,9 +55,7 @@ imports:
 - name: github.com/PuerkitoBio/goquery
   version: e1271ee34c6a305e38566ecd27ae374944907ee9
 - name: github.com/rs/cors
-  version: a62a804a8a009876ca59105f7899938a1349f4b3
-- name: github.com/rs/xhandler
-  version: 1eb70cf1520d43c307a89c5dabb7a7efd132fccd
+  version: 8dd4211afb5d08dbb39a533b9bb9e4b486351df6
 - name: github.com/sirupsen/logrus
   version: a3f95b5c423586578a4e099b11a46c2479628cac
   subpackages:
@@ -79,11 +77,46 @@ imports:
 - name: github.com/stripe/stripe-go
   version: 250fb5fdb3e4001e3388f6410f648ea178b3262e
   subpackages:
+  - account
+  - balance
+  - bankaccount
+  - bitcoinreceiver
+  - bitcointransaction
+  - card
+  - charge
   - client
+  - countryspec
+  - coupon
+  - customer
+  - discount
+  - dispute
+  - ephemeralkey
+  - event
+  - fee
+  - feerefund
+  - fileupload
+  - invoice
+  - invoiceitem
+  - loginlink
+  - order
+  - orderitem
+  - orderreturn
+  - paymentsource
+  - payout
+  - plan
+  - product
+  - recipient
+  - refund
+  - reversal
+  - sku
+  - source
+  - sub
+  - subitem
+  - token
+  - transfer
 - name: golang.org/x/net
   version: ab5485076ff3407ad2d02db054635913f017b0ed
   subpackages:
-  - context
   - html
   - html/atom
 - name: golang.org/x/sys

@@ -13,7 +13,7 @@ import:
 - package: github.com/pborman/uuid
   version: v1.0
 - package: github.com/rs/cors
-  version: v1.0
+  version: v1.1
 - package: github.com/spf13/cobra
 - package: github.com/spf13/viper
 - package: github.com/netlify/mailme
