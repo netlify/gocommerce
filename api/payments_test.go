@@ -27,24 +27,24 @@ import (
 func TestOrderPaymentsList(t *testing.T) {
 	t.Run("AsOwner", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testToken(testData.testUser.ID, "")
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder+"/payments", nil, token)
+		token := testToken(test.Data.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, token)
 
 		// we should have gotten back a list of transactions
 		trans := []models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &trans)
 		assert.Len(t, trans, 1)
-		validateTransaction(t, testData.firstTransaction, &trans[0])
+		validateTransaction(t, test.Data.firstTransaction, &trans[0])
 	})
 
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
-		anotherTransaction := models.NewTransaction(testData.firstOrder)
+		anotherTransaction := models.NewTransaction(test.Data.firstOrder)
 		test.DB.Create(anotherTransaction)
 		defer test.DB.Unscoped().Delete(anotherTransaction)
 
 		token := testAdminToken("magical-unicorn", "")
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder+"/payments", nil, token)
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, token)
 
 		trans := []models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &trans)
@@ -53,8 +53,8 @@ func TestOrderPaymentsList(t *testing.T) {
 			switch tran.ID {
 			case anotherTransaction.ID:
 				validateTransaction(t, anotherTransaction, &tran)
-			case testData.firstTransaction.ID:
-				validateTransaction(t, testData.firstTransaction, &tran)
+			case test.Data.firstTransaction.ID:
+				validateTransaction(t, test.Data.firstTransaction, &tran)
 			default:
 				assert.Fail(t, "Unknown transaction: "+tran.ID)
 			}
@@ -63,7 +63,7 @@ func TestOrderPaymentsList(t *testing.T) {
 
 	t.Run("Anonymous", func(t *testing.T) {
 		test := NewRouteTest(t)
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder+"/payments", nil, nil)
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, nil)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 }
@@ -73,36 +73,39 @@ func TestOrderPaymentsList(t *testing.T) {
 // ------------------------------------------------------------------------------------------------
 
 func TestUserPaymentsList(t *testing.T) {
-	url := "/users/" + testData.testUser.ID + "/payments"
 
 	t.Run("AsUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testToken(testData.testUser.ID, "")
+		url := "/users/" + test.Data.testUser.ID + "/payments"
+		token := testToken(test.Data.testUser.ID, "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		actual := []models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &actual)
-		validateAllTransactions(t, testData, actual)
+		validateAllTransactions(t, test.Data, actual)
 	})
 
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		actual := []models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &actual)
-		validateAllTransactions(t, testData, actual)
+		validateAllTransactions(t, test.Data, actual)
 	})
 
 	t.Run("Anonymous", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, nil)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 
 	t.Run("AsStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
 		token := testToken("stranger-danger", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 		validateError(t, http.StatusUnauthorized, recorder)
@@ -131,7 +134,7 @@ func TestPaymentsList(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, &trans)
 
 		assert.Len(t, trans, 1)
-		validateTransaction(t, testData.firstTransaction, &trans[0])
+		validateTransaction(t, test.Data.firstTransaction, &trans[0])
 	})
 
 	t.Run("NoParams", func(t *testing.T) {
@@ -141,7 +144,7 @@ func TestPaymentsList(t *testing.T) {
 
 		trans := []models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &trans)
-		validateAllTransactions(t, testData, trans)
+		validateAllTransactions(t, test.Data, trans)
 	})
 }
 
@@ -156,11 +159,11 @@ func TestPaymentsView(t *testing.T) {
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
 		token := testAdminToken("magical-unicorn", "")
-		recorder := test.TestEndpoint(http.MethodGet, "/payments/"+testData.firstTransaction.ID, nil, token)
+		recorder := test.TestEndpoint(http.MethodGet, "/payments/"+test.Data.firstTransaction.ID, nil, token)
 
 		trans := new(models.Transaction)
 		extractPayload(t, http.StatusOK, recorder, trans)
-		validateTransaction(t, testData.firstTransaction, trans)
+		validateTransaction(t, test.Data.firstTransaction, trans)
 	})
 
 	t.Run("Missing", func(t *testing.T) {
@@ -172,37 +175,42 @@ func TestPaymentsView(t *testing.T) {
 }
 
 func TestPaymentsRefund(t *testing.T) {
-	url := "/payments/" + testData.firstTransaction.ID + "/refund"
 	t.Run("MismatchedCurrency", func(t *testing.T) {
-		w := runPaymentRefund(t, url, &PaymentParams{
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		w := runPaymentRefund(test, url, &PaymentParams{
 			Amount:   1,
 			Currency: "monopoly-money",
 		})
 		validateError(t, http.StatusBadRequest, w, "Currencies do not match")
 	})
 	t.Run("AmountTooHighOrLow", func(t *testing.T) {
-		w := runPaymentRefund(t, url, &PaymentParams{
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		w := runPaymentRefund(test, url, &PaymentParams{
 			Amount:   1000,
 			Currency: "usd",
 		})
 		validateError(t, http.StatusBadRequest, w, "must be between 0 and the total amount")
 	})
 	t.Run("UnknownPayment", func(t *testing.T) {
-		w := runPaymentRefund(t, "/payments/nothing/refund", &stripePaymentParams{
+		test := NewRouteTest(t)
+		w := runPaymentRefund(test, "/payments/nothing/refund", &stripePaymentParams{
 			Amount:      1,
-			Currency:    testData.firstTransaction.Currency,
+			Currency:    test.Data.firstTransaction.Currency,
 			StripeToken: "123",
 		})
 		validateError(t, http.StatusNotFound, w)
 	})
 	t.Run("Unpaid", func(t *testing.T) {
 		test := NewRouteTest(t)
-		testData.firstTransaction.Status = models.PendingState
-		test.DB.Save(testData.firstTransaction)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		test.Data.firstTransaction.Status = models.PendingState
+		test.DB.Save(test.Data.firstTransaction)
 
 		params := &stripePaymentParams{
 			Amount:      1,
-			Currency:    testData.firstTransaction.Currency,
+			Currency:    test.Data.firstTransaction.Currency,
 			StripeToken: "123",
 		}
 		body, err := json.Marshal(params)
@@ -213,6 +221,7 @@ func TestPaymentsRefund(t *testing.T) {
 	})
 	t.Run("Success", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
 		// unused, but needed to pass safety check
 		test.Config.Payment.Stripe.Enabled = true
 		test.Config.Payment.Stripe.SecretKey = "secret"
@@ -224,7 +233,7 @@ func TestPaymentsRefund(t *testing.T) {
 
 		params := &stripePaymentParams{
 			Amount:      1,
-			Currency:    testData.firstTransaction.Currency,
+			Currency:    test.Data.firstTransaction.Currency,
 			StripeToken: "123",
 		}
 		body, err := json.Marshal(params)
@@ -244,7 +253,7 @@ func TestPaymentsRefund(t *testing.T) {
 
 		for _, payment := range []*models.Transaction{stored, rsp} {
 			assert.NotEmpty(t, payment.ID)
-			assert.Equal(t, testData.testUser.ID, payment.UserID)
+			assert.Equal(t, test.Data.testUser.ID, payment.UserID)
 			assert.EqualValues(t, 1, payment.Amount)
 			assert.Equal(t, "usd", payment.Currency)
 			assert.Empty(t, payment.FailureCode)
@@ -255,6 +264,7 @@ func TestPaymentsRefund(t *testing.T) {
 	})
 
 	t.Run("PayPal", func(t *testing.T) {
+		test := NewRouteTest(t)
 		var loginCount, refundCount int
 		refundID := "4CF18861HF410323U"
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -263,7 +273,7 @@ func TestPaymentsRefund(t *testing.T) {
 				w.Header().Add("Content-Type", "application/json")
 				fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
 				loginCount++
-			case "/v1/payments/sale/" + testData.secondTransaction.ProcessorID + "/refund":
+			case "/v1/payments/sale/" + test.Data.secondTransaction.ProcessorID + "/refund":
 				w.Header().Add("Content-Type", "application/json")
 				fmt.Fprint(w, `{"id":"`+refundID+`"}`)
 				refundCount++
@@ -274,7 +284,6 @@ func TestPaymentsRefund(t *testing.T) {
 		}))
 		defer server.Close()
 
-		test := NewRouteTest(t)
 		test.Config.Payment.PayPal.Enabled = true
 		test.Config.Payment.PayPal.ClientID = "clientid"
 		test.Config.Payment.PayPal.Secret = "secret"
@@ -282,7 +291,7 @@ func TestPaymentsRefund(t *testing.T) {
 
 		params := &paypalPaymentParams{
 			Amount:       1,
-			Currency:     testData.secondTransaction.Currency,
+			Currency:     test.Data.secondTransaction.Currency,
 			PaypalID:     "123",
 			PaypalUserID: "456",
 		}
@@ -291,7 +300,7 @@ func TestPaymentsRefund(t *testing.T) {
 		require.NoError(t, err)
 
 		token := testAdminToken("magical-unicorn", "")
-		recorder := test.TestEndpoint(http.MethodPost, "/payments/"+testData.secondTransaction.ID+"/refund", bytes.NewBuffer(body), token)
+		recorder := test.TestEndpoint(http.MethodPost, "/payments/"+test.Data.secondTransaction.ID+"/refund", bytes.NewBuffer(body), token)
 
 		rsp := models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &rsp)
@@ -301,10 +310,9 @@ func TestPaymentsRefund(t *testing.T) {
 	})
 }
 
-func runPaymentRefund(t *testing.T, url string, params interface{}) *httptest.ResponseRecorder {
-	test := NewRouteTest(t)
+func runPaymentRefund(test *RouteTest, url string, params interface{}) *httptest.ResponseRecorder {
 	body, err := json.Marshal(params)
-	require.NoError(t, err)
+	require.NoError(test.T, err)
 	token := testAdminToken("magical-unicorn", "")
 	return test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
 }

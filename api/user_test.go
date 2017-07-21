@@ -40,8 +40,8 @@ func TestUsersList(t *testing.T) {
 			switch u.ID {
 			case toDie.ID:
 				assert.Equal(t, "twoface@dc.com", u.Email)
-			case testData.testUser.ID:
-				assert.Equal(t, testData.testUser.Email, u.Email)
+			case test.Data.testUser.ID:
+				assert.Equal(t, test.Data.testUser.Email, u.Email)
 			default:
 				assert.Fail(t, "unexpected user %v\n", u)
 			}
@@ -68,30 +68,32 @@ func TestUsersList(t *testing.T) {
 }
 
 func TestUsersView(t *testing.T) {
-	url := "/users/" + testData.testUser.ID
 	t.Run("AsUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testUserToken
+		url := "/users/" + test.Data.testUser.ID
+		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		user := new(models.User)
 		extractPayload(t, http.StatusOK, recorder, user)
-		validateUser(t, testData.testUser, user)
+		validateUser(t, test.Data.testUser, user)
 	})
 	t.Run("AsStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID
 		token := testToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		user := new(models.User)
 		extractPayload(t, http.StatusOK, recorder, user)
-		validateUser(t, testData.testUser, user)
+		validateUser(t, test.Data.testUser, user)
 	})
 	t.Run("Deleted", func(t *testing.T) {
 		test := NewRouteTest(t)
@@ -110,11 +112,11 @@ func TestUsersView(t *testing.T) {
 }
 
 func TestUserAddressesList(t *testing.T) {
-	url := "/users/" + testData.testUser.ID + "/addresses"
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
 		second := getTestAddress()
-		second.UserID = testData.testUser.ID
+		second.UserID = test.Data.testUser.ID
 		assert.Nil(t, second.Validate())
 		test.DB.Create(&second)
 		defer test.DB.Unscoped().Delete(&second)
@@ -130,8 +132,8 @@ func TestUserAddressesList(t *testing.T) {
 			switch a.ID {
 			case second.ID:
 				validateAddress(t, *second, a)
-			case testData.testAddress.ID:
-				validateAddress(t, testData.testAddress, a)
+			case test.Data.testAddress.ID:
+				validateAddress(t, test.Data.testAddress, a)
 			default:
 				assert.Fail(t, fmt.Sprintf("Unexpected address: %+v", a))
 			}
@@ -139,16 +141,18 @@ func TestUserAddressesList(t *testing.T) {
 	})
 	t.Run("AsUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testToken(testData.testUser.ID, "")
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
+		token := testToken(test.Data.testUser.ID, "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		addrs := []models.Address{}
 		extractPayload(t, http.StatusOK, recorder, &addrs)
 		require.Len(t, addrs, 1)
-		validateAddress(t, testData.testAddress, addrs[0])
+		validateAddress(t, test.Data.testAddress, addrs[0])
 	})
 	t.Run("AsStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
 		token := testToken("stranger-danger", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 		validateError(t, http.StatusUnauthorized, recorder)
@@ -177,15 +181,15 @@ func TestUserAddressesList(t *testing.T) {
 }
 
 func TestUserAddressView(t *testing.T) {
-	url := "/users/" + testData.testUser.ID + "/addresses/" + testData.testAddress.ID
 	t.Run("AsUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testToken(testData.testUser.ID, "")
+		url := "/users/" + test.Data.testUser.ID + "/addresses/" + test.Data.testAddress.ID
+		token := testToken(test.Data.testUser.ID, "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
 		addr := new(models.Address)
 		extractPayload(t, http.StatusOK, recorder, addr)
-		validateAddress(t, testData.testAddress, *addr)
+		validateAddress(t, test.Data.testAddress, *addr)
 	})
 }
 
@@ -252,11 +256,11 @@ func TestUserDelete(t *testing.T) {
 func TestUserAddressDelete(t *testing.T) {
 	test := NewRouteTest(t)
 	addr := getTestAddress()
-	addr.UserID = testData.testUser.ID
+	addr.UserID = test.Data.testUser.ID
 	test.DB.Create(addr)
 
 	token := testAdminToken("magical-unicorn", "")
-	recorder := test.TestEndpoint(http.MethodDelete, "/users/"+testData.testUser.ID+"/addresses/"+addr.ID, nil, token)
+	recorder := test.TestEndpoint(http.MethodDelete, "/users/"+test.Data.testUser.ID+"/addresses/"+addr.ID, nil, token)
 
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
@@ -273,7 +277,7 @@ func TestUserAddressCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		token := testAdminToken("magical-unicorn", "")
-		recorder := test.TestEndpoint(http.MethodPost, "/users/"+testData.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+test.Data.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
 
 		results := struct {
 			ID string
@@ -281,7 +285,7 @@ func TestUserAddressCreate(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, &results)
 
 		// now pull off the address from the DB
-		dbAddr := &models.Address{ID: results.ID, UserID: testData.testUser.ID}
+		dbAddr := &models.Address{ID: results.ID, UserID: test.Data.testUser.ID}
 		rsp := test.DB.First(dbAddr)
 		assert.False(t, rsp.RecordNotFound())
 	})
@@ -293,7 +297,7 @@ func TestUserAddressCreate(t *testing.T) {
 		require.NoError(t, err)
 
 		token := testAdminToken("magical-unicorn", "")
-		recorder := test.TestEndpoint(http.MethodPost, "/users/"+testData.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+test.Data.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
 		validateError(t, http.StatusBadRequest, recorder)
 	})
 }

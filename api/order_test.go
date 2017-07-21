@@ -39,7 +39,7 @@ func TestOrderCreate(t *testing.T) {
 			},
 			"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
 		}`)
-		token := testUserToken
+		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
 		order := &models.Order{}
@@ -66,7 +66,7 @@ func TestOrderCreate(t *testing.T) {
 			},
 			"line_items": [{"path": "/simple-product", "quantity": 1}]
 		}`)
-		token := testUserToken
+		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
 		order := &models.Order{}
@@ -92,7 +92,7 @@ func TestOrderCreate(t *testing.T) {
 			},
 			"line_items": [{"path": "/bundle-product", "quantity": 1}]
 		}`)
-		token := testUserToken
+		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
 		order := &models.Order{}
@@ -114,13 +114,13 @@ func TestOrderCreate(t *testing.T) {
 func TestOrdersList(t *testing.T) {
 	t.Run("AsTheUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testUserToken
+		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodGet, "/orders", nil, token)
 
 		orders := []models.Order{}
 		extractPayload(t, http.StatusOK, recorder, &orders)
 		assert.Len(t, orders, 2)
-		validateAllOrders(t, orders, testData)
+		validateAllOrders(t, orders, test.Data)
 	})
 	t.Run("AsStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
@@ -134,7 +134,7 @@ func TestOrdersList(t *testing.T) {
 	t.Run("Filter", func(t *testing.T) {
 		t.Run("EmailFilterAsTheUser", func(t *testing.T) {
 			test := NewRouteTest(t)
-			token := testUserToken
+			token := test.Data.testUserToken
 			recorder := test.TestEndpoint(http.MethodGet, "/orders?email=bruce", nil, token)
 
 			orders := []models.Order{}
@@ -143,7 +143,7 @@ func TestOrdersList(t *testing.T) {
 		})
 		t.Run("EmailFilterAsTheUserEmptyResponse", func(t *testing.T) {
 			test := NewRouteTest(t)
-			token := testUserToken
+			token := test.Data.testUserToken
 			recorder := test.TestEndpoint(http.MethodGet, "/orders?email=gmail.com", nil, token)
 
 			orders := []models.Order{}
@@ -152,7 +152,7 @@ func TestOrdersList(t *testing.T) {
 		})
 		t.Run("ItemFilterAsTheUser", func(t *testing.T) {
 			test := NewRouteTest(t)
-			token := testUserToken
+			token := test.Data.testUserToken
 			recorder := test.TestEndpoint(http.MethodGet, "/orders?items=batwing", nil, token)
 
 			orders := []models.Order{}
@@ -171,7 +171,7 @@ func TestUserOrdersList(t *testing.T) {
 		orders := []models.Order{}
 		extractPayload(t, http.StatusOK, recorder, &orders)
 		assert.Len(t, orders, 2)
-		validateAllOrders(t, orders, testData)
+		validateAllOrders(t, orders, test.Data)
 	})
 	t.Run("NotWithAdminRights", func(t *testing.T) {
 		test := NewRouteTest(t)
@@ -193,30 +193,30 @@ func TestUserOrdersList(t *testing.T) {
 func TestOrderView(t *testing.T) {
 	t.Run("AsTheUser", func(t *testing.T) {
 		test := NewRouteTest(t)
-		token := testToken(testData.testUser.ID, "marp@wayneindustries.com")
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder, nil, token)
+		token := testToken(test.Data.testUser.ID, "marp@wayneindustries.com")
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder, nil, token)
 
 		order := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, order)
-		validateOrder(t, testData.firstOrder, order)
-		validateAddress(t, testData.firstOrder.BillingAddress, order.BillingAddress)
-		validateAddress(t, testData.firstOrder.ShippingAddress, order.ShippingAddress)
+		validateOrder(t, test.Data.firstOrder, order)
+		validateAddress(t, test.Data.firstOrder.BillingAddress, order.BillingAddress)
+		validateAddress(t, test.Data.firstOrder.ShippingAddress, order.ShippingAddress)
 	})
 	t.Run("AsAnAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder, nil, token)
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder, nil, token)
 
 		order := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, order)
-		validateOrder(t, testData.firstOrder, order)
-		validateAddress(t, testData.firstOrder.BillingAddress, order.BillingAddress)
-		validateAddress(t, testData.firstOrder.ShippingAddress, order.ShippingAddress)
+		validateOrder(t, test.Data.firstOrder, order)
+		validateAddress(t, test.Data.firstOrder.BillingAddress, order.BillingAddress)
+		validateAddress(t, test.Data.firstOrder.ShippingAddress, order.ShippingAddress)
 	})
 	t.Run("AsAStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
 		token := testToken("stranger", "stranger-danger@wayneindustries.com")
-		recorder := test.TestEndpoint(http.MethodGet, testData.urlForFirstOrder, nil, token)
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder, nil, token)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 	t.Run("MissingOrder", func(t *testing.T) {
@@ -275,7 +275,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("NewUserNoEmails", func(t *testing.T) {
-		db, _, _ := db(t)
+		db, _, _, _ := db(t)
 		simpleOrder := models.NewOrder("session", "", "usd")
 		claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 		err := setOrderEmail(db, simpleOrder, claims, testLogger)
@@ -283,7 +283,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, err.Code)
 	})
 	t.Run("KnownUserClaimsOnRequest", func(t *testing.T) {
-		db, _, _ := db(t)
+		db, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -293,7 +293,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserClaimsOnClaim", func(t *testing.T) {
-		db, _, _ := db(t)
+		db, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -303,7 +303,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserAllTheEmail", func(t *testing.T) {
-		db, _, _ := db(t)
+		db, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -313,7 +313,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserNoEmail", func(t *testing.T) {
-		db, _, _ := db(t)
+		db, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -336,15 +336,15 @@ func TestOrderUpdate(t *testing.T) {
 			Currency: "monopoly-dollars",
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
-		recorder := runOrderUpdate(test, testData.firstOrder, op, token)
-		defer test.DB.Save(testData.firstOrder)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
+		defer test.DB.Save(test.Data.firstOrder)
 
 		assert := assert.New(t)
 		rspOrder := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 		saved := new(models.Order)
-		rsp := test.DB.Preload("LineItems").First(saved, "id = ?", testData.firstOrder.ID)
+		rsp := test.DB.Preload("LineItems").First(saved, "id = ?", test.Data.firstOrder.ID)
 		require.False(t, rsp.RecordNotFound())
 
 		assert.Equal("mrfreeze@dc.com", rspOrder.Email)
@@ -356,16 +356,16 @@ func TestOrderUpdate(t *testing.T) {
 		validateOrder(t, saved, rspOrder)
 
 		// should be the only field that has changed ~ check it
-		saved.Email = testData.firstOrder.Email
-		saved.Currency = testData.firstOrder.Currency
-		validateOrder(t, testData.firstOrder, saved)
+		saved.Email = test.Data.firstOrder.Email
+		saved.Currency = test.Data.firstOrder.Currency
+		validateOrder(t, test.Data.firstOrder, saved)
 	})
 
 	t.Run("ExistingAddress", func(t *testing.T) {
 		test := NewRouteTest(t)
 		newAddr := getTestAddress()
 		newAddr.ID = "new-addr"
-		newAddr.UserID = testData.firstOrder.UserID
+		newAddr.UserID = test.Data.firstOrder.UserID
 		test.DB.Create(newAddr)
 		defer test.DB.Unscoped().Delete(newAddr)
 
@@ -373,14 +373,14 @@ func TestOrderUpdate(t *testing.T) {
 			BillingAddressID: newAddr.ID,
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
-		recorder := runOrderUpdate(test, testData.firstOrder, op, token)
-		defer test.DB.Save(testData.firstOrder)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
+		defer test.DB.Save(test.Data.firstOrder)
 
 		rspOrder := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 		saved := new(models.Order)
-		rsp := test.DB.First(saved, "id = ?", testData.firstOrder.ID)
+		rsp := test.DB.First(saved, "id = ?", test.Data.firstOrder.ID)
 		require.False(t, rsp.RecordNotFound())
 
 		// now we load the addresses
@@ -402,14 +402,14 @@ func TestOrderUpdate(t *testing.T) {
 			ShippingAddress: paramsAddress,
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
-		recorder := runOrderUpdate(test, testData.firstOrder, op, token)
-		defer test.DB.Save(testData.firstOrder)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
+		defer test.DB.Save(test.Data.firstOrder)
 
 		rspOrder := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 		saved := new(models.Order)
-		rsp := test.DB.First(saved, "id = ?", testData.firstOrder.ID)
+		rsp := test.DB.First(saved, "id = ?", test.Data.firstOrder.ID)
 		require.False(t, rsp.RecordNotFound())
 
 		// now we load the addresses
@@ -430,7 +430,7 @@ func TestOrderUpdate(t *testing.T) {
 			Currency: "monopoly-dollars",
 		}
 		token := testToken("villian", "villian@wayneindustries.com")
-		recorder := runOrderUpdate(test, testData.firstOrder, op, token)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 
@@ -440,7 +440,7 @@ func TestOrderUpdate(t *testing.T) {
 			Email:    "mrfreeze@dc.com",
 			Currency: "monopoly-dollars",
 		}
-		recorder := runOrderUpdate(test, testData.firstOrder, op, nil)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, nil)
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 
@@ -455,8 +455,8 @@ func TestOrderUpdate(t *testing.T) {
 			},
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
-		recorder := runOrderUpdate(test, testData.firstOrder, op, token)
-		defer test.DB.Save(testData.firstOrder)
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
+		defer test.DB.Save(test.Data.firstOrder)
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusOK, recorder, order)
@@ -471,9 +471,9 @@ func TestOrderUpdate(t *testing.T) {
 func TestClaim(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
 		test := NewRouteTest(t)
-		testData.firstOrder.Email = "villian@wayneindustries.com"
-		testData.firstOrder.UserID = ""
-		rsp := test.DB.Save(testData.firstOrder)
+		test.Data.firstOrder.Email = "villian@wayneindustries.com"
+		test.Data.firstOrder.UserID = ""
+		rsp := test.DB.Save(test.Data.firstOrder)
 		require.NoError(t, rsp.Error, "Failed to update email")
 
 		token := testToken("villian", "villian@wayneindustries.com")
@@ -506,9 +506,9 @@ func TestClaim(t *testing.T) {
 
 	t.Run("MultipleTimes", func(t *testing.T) {
 		test := NewRouteTest(t)
-		testData.firstOrder.Email = "villian@wayneindustries.com"
-		testData.firstOrder.UserID = ""
-		rsp := test.DB.Save(testData.firstOrder)
+		test.Data.firstOrder.Email = "villian@wayneindustries.com"
+		test.Data.firstOrder.UserID = ""
+		rsp := test.DB.Save(test.Data.firstOrder)
 		require.NoError(t, rsp.Error, "Failed to update email")
 
 		token := testToken("villian", "villian@wayneindustries.com")
@@ -596,7 +596,7 @@ func validateAllOrders(t *testing.T, actual []models.Order, expected *TestData) 
 }
 
 func validateNewUserEmail(t *testing.T, order *models.Order, claims *claims.JWTClaims, expectedUserEmail, expectedOrderEmail string) {
-	db, _, _ := db(t)
+	db, _, _, _ := db(t)
 	result := db.First(new(models.User), "id = ?", claims.ID)
 	require.True(t, result.RecordNotFound(), "Unclean test env -- user exists with ID "+claims.ID)
 

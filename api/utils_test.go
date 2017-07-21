@@ -39,7 +39,7 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration) {
+func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration, *TestData) {
 	f, err := ioutil.TempFile("", "test-db")
 	if err != nil {
 		panic(err)
@@ -55,8 +55,8 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration)
 		assert.FailNow(t, "failed to connect to db: "+err.Error())
 	}
 
-	loadTestData(db)
-	return db, globalConfig, config
+	data := loadTestData(db)
+	return db, globalConfig, config, data
 }
 
 func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
@@ -96,15 +96,13 @@ func testAdminToken(id, email string) *jwt.Token {
 // TEST DATA
 // ------------------------------------------------------------------------------------------------
 
-var testData = setupTestData()
-var testUserToken = testToken(testData.testUser.ID, testData.testUser.Email)
-
 type TestData struct {
 	urlWithUserID    string
 	urlForFirstOrder string
 
-	testUser    *models.User
-	testAddress models.Address
+	testUserToken *jwt.Token
+	testUser      *models.User
+	testAddress   models.Address
 
 	firstOrder       *models.Order
 	firstTransaction *models.Transaction
@@ -203,6 +201,7 @@ func setupTestData() *TestData {
 		fmt.Sprintf("/users/%s/orders", testUser.ID),
 		fmt.Sprintf("/orders/%s", firstOrder.ID),
 
+		testToken(testUser.ID, testUser.Email),
 		testUser,
 		testAddress,
 
@@ -217,8 +216,8 @@ func setupTestData() *TestData {
 	}
 }
 
-func loadTestData(db *gorm.DB) {
-	testData = setupTestData()
+func loadTestData(db *gorm.DB) *TestData {
+	testData := setupTestData()
 
 	db.Create(testData.testUser)
 	db.Create(&testData.testAddress)
@@ -231,6 +230,7 @@ func loadTestData(db *gorm.DB) {
 	db.Create(testData.secondLineItem2)
 	db.Create(testData.secondTransaction)
 	db.Create(testData.secondOrder)
+	return testData
 }
 
 func getTestAddress() *models.Address {
@@ -305,11 +305,12 @@ type RouteTest struct {
 	GlobalConfig *conf.GlobalConfiguration
 	Config       *conf.Configuration
 	T            *testing.T
+	Data         *TestData
 }
 
 func NewRouteTest(t *testing.T) *RouteTest {
-	db, globalConfig, config := db(t)
-	return &RouteTest{db, globalConfig, config, t}
+	db, globalConfig, config, data := db(t)
+	return &RouteTest{db, globalConfig, config, t, data}
 }
 
 func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, token *jwt.Token) *httptest.ResponseRecorder {
