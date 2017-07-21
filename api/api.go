@@ -72,49 +72,8 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	// endpoints
 	r.Get("/", api.Index)
 
-	r.Route("/orders", func(r *router) {
-		r.With(authRequired).Get("/", api.OrderList)
-		r.Post("/", api.OrderCreate)
-
-		r.Route("/{order_id}", func(r *router) {
-			r.Use(api.withOrderID)
-			r.Get("/", api.OrderView)
-			r.With(adminRequired).Put("/", api.OrderUpdate)
-
-			r.Route("/payments", func(r *router) {
-				r.With(authRequired).Get("/", api.PaymentListForOrder)
-				r.Post("/", api.PaymentCreate)
-			})
-
-			r.Get("/downloads", api.DownloadList)
-			r.Post("/receipt", api.ResendOrderReceipt)
-		})
-	})
-
-	r.Route("/users", func(r *router) {
-		r.Use(authRequired)
-		r.With(adminRequired).Get("/", api.UserList)
-
-		r.Route("/{user_id}", func(r *router) {
-			r.Use(api.withUserID)
-			r.Use(ensureUserAccess)
-
-			r.Get("/", api.UserView)
-			r.With(adminRequired).Delete("/", api.UserDelete)
-
-			r.Get("/payments", api.PaymentListForUser)
-			r.Get("/orders", api.OrderList)
-
-			r.Route("/addresses", func(r *router) {
-				r.Get("/", api.AddressList)
-				r.With(adminRequired).Post("/", api.CreateNewAddress)
-				r.Route("/{addr_id}", func(r *router) {
-					r.Get("/", api.AddressView)
-					r.With(adminRequired).Delete("/", api.AddressDelete)
-				})
-			})
-		})
-	})
+	r.Route("/orders", api.orderRoutes)
+	r.Route("/users", api.userRoutes)
 
 	r.Route("/downloads", func(r *router) {
 		r.With(authRequired).Get("/", api.DownloadList)
@@ -164,6 +123,50 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	api.handler = corsHandler.Handler(chi.ServerBaseContext(r, ctx))
 
 	return api
+}
+
+func (a *API) orderRoutes(r *router) {
+	r.With(authRequired).Get("/", a.OrderList)
+	r.Post("/", a.OrderCreate)
+
+	r.Route("/{order_id}", func(r *router) {
+		r.Use(a.withOrderID)
+		r.Get("/", a.OrderView)
+		r.With(adminRequired).Put("/", a.OrderUpdate)
+
+		r.Route("/payments", func(r *router) {
+			r.With(authRequired).Get("/", a.PaymentListForOrder)
+			r.Post("/", a.PaymentCreate)
+		})
+
+		r.Get("/downloads", a.DownloadList)
+		r.Post("/receipt", a.ResendOrderReceipt)
+	})
+}
+
+func (a *API) userRoutes(r *router) {
+	r.Use(authRequired)
+	r.With(adminRequired).Get("/", a.UserList)
+
+	r.Route("/{user_id}", func(r *router) {
+		r.Use(a.withUserID)
+		r.Use(ensureUserAccess)
+
+		r.Get("/", a.UserView)
+		r.With(adminRequired).Delete("/", a.UserDelete)
+
+		r.Get("/payments", a.PaymentListForUser)
+		r.Get("/orders", a.OrderList)
+
+		r.Route("/addresses", func(r *router) {
+			r.Get("/", a.AddressList)
+			r.With(adminRequired).Post("/", a.CreateNewAddress)
+			r.Route("/{addr_id}", func(r *router) {
+				r.Get("/", a.AddressView)
+				r.With(adminRequired).Delete("/", a.AddressDelete)
+			})
+		})
+	})
 }
 
 func withRequestID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
