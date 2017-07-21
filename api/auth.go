@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Sirupsen/logrus"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/netlify/gocommerce/claims"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
+	"github.com/sirupsen/logrus"
 )
 
 func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {

@@ -11,9 +11,9 @@ import (
 
 	"github.com/go-chi/chi"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"

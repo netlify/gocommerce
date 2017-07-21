@@ -7,10 +7,10 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/go-chi/chi"
 	"github.com/netlify/gocommerce/assetstores"

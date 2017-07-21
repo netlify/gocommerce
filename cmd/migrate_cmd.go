@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	"github.com/Sirupsen/logrus"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 

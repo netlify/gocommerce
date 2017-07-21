@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 const maxConcurrentHooks = 5

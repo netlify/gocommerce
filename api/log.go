@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	chimiddleware "github.com/go-chi/chi/middleware"
 	gcontext "github.com/netlify/gocommerce/context"
+	"github.com/sirupsen/logrus"
 )
 
 func newStructuredLogger(logger *logrus.Logger) func(next http.Handler) http.Handler {

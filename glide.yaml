@@ -29,6 +29,8 @@ import:
 - package: github.com/logpacker/PayPal-Go-SDK
 - package: github.com/go-chi/chi
   version: v3.1.0
+- package: github.com/sirupsen/logrus
+  version: 1.0.2
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3

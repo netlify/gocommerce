@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/Sirupsen/logrus"
 	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
@@ -17,6 +16,7 @@ import (
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 )
 
 // MaxConcurrentLookups controls the number of simultaneous HTTP Order lookups
