@@ -131,6 +131,12 @@ func TestOrdersList(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, &orders)
 		assert.Len(t, orders, 0)
 	})
+	t.Run("AsExpiredToken", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testExpiredToken("stranger", "stranger-danger@wayneindustries.com")
+		recorder := test.TestEndpoint(http.MethodGet, "/orders", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
 	t.Run("Filter", func(t *testing.T) {
 		t.Run("EmailFilterAsTheUser", func(t *testing.T) {
 			test := NewRouteTest(t)

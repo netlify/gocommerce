@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
@@ -77,6 +78,17 @@ func testToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
 		ID:    id,
 		Email: email,
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+}
+
+func testExpiredToken(id, email string) *jwt.Token {
+	claims := &claims.JWTClaims{
+		ID:    id,
+		Email: email,
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Duration(-1) * time.Minute).Unix(),
+		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 }

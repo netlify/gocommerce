@@ -38,11 +38,6 @@ func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, erro
 	}
 
 	claims := token.Claims.(*claims.JWTClaims)
-	// I'm pretty sure the library is already validating the expiration
-	// if claims.StandardClaims.ExpiresAt < time.Now().Unix() {
-	// 	return unauthorizedError("Token expired at %v", time.Unix(claims.StandardClaims.ExpiresAt, 0))
-	// }
-
 	isAdmin := false
 	roles, ok := claims.AppMetaData["roles"]
 	if ok {
