@@ -63,11 +63,11 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	}
 
 	r := newRouter()
-	r.Use(requestIDCtx)
+	r.Use(withRequestID)
 	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
 	r.Use(recoverer)
 	r.Use(api.instanceConfigCtx)
-	r.Use(withTokenCtx)
+	r.Use(withToken)
 
 	// endpoints
 	r.Get("/", api.Index)
@@ -77,7 +77,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		r.Post("/", api.OrderCreate)
 
 		r.Route("/{order_id}", func(r *router) {
-			r.Use(api.orderCtx)
+			r.Use(api.withOrderID)
 			// TODO should anonymous order viewing be allowed?
 			r.With(authRequired).Get("/", api.OrderView)
 			r.With(adminRequired).Put("/", api.OrderUpdate)
@@ -97,7 +97,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		r.With(adminRequired).Get("/", api.UserList)
 
 		r.Route("/{user_id}", func(r *router) {
-			r.Use(api.userCtx)
+			r.Use(api.withUserID)
 			r.Use(ensureUserAccess)
 
 			r.Get("/", api.UserView)
@@ -167,7 +167,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	return api
 }
 
-func requestIDCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func withRequestID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	id := uuid.NewRandom().String()
 	ctx := r.Context()
 	ctx = gcontext.WithRequestID(ctx, id)

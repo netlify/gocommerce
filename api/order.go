@@ -75,7 +75,7 @@ func (e *verificationError) setError(err error) {
 	e.mutex.Unlock()
 }
 
-func (a *API) orderCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func (a *API) withOrderID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	orderID := chi.URLParam(r, "order_id")
 	logEntrySetField(r, "order_id", orderID)
 

@@ -17,7 +17,7 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func (a *API) userCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func (a *API) withUserID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	userID := chi.URLParam(r, "user_id")
 	logEntrySetField(r, "user_id", userID)
 

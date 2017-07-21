@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func withTokenCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	config := gcontext.GetConfig(ctx)
