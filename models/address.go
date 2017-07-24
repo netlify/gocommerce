@@ -8,8 +8,7 @@ import (
 
 // AddressRequest is the raw address data
 type AddressRequest struct {
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
+	Name string `json:"name"`
 
 	Company  string `json:"company"`
 	Address1 string `json:"address1"`
@@ -18,6 +17,10 @@ type AddressRequest struct {
 	Country  string `json:"country"`
 	State    string `json:"state"`
 	Zip      string `json:"zip"`
+
+	// deprecated
+	FirstName string `json:"first_name,omitempty"`
+	LastName  string `json:"last_name,omitempty"`
 }
 
 // Address is a stored address, reusable with an ID.
@@ -40,12 +43,13 @@ func (Address) TableName() string {
 
 // Validate validates the AddressRequest model
 func (a AddressRequest) Validate() error {
+	a.combineNames()
 	required := map[string]string{
-		"last name": a.LastName,
-		"address":   a.Address1,
-		"country":   a.Country,
-		"city":      a.City,
-		"zip":       a.Zip,
+		"name":    a.Name,
+		"address": a.Address1,
+		"country": a.Country,
+		"city":    a.City,
+		"zip":     a.Zip,
 	}
 
 	missing := []string{}
@@ -60,4 +64,24 @@ func (a AddressRequest) Validate() error {
 	}
 
 	return nil
+}
+
+// BeforeUpdate database callback.
+func (a *AddressRequest) BeforeUpdate() (err error) {
+	a.combineNames()
+	return err
+}
+
+// AfterFind database callback.
+func (a *AddressRequest) AfterFind() (err error) {
+	a.combineNames()
+	return nil
+}
+
+func (a *AddressRequest) combineNames() {
+	if a.Name == "" {
+		a.Name = strings.TrimSpace(strings.Join([]string{a.FirstName, a.LastName}, " "))
+		a.FirstName = ""
+		a.LastName = ""
+	}
 }

@@ -292,7 +292,7 @@ func TestUserAddressCreate(t *testing.T) {
 	t.Run("Invalid", func(t *testing.T) {
 		test := NewRouteTest(t)
 		addr := getTestAddress()
-		addr.LastName = "" // required field
+		addr.Name = "" // required field
 		b, err := json.Marshal(&addr.AddressRequest)
 		require.NoError(t, err)
 

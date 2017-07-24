@@ -135,7 +135,7 @@ func setupTestData() *TestData {
 	testAddress := models.Address{
 		ID: "first-address",
 		AddressRequest: models.AddressRequest{
-			LastName: "wayne",
+			Name:     "wayne",
 			Address1: "123 cave way",
 			Country:  "dcland",
 			City:     "gotham",
@@ -249,12 +249,11 @@ func getTestAddress() *models.Address {
 	return &models.Address{
 		ID: "spidermans-house",
 		AddressRequest: models.AddressRequest{
-			LastName:  "parker",
-			FirstName: "Peter",
-			Address1:  "123 spidey lane",
-			Country:   "marvel-land",
-			City:      "new york",
-			Zip:       "10007",
+			Name:     "Peter Parker",
+			Address1: "123 spidey lane",
+			Country:  "marvel-land",
+			City:     "new york",
+			Zip:      "10007",
 		},
 	}
 }
@@ -291,8 +290,7 @@ func validateUser(t *testing.T, expected *models.User, actual *models.User) {
 
 func validateAddress(t *testing.T, expected models.Address, actual models.Address) {
 	assert := assert.New(t)
-	assert.Equal(expected.FirstName, actual.FirstName)
-	assert.Equal(expected.LastName, actual.LastName)
+	assert.Equal(expected.Name, actual.Name)
 	assert.Equal(expected.Company, actual.Company)
 	assert.Equal(expected.Address1, actual.Address1)
 	assert.Equal(expected.Address2, actual.Address2)

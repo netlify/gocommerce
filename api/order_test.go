@@ -33,7 +33,7 @@ func TestOrderCreate(t *testing.T) {
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
-				"first_name": "Test", "last_name": "User",
+				"name": "Test User",
 				"address1": "610 22nd Street",
 				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
 			},
@@ -54,13 +54,33 @@ func TestOrderCreate(t *testing.T) {
 		require.True(t, ok, "Line item should have attendees")
 	})
 
-	t.Run("WithTaxes", func(t *testing.T) {
+	t.Run("NameBackwardsCompatible", func(t *testing.T) {
 		test := NewRouteTest(t)
 		test.Config.SiteURL = server.URL
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
 				"first_name": "Test", "last_name": "User",
+				"address1": "610 22nd Street",
+				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+			},
+			"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
+		}`)
+		token := test.Data.testUserToken
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		assert.Equal(t, "Test User", order.ShippingAddress.Name)
+	})
+
+	t.Run("WithTaxes", func(t *testing.T) {
+		test := NewRouteTest(t)
+		test.Config.SiteURL = server.URL
+		body := strings.NewReader(`{
+			"email": "info@example.com",
+			"shipping_address": {
+				"name": "Test User",
 				"address1": "Branengebranen",
 				"city": "Berlin", "country": "Germany", "zip": "94107"
 			},
@@ -86,7 +106,7 @@ func TestOrderCreate(t *testing.T) {
 		body := strings.NewReader(`{
 			"email": "info@example.com",
 			"shipping_address": {
-				"first_name": "Test", "last_name": "User",
+				"name": "Test User",
 				"address1": "Branengebranen",
 				"city": "Berlin", "country": "Germany", "zip": "94107"
 			},
