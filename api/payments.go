@@ -327,22 +327,6 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 	return sendJSON(w, http.StatusOK, paymentResult)
 }
 
-// PayPalGetPayment retrieves information on an authorized paypal payment, including
-// the shipping address
-// func (a *API) PayPalGetPayment(w http.ResponseWriter, r *http.Request) error {
-//	ctx := r.Context()
-// 	provider, ok := getPaymentProvider(ctx).(*payments.paypalPaymentProvider)
-// 	if !ok {
-// 		return internalServerError("PayPal provider not available")
-// 	}
-// 	payment, err := provider.client.GetPayment(chi.URLParam(r, "payment_id"))
-// 	if err != nil {
-// 		return internalServerError("Error fetching paypal payment: %v", err)
-// 	}
-//
-// 	return sendJSON(w, http.StatusOK, payment)
-// }
-
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
