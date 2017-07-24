@@ -375,7 +375,15 @@ func TestPaymentCreate(t *testing.T) {
 		})
 	})
 	t.Run("Stripe", func(t *testing.T) {
-		stripe.SetBackend(stripe.APIBackend, noopStripeBackend{})
+		callCount := 0
+		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, body *stripe.RequestValues, params *stripe.Params) {
+			switch path {
+			case "/charges":
+				callCount++
+			default:
+				t.Fatalf("unknown Stripe API call to %s", path)
+			}
+		}))
 		defer stripe.SetBackend(stripe.APIBackend, nil)
 
 		test := NewRouteTest(t)
@@ -393,6 +401,7 @@ func TestPaymentCreate(t *testing.T) {
 
 		rsp := models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &rsp)
+		assert.Equal(t, 1, callCount)
 	})
 }
 
@@ -611,12 +620,21 @@ func (mp *memProvider) preauthorize(amount uint64, currency string, description 
 	return nil, nil
 }
 
-type noopStripeBackend struct{}
+type stripeCallFunc func(method, path, key string, body *stripe.RequestValues, params *stripe.Params)
 
-func (s noopStripeBackend) Call(method, path, key string, body *stripe.RequestValues, params *stripe.Params, v interface{}) error {
+func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
+	return &trackingStripeBackend{fn}
+}
+
+type trackingStripeBackend struct {
+	trackingFunc stripeCallFunc
+}
+
+func (t trackingStripeBackend) Call(method, path, key string, body *stripe.RequestValues, params *stripe.Params, v interface{}) error {
+	t.trackingFunc(method, path, key, body, params)
 	return nil
 }
 
-func (s noopStripeBackend) CallMultipart(method, path, key, boundary string, body io.Reader, params *stripe.Params, v interface{}) error {
+func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body io.Reader, params *stripe.Params, v interface{}) error {
 	return nil
 }
