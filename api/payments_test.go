@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
+	stripe "github.com/stripe/stripe-go"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -372,6 +374,35 @@ func TestPaymentCreate(t *testing.T) {
 			assert.Equal(t, 2, paymentCount, "too many payment calls")
 		})
 	})
+	t.Run("Stripe", func(t *testing.T) {
+		callCount := 0
+		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, body *stripe.RequestValues, params *stripe.Params) {
+			switch path {
+			case "/charges":
+				callCount++
+			default:
+				t.Fatalf("unknown Stripe API call to %s", path)
+			}
+		}))
+		defer stripe.SetBackend(stripe.APIBackend, nil)
+
+		test := NewRouteTest(t)
+		params := &stripePaymentParams{
+			Amount:      test.Data.firstOrder.Total,
+			Currency:    test.Data.firstOrder.Currency,
+			StripeToken: "123456",
+			Provider:    payments.StripeProvider,
+		}
+
+		body, err := json.Marshal(params)
+		require.NoError(t, err)
+
+		recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
+
+		rsp := models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &rsp)
+		assert.Equal(t, 1, callCount)
+	})
 }
 
 func TestPaymentPreauthorize(t *testing.T) {
@@ -587,4 +618,23 @@ func (mp *memProvider) refund(transactionID string, amount uint64, currency stri
 
 func (mp *memProvider) preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
 	return nil, nil
+}
+
+type stripeCallFunc func(method, path, key string, body *stripe.RequestValues, params *stripe.Params)
+
+func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
+	return &trackingStripeBackend{fn}
+}
+
+type trackingStripeBackend struct {
+	trackingFunc stripeCallFunc
+}
+
+func (t trackingStripeBackend) Call(method, path, key string, body *stripe.RequestValues, params *stripe.Params, v interface{}) error {
+	t.trackingFunc(method, path, key, body, params)
+	return nil
+}
+
+func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body io.Reader, params *stripe.Params, v interface{}) error {
+	return nil
 }
