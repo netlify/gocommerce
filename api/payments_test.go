@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,8 @@ import (
 	"errors"
 
 	"fmt"
+
+	"strings"
 
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
@@ -317,6 +320,106 @@ func runPaymentRefund(test *RouteTest, url string, params interface{}) *httptest
 	return test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
 }
 
+func TestPaymentPreauthorize(t *testing.T) {
+	t.Run("PayPal", func(t *testing.T) {
+		testURL := "/paypal"
+		var createData *paypalPaymentCreateParams
+		var loginCount, paymentCount int
+		paymentID := "4CF18861HF410323V"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v1/oauth2/token":
+				w.Header().Add("Content-Type", "application/json")
+				fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+				loginCount++
+			case "/v1/payment-experience/web-profiles":
+				w.Header().Add("Content-Type", "application/json")
+				fmt.Fprint(w, `[{"id":"expid","name":"gocommerce"}]`)
+			case "/v1/payments/payment":
+				w.Header().Add("Content-Type", "application/json")
+				fmt.Fprint(w, `{"id":"`+paymentID+`"}`)
+				paymentCount++
+				require.NoError(t, json.NewDecoder(r.Body).Decode(createData))
+			default:
+				w.WriteHeader(500)
+				t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		t.Run("Form", func(t *testing.T) {
+			loginCount = 0
+			paymentCount = 0
+			createData = new(paypalPaymentCreateParams)
+			test := NewRouteTest(t)
+			test.Config.Payment.PayPal.Enabled = true
+			test.Config.Payment.PayPal.ClientID = "clientid"
+			test.Config.Payment.PayPal.Secret = "secret"
+			test.Config.Payment.PayPal.Env = server.URL
+
+			form := url.Values{}
+			form.Add("provider", payments.PayPalProvider)
+			form.Add("amount", "10")
+			form.Add("currency", "USD")
+			form.Add("description", "test")
+
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+			NewAPI(test.GlobalConfig, test.Config, test.DB).handler.ServeHTTP(recorder, req)
+
+			rsp := payments.PreauthorizationResult{}
+			extractPayload(t, http.StatusOK, recorder, &rsp)
+			assert.Equal(t, paymentID, rsp.ID)
+			assert.Equal(t, 1, loginCount, "too many login calls")
+			assert.Equal(t, 1, paymentCount, "too many payment calls")
+
+			require.Len(t, createData.Transactions, 1)
+			assert.Equal(t, "sale", createData.Intent)
+			assert.Equal(t, "10", createData.Transactions[0].Amount.Total)
+			assert.Equal(t, "USD", createData.Transactions[0].Amount.Currency)
+			assert.Equal(t, "test", createData.Transactions[0].Description)
+		})
+		t.Run("JSON", func(t *testing.T) {
+			loginCount = 0
+			paymentCount = 0
+			createData = new(paypalPaymentCreateParams)
+			test := NewRouteTest(t)
+			test.Config.Payment.PayPal.Enabled = true
+			test.Config.Payment.PayPal.ClientID = "clientid"
+			test.Config.Payment.PayPal.Secret = "secret"
+			test.Config.Payment.PayPal.Env = server.URL
+
+			params := paypalPreauthorizeParams{
+				Amount:      10,
+				Currency:    "USD",
+				Description: "test",
+				Provider:    payments.PayPalProvider,
+			}
+
+			body, err := json.Marshal(params)
+			require.NoError(t, err)
+
+			recorder := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, bytes.NewBuffer(body))
+			req.Header.Set("Content-Type", "application/json")
+			NewAPI(test.GlobalConfig, test.Config, test.DB).handler.ServeHTTP(recorder, req)
+
+			rsp := payments.PreauthorizationResult{}
+			extractPayload(t, http.StatusOK, recorder, &rsp)
+			assert.Equal(t, paymentID, rsp.ID)
+			assert.Equal(t, 1, loginCount, "too many login calls")
+			assert.Equal(t, 1, paymentCount, "too many payment calls")
+
+			require.Len(t, createData.Transactions, 1)
+			assert.Equal(t, "sale", createData.Intent)
+			assert.Equal(t, "10", createData.Transactions[0].Amount.Total)
+			assert.Equal(t, "USD", createData.Transactions[0].Amount.Currency)
+			assert.Equal(t, "test", createData.Transactions[0].Description)
+		})
+	})
+}
+
 // ------------------------------------------------------------------------------------------------
 // Validators
 // ------------------------------------------------------------------------------------------------
@@ -361,6 +464,28 @@ type paypalPaymentParams struct {
 	Currency     string
 	PaypalID     string
 	PaypalUserID string
+}
+
+type paypalPreauthorizeParams struct {
+	Amount      uint64
+	Currency    string
+	Description string
+	Provider    string
+}
+
+type paypalAmount struct {
+	Total    string
+	Currency string
+}
+
+type paypalTransaction struct {
+	Amount      paypalAmount
+	Description string
+}
+
+type paypalPaymentCreateParams struct {
+	Intent       string
+	Transactions []paypalTransaction
 }
 
 type memProvider struct {

@@ -15,6 +15,8 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/sirupsen/logrus"
 
+	"mime"
+
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
@@ -29,6 +31,7 @@ type PaymentParams struct {
 	Amount       uint64 `json:"amount"`
 	Currency     string `json:"currency"`
 	ProviderType string `json:"provider"`
+	Description  string `json:"description"`
 }
 
 // PaymentListForUser is the endpoint for listing transactions for a user.
@@ -299,7 +302,32 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
-	providerType := strings.ToLower(r.FormValue("provider"))
+	params := PaymentParams{}
+	ct := r.Header.Get("Content-Type")
+	mediaType, _, err := mime.ParseMediaType(ct)
+	if err != nil {
+		return badRequestError("Invalid Content-Type: %s", ct)
+	}
+
+	switch mediaType {
+	case "application/json":
+		if err := json.NewDecoder(r.Body).Decode(&params); err != nil {
+			return badRequestError("Could not read params: %v", err)
+		}
+	case "application/x-www-form-urlencoded":
+		amt, err := strconv.ParseUint(r.FormValue("amount"), 10, 64)
+		if err != nil {
+			return badRequestError("Error parsing amount: %v", err)
+		}
+		params.ProviderType = r.FormValue("provider")
+		params.Amount = amt
+		params.Currency = r.FormValue("currency")
+		params.Description = r.FormValue("description")
+	default:
+		return badRequestError("Unsupported Content-Type: %s", ct)
+	}
+
+	providerType := strings.ToLower(params.ProviderType)
 	if providerType == "" {
 		return badRequestError("Preauthorizing a payment requires specifying a 'provider'")
 	}
@@ -313,13 +341,7 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 		return badRequestError("Error creating payment provider: %v", err)
 	}
 
-	// TODO it is odd that this is the only method using FORM values
-	amt, err := strconv.ParseUint(r.FormValue("amount"), 10, 64)
-	if err != nil {
-		return internalServerError("Error parsing amount: %v", err)
-	}
-
-	paymentResult, err := preauthorize(amt, r.FormValue("currency"), r.FormValue("description"))
+	paymentResult, err := preauthorize(params.Amount, params.Currency, params.Description)
 	if err != nil {
 		return internalServerError("Error preauthorizing payment: %v", err).WithInternalError(err)
 	}
