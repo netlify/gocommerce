@@ -108,8 +108,6 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 
 	r.Route("/paypal", func(r *router) {
 		r.Post("/", api.PreauthorizePayment)
-		// TODO is this needed? I did not see a use case in the PayPal payment flow.
-		// r.Get("/{payment_id}", api.PayPalGetPayment)
 	})
 
 	r.Route("/reports", func(r *router) {
