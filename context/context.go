@@ -2,11 +2,9 @@ package context
 
 import (
 	"fmt"
-	"time"
 
 	"context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/dgrijalva/jwt-go"
 
 	"github.com/netlify/gocommerce/assetstores"
@@ -27,43 +25,14 @@ const (
 	tokenKey           = contextKey("jwt")
 	configKey          = contextKey("config")
 	couponsKey         = contextKey("coupons")
-	loggerKey          = contextKey("logger")
 	requestIDKey       = contextKey("request_id")
-	startKey           = contextKey("request_start_time")
 	adminFlagKey       = contextKey("is_admin")
 	mailerKey          = contextKey("mailer")
 	assetStoreKey      = contextKey("asset_store")
 	paymentProviderKey = contextKey("payment-provider")
+	userIDKey          = contextKey("user_id")
+	orderIDKey         = contextKey("order_id")
 )
-
-// WithStartTime adds the provided start time to the context
-func WithStartTime(ctx context.Context, when time.Time) context.Context {
-	return context.WithValue(ctx, startKey, &when)
-}
-
-// GetStartTime reads the start time from the context
-func GetStartTime(ctx context.Context) *time.Time {
-	obj := ctx.Value(startKey)
-	if obj == nil {
-		return nil
-	}
-
-	return obj.(*time.Time)
-}
-
-// WithLogger adds the logger to the context.
-func WithLogger(ctx context.Context, l *logrus.Entry) context.Context {
-	return context.WithValue(ctx, loggerKey, l)
-}
-
-// GetLogger reads the logger from the context
-func GetLogger(ctx context.Context) *logrus.Entry {
-	obj := ctx.Value(loggerKey)
-	if obj == nil {
-		return logrus.NewEntry(logrus.StandardLogger())
-	}
-	return obj.(*logrus.Entry)
-}
 
 // WithConfig adds the tenant configuration to the context.
 func WithConfig(ctx context.Context, config *conf.Configuration) context.Context {
@@ -210,4 +179,26 @@ func IsAdmin(ctx context.Context) bool {
 		return false
 	}
 	return obj.(bool)
+}
+
+// GetUserID reads the user ID from the context.
+func GetUserID(ctx context.Context) string {
+	id, _ := ctx.Value(userIDKey).(string)
+	return id
+}
+
+// WithUserID adds the user ID to the context.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, userIDKey, userID)
+}
+
+// GetOrderID reads the order ID from the context.
+func GetOrderID(ctx context.Context) string {
+	id, _ := ctx.Value(orderIDKey).(string)
+	return id
+}
+
+// WithOrderID adds the order ID to the context.
+func WithOrderID(ctx context.Context, orderID string) context.Context {
+	return context.WithValue(ctx, orderIDKey, orderID)
 }

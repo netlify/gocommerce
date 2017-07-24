@@ -8,14 +8,22 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/guregu/kami"
+	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
+	"github.com/sirupsen/logrus"
 
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
+
+func (a *API) withUserID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	userID := chi.URLParam(r, "user_id")
+	logEntrySetField(r, "user_id", userID)
+
+	ctx := gcontext.WithUserID(r.Context(), userID)
+	return ctx, nil
+}
 
 // UserList will return all of the users. It requires admin access.
 // It supports the filters:
@@ -24,20 +32,12 @@ import (
 // email     email
 // user_id   id
 // limit     # of records to return (max)
-func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	_, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
+	log := getLogEntry(r)
 
 	query, err := parseUserQueryParams(a.db, r.URL.Query())
 	if err != nil {
-		log.WithError(err).Info("Bad query parameters in request")
-		badRequestError(w, "Bad parameters in query: "+err.Error())
-		return
+		return badRequestError("Bad parameters in query: %v", err)
 	}
 
 	log.Debug("Parsed url params")
@@ -53,18 +53,14 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 	offset, limit, err := paginate(w, r, query.Model(&models.User{}))
 	if err != nil {
 		if err == sql.ErrNoRows {
-			sendJSON(w, http.StatusOK, []string{})
-			return
+			return sendJSON(w, http.StatusOK, []string{})
 		}
-		badRequestError(w, "Bad Pagination Parameters: %v", err)
-		return
+		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
 	rows, err := query.Offset(offset).Limit(limit).Find(&users).Rows()
 	if err != nil {
-		log.WithError(err).Warn("Error while querying the database")
-		internalServerError(w, "Failed to execute request")
-		return
+		return internalServerError("Failed to execute request").WithInternalError(err)
 	}
 	defer rows.Close()
 	i := 0
@@ -74,9 +70,7 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 		var orderCount int64
 		err := rows.Scan(&id, &email, &createdAt, &updatedAt, &orderCount)
 		if err != nil {
-			log.WithError(err).Warn("Error while querying the database")
-			internalServerError(w, "Failed to execute request")
-			return
+			return internalServerError("Failed to execute request").WithInternalError(err)
 		}
 		users[i].OrderCount = orderCount
 		i++
@@ -84,84 +78,63 @@ func (a *API) UserList(ctx context.Context, w http.ResponseWriter, r *http.Reque
 
 	numUsers := len(users)
 	log.WithField("user_count", numUsers).Debugf("Successfully retrieved %d users", numUsers)
-	sendJSON(w, http.StatusOK, users)
+	return sendJSON(w, http.StatusOK, users)
 }
 
 // UserView will return the user specified.
 // If you're an admin you can request a user that is not your self
-func (a *API) UserView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID := gcontext.GetUserID(ctx)
 
 	user := &models.User{
 		ID: userID,
 	}
 	rsp := a.db.First(user)
 	if rsp.RecordNotFound() {
-		notFoundError(w, "Couldn't find a record for "+userID)
-		return
+		return notFoundError("Couldn't find a record for " + userID)
 	}
 
 	if rsp.Error != nil {
-		log.WithError(rsp.Error).Warnf("Failed to query DB: %v", rsp.Error)
-		internalServerError(w, "Problem searching for user "+userID)
-		return
+		return internalServerError("Problem searching for user %s", userID).WithInternalError(rsp.Error)
 	}
 
 	if user.DeletedAt != nil {
-		notFoundError(w, "Couldn't find a record for "+userID)
-		return
+		return notFoundError("Couldn't find a record for " + userID)
 	}
 
 	orders := []models.Order{}
 	a.db.Where("user_id = ?", user.ID).Find(&orders).Count(&user.OrderCount)
 
-	sendJSON(w, http.StatusOK, user)
+	return sendJSON(w, http.StatusOK, user)
 }
 
 // AddressList will return the addresses for a given user
-func (a *API) AddressList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
-		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
-		return
+		return notFoundError("couldn't find a record for user: " + userID)
 	}
 
 	addrs := []models.Address{}
 	results := a.db.Where("user_id = ?", userID).Find(&addrs)
 	if results.Error != nil {
-		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
-		internalServerError(w, "problem while querying for userID: "+userID)
-		return
+		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
 
-	sendJSON(w, http.StatusOK, &addrs)
+	return sendJSON(w, http.StatusOK, &addrs)
 }
 
 // AddressView will return a particular address for a given user
-func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, addrID, httpErr := checkPermissions(ctx, false)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-
-	log := gcontext.GetLogger(ctx)
+func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	addrID := chi.URLParam(r, "addr_id")
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
-		log.WithError(notFoundError(w, "couldn't find a record for user: "+userID)).Warn("requested non-existent user")
-		return
+		return notFoundError("couldn't find a record for user: " + userID)
 	}
 
 	addr := &models.Address{
@@ -170,29 +143,24 @@ func (a *API) AddressView(ctx context.Context, w http.ResponseWriter, r *http.Re
 	}
 	results := a.db.First(addr)
 	if results.Error != nil {
-		log.WithError(results.Error).Warn("failed to query for userID: " + userID)
-		internalServerError(w, "problem while querying for userID: "+userID)
-		return
+		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
 
-	sendJSON(w, http.StatusOK, &addr)
+	return sendJSON(w, http.StatusOK, &addr)
 }
 
 // UserDelete will soft delete the user. It requires admin access
 // return errors or 200 and no body
-func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID := gcontext.GetUserID(ctx)
+	log := getLogEntry(r)
 	log.Debugf("Starting to delete user %s", userID)
 
 	user := getUser(a.db, userID)
 	if user == nil {
 		log.Info("attempted to delete non-existent user")
-		return // not an error ~ just an action
+		return nil // not an error ~ just an action
 	}
 
 	// do a cascading delete
@@ -201,9 +169,7 @@ func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Req
 	results := tx.Delete(user)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warn("Failed to find associated orders")
-		internalServerError(w, "Failed to delete user")
-		return
+		return internalServerError("Failed to delete user").WithInternalError(results.Error)
 	}
 	log.Debug("Deleted user")
 
@@ -211,9 +177,7 @@ func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Req
 	results = tx.Where("user_id = ?", userID).Find(&orders)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warn("Failed to find associated orders")
-		internalServerError(w, "Failed to delete user")
-		return
+		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("failed to find associated orders")
 	}
 
 	log.Debugf("Starting to collect info about %d orders", len(orders))
@@ -226,85 +190,70 @@ func (a *API) UserDelete(ctx context.Context, w http.ResponseWriter, r *http.Req
 	results = tx.Where("order_id in (?)", orderIDs).Delete(&models.LineItem{})
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).
-			WithField("order_ids", orderIDs).
-			Warnf("Failed to delete line items associated with orders: %v", orderIDs)
-		internalServerError(w, "Failed to delete user")
-		return
+		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("Failed to delete line items associated with orders: %v", orderIDs)
 	}
 	log.Debugf("Deleted %d items", results.RowsAffected)
 
 	if err := tryDelete(tx, w, log, userID, &models.Order{}); err != nil {
-		return
+		return err
 	}
 	if err := tryDelete(tx, w, log, userID, &models.Transaction{}); err != nil {
-		return
+		return err
 	}
 	if err := tryDelete(tx, w, log, userID, &models.OrderNote{}); err != nil {
-		return
+		return err
 	}
 	if err := tryDelete(tx, w, log, userID, &models.Address{}); err != nil {
-		return
+		return err
 	}
 
 	tx.Commit()
 	log.Infof("Deleted user")
+	return nil
 }
 
 // AddressDelete will soft delete the address associated with that user. It requires admin access
 // return errors or 200 and no body
-func (a *API) AddressDelete(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, addrID, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx).WithField("addr_id", addrID)
+func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	addrID := chi.URLParam(r, "addr_id")
+	userID := gcontext.GetUserID(ctx)
+	log := getLogEntry(r).WithField("addr_id", addrID)
 
 	if getUser(a.db, userID) == nil {
 		log.Warn("requested non-existent user - not an error b/c it is a delete")
-		return
+		return nil
 	}
 
 	rsp := a.db.Delete(&models.Address{ID: addrID})
 	if rsp.RecordNotFound() {
 		log.Warn("Attempted to delete an address that doesn't exist")
-		return
+		return nil
 	} else if rsp.Error != nil {
-		log.WithError(rsp.Error).Warn("Error while deleting address")
-		internalServerError(w, "error while deleting address")
-		return
+		return internalServerError("error while deleting address").WithInternalError(rsp.Error)
 	}
 
 	log.Info("deleted address")
+	return nil
 }
 
 // CreateNewAddress will create an address associated with that user
-func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	userID, _, httpErr := checkPermissions(ctx, true)
-	if httpErr != nil {
-		sendJSON(w, httpErr.Code, httpErr)
-		return
-	}
-	log := gcontext.GetLogger(ctx)
+func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID := gcontext.GetUserID(ctx)
 
 	if getUser(a.db, userID) == nil {
-		log.WithError(notFoundError(w, "Couldn't find user "+userID)).Warn("Requested to add an address to a missing user")
-		return
+		return notFoundError("Couldn't find user " + userID)
 	}
 
 	addrReq := new(models.AddressRequest)
 	err := json.NewDecoder(r.Body).Decode(addrReq)
 	if err != nil {
-		log.WithError(err).Info("Failed to parse json")
-		badRequestError(w, "Failed to parse json body")
-		return
+		return badRequestError("Failed to parse json body: %v", err)
 	}
 
 	if err := addrReq.Validate(); err != nil {
-		log.WithError(err).Infof("requested address is not valid")
-		badRequestError(w, "requested address is missing a required field: "+err.Error())
-		return
+		return badRequestError("requested address is missing a required field: %v", err)
 	}
 
 	addr := models.Address{
@@ -314,49 +263,15 @@ func (a *API) CreateNewAddress(ctx context.Context, w http.ResponseWriter, r *ht
 	}
 	rsp := a.db.Create(&addr)
 	if rsp.Error != nil {
-		log.WithError(rsp.Error).Warnf("Failed to save address %v", addr)
-		internalServerError(w, "failed to save address")
-		return
+		return internalServerError("failed to save address").WithInternalError(rsp.Error)
 	}
 
-	sendJSON(w, http.StatusOK, &struct{ ID string }{ID: addr.ID})
+	return sendJSON(w, http.StatusOK, &struct{ ID string }{ID: addr.ID})
 }
 
 // -------------------------------------------------------------------------------------------------------------------
 // Helper methods
 // -------------------------------------------------------------------------------------------------------------------
-func checkPermissions(ctx context.Context, adminOnly bool) (string, string, *HTTPError) {
-	log := gcontext.GetLogger(ctx)
-	userID := kami.Param(ctx, "user_id")
-	addrID := kami.Param(ctx, "addr_id")
-
-	claims := gcontext.GetClaims(ctx)
-	if claims == nil {
-		err := httpError(http.StatusUnauthorized, "No claims provided")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	isAdmin := gcontext.IsAdmin(ctx)
-	if isAdmin {
-		gcontext.WithLogger(ctx, log.WithField("admin_id", claims.ID))
-	}
-
-	if claims.ID != userID && !isAdmin {
-		err := httpError(http.StatusUnauthorized, "Can't access a different user unless you're an admin")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	if adminOnly && !isAdmin {
-		err := httpError(http.StatusUnauthorized, "Admin permissions required")
-		log.WithError(err).Warn("Illegal access attempt")
-		return "", "", err
-	}
-
-	return userID, addrID, nil
-}
-
 func getUser(db *gorm.DB, userID string) *models.User {
 	user := &models.User{ID: userID}
 	results := db.Find(user)
@@ -367,15 +282,14 @@ func getUser(db *gorm.DB, userID string) *models.User {
 	return user
 }
 
-func tryDelete(tx *gorm.DB, w http.ResponseWriter, log *logrus.Entry, userID string, face interface{}) error {
+func tryDelete(tx *gorm.DB, w http.ResponseWriter, log logrus.FieldLogger, userID string, face interface{}) error {
 	typeName := reflect.TypeOf(face).String()
 
 	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)
 	results := tx.Where("user_id = ?", userID).Delete(face)
 	if results.Error != nil {
 		tx.Rollback()
-		log.WithError(results.Error).Warnf("Failed to delete %s", typeName)
-		internalServerError(w, "Failed to delete user")
+		return internalServerError("Failed to delete user").WithInternalError(results.Error)
 	}
 
 	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)

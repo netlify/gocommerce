@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -16,7 +15,6 @@ import (
 
 	"fmt"
 
-	"github.com/jinzhu/gorm"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
@@ -26,380 +24,297 @@ import (
 // List by ORDER
 // ------------------------------------------------------------------------------------------------
 
-func TestPaymentsOrderForAllAsOwner(t *testing.T) {
-	db, globalConfig, config := db(t)
+func TestOrderPaymentsList(t *testing.T) {
+	t.Run("AsOwner", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken(test.Data.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, token)
 
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
-	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
+		// we should have gotten back a list of transactions
+		trans := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &trans)
+		assert.Len(t, trans, 1)
+		validateTransaction(t, test.Data.firstTransaction, &trans[0])
+	})
 
-	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		anotherTransaction := models.NewTransaction(test.Data.firstOrder)
+		test.DB.Create(anotherTransaction)
+		defer test.DB.Unscoped().Delete(anotherTransaction)
 
-	// we should have gotten back a list of transactions
-	trans := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &trans)
-	assert.Equal(t, 1, len(trans))
-	validateTransaction(t, firstTransaction, &trans[0])
-}
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, token)
 
-func TestPaymentsOrderQueryForAllAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
-	anotherTransaction := models.NewTransaction(firstOrder)
-	db.Create(anotherTransaction)
-	defer db.Unscoped().Delete(anotherTransaction)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-
-	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
-
-	// we should have gotten back a list of transactions
-	trans := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &trans)
-	assert.Equal(t, 2, len(trans))
-	for _, tran := range trans {
-		switch tran.ID {
-		case anotherTransaction.ID:
-			validateTransaction(t, anotherTransaction, &tran)
-		case firstTransaction.ID:
-			validateTransaction(t, firstTransaction, &tran)
-		default:
-			assert.Fail(t, "Unknown transaction: "+tran.ID)
+		trans := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &trans)
+		assert.Len(t, trans, 2)
+		for _, tran := range trans {
+			switch tran.ID {
+			case anotherTransaction.ID:
+				validateTransaction(t, anotherTransaction, &tran)
+			case test.Data.firstTransaction.ID:
+				validateTransaction(t, test.Data.firstTransaction, &tran)
+			default:
+				assert.Fail(t, "Unknown transaction: "+tran.ID)
+			}
 		}
-	}
-}
+	})
 
-func TestPaymentsOrderQueryForAllAsAnon(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(nil, config, false)
-	ctx = kami.SetParam(ctx, "order_id", firstOrder.ID)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentListForOrder(ctx, w, r)
-
-	// should get a 401 ~ claims are required
-	validateError(t, http.StatusUnauthorized, w)
+	t.Run("Anonymous", func(t *testing.T) {
+		test := NewRouteTest(t)
+		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, nil)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
 }
 
 // ------------------------------------------------------------------------------------------------
 // List by USER
 // ------------------------------------------------------------------------------------------------
-func TestPaymentsUserForAllAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
 
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+func TestUserPaymentsList(t *testing.T) {
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
+		token := testToken(test.Data.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	actual := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &actual)
-	validateAllTransactions(t, actual)
-}
+		actual := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &actual)
+		validateAllTransactions(t, test.Data, actual)
+	})
 
-func TestPaymentsUserForAllAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+		actual := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &actual)
+		validateAllTransactions(t, test.Data, actual)
+	})
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
+	t.Run("Anonymous", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, nil)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
 
-	actual := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &actual)
-
-	validateAllTransactions(t, actual)
-}
-
-func TestPaymentsUserForAllAsAnon(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(nil, config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
-
-	// should get a 401 ~ claims are required
-	validateError(t, http.StatusUnauthorized, w)
-}
-
-func TestPaymentsUserForAllAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(testToken("stranger-danger", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentListForUser(ctx, w, r)
-
-	// should get a 401 ~ not the right user
-	validateError(t, http.StatusUnauthorized, w)
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/payments"
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
 }
 
 // ------------------------------------------------------------------------------------------------
 // List with params
 // ------------------------------------------------------------------------------------------------
-func TestPaymentsListAllAsNonAdmin(t *testing.T) {
-	globalConfig, config := testConfig()
-	ctx := testContext(testToken("stranger-danger", ""), config, false)
+func TestPaymentsList(t *testing.T) {
+	url := "/payments"
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, nil).PaymentList(ctx, w, r)
+	t.Run("AsNonAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
 
-	// should get a 401 ~ not the right user
-	validateError(t, http.StatusUnauthorized, w)
-}
+	t.Run("WithParams", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url+"?processor_id=stripe", nil, token)
 
-func TestPaymentsListWithParams(t *testing.T) {
-	db, globalConfig, config := db(t)
+		trans := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &trans)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
+		assert.Len(t, trans, 1)
+		validateTransaction(t, test.Data.firstTransaction, &trans[0])
+	})
 
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something?processor_id=stripe", nil)
-	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
+	t.Run("NoParams", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	trans := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &trans)
-
-	assert.Equal(t, 1, len(trans))
-	validateTransaction(t, firstTransaction, &trans[0])
-}
-
-func TestPaymentsListNoParams(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentList(ctx, w, r)
-
-	trans := []models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &trans)
-
-	validateAllTransactions(t, trans)
-}
-
-func TestPaymentsViewAsNonAdmin(t *testing.T) {
-	globalConfig, config := testConfig()
-	ctx := testContext(testToken("stranger-danger", ""), config, false)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, nil).PaymentView(ctx, w, r)
-
-	// should get a 401 ~ not the right user
-	validateError(t, http.StatusUnauthorized, w)
+		trans := []models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &trans)
+		validateAllTransactions(t, test.Data, trans)
+	})
 }
 
 func TestPaymentsView(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
-
-	trans := new(models.Transaction)
-	extractPayload(t, http.StatusOK, w, trans)
-
-	validateTransaction(t, firstTransaction, trans)
-}
-
-func TestPaymentsViewMissingPayment(t *testing.T) {
-	db, globalConfig, config := db(t)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", "nonsense")
-
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("GET", "http://something", nil)
-	NewAPI(globalConfig, config, db).PaymentView(ctx, w, r)
-
-	validateError(t, http.StatusNotFound, w, "Transaction not found")
-}
-
-func TestPaymentsRefundMismatchedCurrency(t *testing.T) {
-	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:   1,
-		Currency: "monopoly-money",
+	t.Run("AsNonAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/payments/123", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
 	})
 
-	validateError(t, http.StatusBadRequest, w, "Currencies do not match")
-}
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/payments/"+test.Data.firstTransaction.ID, nil, token)
 
-func TestPaymentsRefundAmountTooHighOrLow(t *testing.T) {
-	w, _ := runPaymentRefund(t, &PaymentParams{
-		Amount:   1000,
-		Currency: "usd",
+		trans := new(models.Transaction)
+		extractPayload(t, http.StatusOK, recorder, trans)
+		validateTransaction(t, test.Data.firstTransaction, trans)
 	})
 
-	validateError(t, http.StatusBadRequest, w, "must be between 0 and the total amount")
+	t.Run("Missing", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/payments/nonsense", nil, token)
+		validateError(t, http.StatusNotFound, recorder, "Transaction not found")
+	})
 }
 
-func TestPaymentsRefundPaypal(t *testing.T) {
-	var loginCount, refundCount int
-	refundID := "4CF18861HF410323U"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch r.URL.Path {
-		case "/v1/oauth2/token":
-			w.Header().Add("Content-Type", "application/json")
-			fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
-			loginCount++
-		case "/v1/payments/sale/" + secondTransaction.ProcessorID + "/refund":
-			w.Header().Add("Content-Type", "application/json")
-			fmt.Fprint(w, `{"id":"`+refundID+`"}`)
-			refundCount++
-		default:
-			w.WriteHeader(500)
-			t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
+func TestPaymentsRefund(t *testing.T) {
+	t.Run("MismatchedCurrency", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		w := runPaymentRefund(test, url, &PaymentParams{
+			Amount:   1,
+			Currency: "monopoly-money",
+		})
+		validateError(t, http.StatusBadRequest, w, "Currencies do not match")
+	})
+	t.Run("AmountTooHighOrLow", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		w := runPaymentRefund(test, url, &PaymentParams{
+			Amount:   1000,
+			Currency: "usd",
+		})
+		validateError(t, http.StatusBadRequest, w, "must be between 0 and the total amount")
+	})
+	t.Run("UnknownPayment", func(t *testing.T) {
+		test := NewRouteTest(t)
+		w := runPaymentRefund(test, "/payments/nothing/refund", &stripePaymentParams{
+			Amount:      1,
+			Currency:    test.Data.firstTransaction.Currency,
+			StripeToken: "123",
+		})
+		validateError(t, http.StatusNotFound, w)
+	})
+	t.Run("Unpaid", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		test.Data.firstTransaction.Status = models.PendingState
+		test.DB.Save(test.Data.firstTransaction)
+
+		params := &stripePaymentParams{
+			Amount:      1,
+			Currency:    test.Data.firstTransaction.Currency,
+			StripeToken: "123",
 		}
-	}))
-	defer server.Close()
+		body, err := json.Marshal(params)
+		require.NoError(t, err)
+		token := testAdminToken("magical-unicorn", "")
+		w := test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
+		validateError(t, http.StatusBadRequest, w, "hasn't been paid")
+	})
+	t.Run("Success", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
+		// unused, but needed to pass safety check
+		test.Config.Payment.Stripe.Enabled = true
+		test.Config.Payment.Stripe.SecretKey = "secret"
 
-	db, globalConfig, config := db(t)
-	config.Payment.PayPal.Enabled = true
-	config.Payment.PayPal.ClientID = "clientid"
-	config.Payment.PayPal.Secret = "secret"
-	config.Payment.PayPal.Env = server.URL
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", secondTransaction.ID)
-	provs, err := createPaymentProviders(config)
-	require.Nil(t, err)
-	ctx = gcontext.WithPaymentProviders(ctx, provs)
+		provider := &memProvider{name: payments.StripeProvider}
+		ctx, err := withTenantConfig(context.Background(), test.Config)
+		require.NoError(t, err)
+		ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
 
-	params := &paypalPaymentParams{
-		Amount:       1,
-		Currency:     secondTransaction.Currency,
-		PaypalID:     "123",
-		PaypalUserID: "456",
-	}
+		params := &stripePaymentParams{
+			Amount:      1,
+			Currency:    test.Data.firstTransaction.Currency,
+			StripeToken: "123",
+		}
+		body, err := json.Marshal(params)
+		require.NoError(t, err)
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("POST", url, bytes.NewBuffer(body))
+		err = signHTTPRequest(r, testAdminToken("magical-unicorn", ""), test.Config.JWT.Secret)
+		require.NoError(t, err)
 
-	body, _ := json.Marshal(params)
-	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
+		NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, defaultVersion).handler.ServeHTTP(w, r)
 
-	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
+		rsp := new(models.Transaction)
+		extractPayload(t, http.StatusOK, w, rsp)
 
-	rsp := models.Transaction{}
-	extractPayload(t, http.StatusOK, w, &rsp)
-	assert.Equal(t, refundID, rsp.ProcessorID)
-	// this is 2 because we manually create a PayPal provider to pass in our test context.
-	assert.Equal(t, 2, loginCount, "too many login calls")
-	assert.Equal(t, 1, refundCount, "too many refund calls")
+		stored := &models.Transaction{ID: rsp.ID}
+		test.DB.First(stored)
+
+		for _, payment := range []*models.Transaction{stored, rsp} {
+			assert.NotEmpty(t, payment.ID)
+			assert.Equal(t, test.Data.testUser.ID, payment.UserID)
+			assert.EqualValues(t, 1, payment.Amount)
+			assert.Equal(t, "usd", payment.Currency)
+			assert.Empty(t, payment.FailureCode)
+			assert.Empty(t, payment.FailureDescription)
+			assert.Equal(t, models.RefundTransactionType, payment.Type)
+			assert.Equal(t, models.PaidState, payment.Status)
+		}
+	})
+
+	t.Run("PayPal", func(t *testing.T) {
+		test := NewRouteTest(t)
+		var loginCount, refundCount int
+		refundID := "4CF18861HF410323U"
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/v1/oauth2/token":
+				w.Header().Add("Content-Type", "application/json")
+				fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+				loginCount++
+			case "/v1/payments/sale/" + test.Data.secondTransaction.ProcessorID + "/refund":
+				w.Header().Add("Content-Type", "application/json")
+				fmt.Fprint(w, `{"id":"`+refundID+`"}`)
+				refundCount++
+			default:
+				w.WriteHeader(500)
+				t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		test.Config.Payment.PayPal.Enabled = true
+		test.Config.Payment.PayPal.ClientID = "clientid"
+		test.Config.Payment.PayPal.Secret = "secret"
+		test.Config.Payment.PayPal.Env = server.URL
+
+		params := &paypalPaymentParams{
+			Amount:       1,
+			Currency:     test.Data.secondTransaction.Currency,
+			PaypalID:     "123",
+			PaypalUserID: "456",
+		}
+
+		body, err := json.Marshal(params)
+		require.NoError(t, err)
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodPost, "/payments/"+test.Data.secondTransaction.ID+"/refund", bytes.NewBuffer(body), token)
+
+		rsp := models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &rsp)
+		assert.Equal(t, refundID, rsp.ProcessorID)
+		assert.Equal(t, 1, loginCount, "too many login calls")
+		assert.Equal(t, 1, refundCount, "too many refund calls")
+	})
 }
 
-func TestPaymentsRefundUnknownPayment(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", "nothign")
-
-	params := &stripePaymentParams{
-		Amount:      1,
-		Currency:    firstTransaction.Currency,
-		StripeToken: "123",
-	}
-
-	body, _ := json.Marshal(params)
-	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	w := httptest.NewRecorder()
-
-	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
-
-	validateError(t, http.StatusNotFound, w)
-}
-
-func TestPaymentsRefundUnpaid(t *testing.T) {
-	db, globalConfig, config := db(t)
-	firstTransaction.Status = models.PendingState
-	db.Save(firstTransaction)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProviders(ctx, nil)
-
-	params := &stripePaymentParams{
-		Amount:      1,
-		Currency:    firstTransaction.Currency,
-		StripeToken: "123",
-	}
-
-	body, _ := json.Marshal(params)
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-
-	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
-
-	validateError(t, http.StatusBadRequest, w)
-}
-
-func runPaymentRefund(t *testing.T, params *PaymentParams) (*httptest.ResponseRecorder, *gorm.DB) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProviders(ctx, nil)
-
-	body, _ := json.Marshal(params)
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-
-	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
-	return w, db
-}
-
-func TestPaymentsRefundSuccess(t *testing.T) {
-	db, globalConfig, config := db(t)
-	// unused, but needed to pass safety check
-	config.Payment.Stripe.Enabled = true
-	config.Payment.Stripe.SecretKey = "secret"
-
-	provider := &memProvider{name: payments.StripeProvider}
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "pay_id", firstTransaction.ID)
-	ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
-
-	params := &stripePaymentParams{
-		Amount:      1,
-		Currency:    firstTransaction.Currency,
-		StripeToken: "123",
-	}
-	body, _ := json.Marshal(params)
-	w := httptest.NewRecorder()
-	r := httptest.NewRequest("POST", "http://something", bytes.NewBuffer(body))
-	NewAPI(globalConfig, config, db).PaymentRefund(ctx, w, r)
-
-	rsp := new(models.Transaction)
-	extractPayload(t, http.StatusOK, w, rsp)
-
-	stored := &models.Transaction{ID: rsp.ID}
-	db.First(stored)
-
-	for _, payment := range []*models.Transaction{stored, rsp} {
-		assert.NotEmpty(t, payment.ID)
-		assert.Equal(t, testUser.ID, payment.UserID)
-		assert.EqualValues(t, 1, payment.Amount)
-		assert.Equal(t, "usd", payment.Currency)
-		assert.Empty(t, payment.FailureCode)
-		assert.Empty(t, payment.FailureDescription)
-		assert.Equal(t, models.RefundTransactionType, payment.Type)
-		assert.Equal(t, models.PaidState, payment.Status)
-	}
+func runPaymentRefund(test *RouteTest, url string, params interface{}) *httptest.ResponseRecorder {
+	body, err := json.Marshal(params)
+	require.NoError(test.T, err)
+	token := testAdminToken("magical-unicorn", "")
+	return test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -421,14 +336,14 @@ func validateTransaction(t *testing.T, expected *models.Transaction, actual *mod
 	assert.Equal(expected.CreatedAt.UTC(), actual.CreatedAt.UTC())
 }
 
-func validateAllTransactions(t *testing.T, trans []models.Transaction) {
+func validateAllTransactions(t *testing.T, testData *TestData, trans []models.Transaction) {
 	assert.Equal(t, 2, len(trans))
 	for _, tran := range trans {
 		switch tran.ID {
-		case secondTransaction.ID:
-			validateTransaction(t, secondTransaction, &tran)
-		case firstTransaction.ID:
-			validateTransaction(t, firstTransaction, &tran)
+		case testData.secondTransaction.ID:
+			validateTransaction(t, testData.secondTransaction, &tran)
+		case testData.firstTransaction.ID:
+			validateTransaction(t, testData.firstTransaction, &tran)
 		default:
 			assert.Fail(t, "Unknown transaction: "+tran.ID)
 		}

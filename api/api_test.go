@@ -5,8 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/Sirupsen/logrus/hooks/test"
+	"github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -14,14 +13,13 @@ import (
 )
 
 func TestTraceWrapper(t *testing.T) {
-	l, hook := test.NewNullLogger()
+	hook := test.NewGlobal()
 	globalConfig := new(conf.GlobalConfiguration)
 	config := new(conf.Configuration)
 	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 
 	api := NewAPI(globalConfig, config, nil)
-	api.log = logrus.NewEntry(l)
 
 	server := httptest.NewServer(api.handler)
 	defer server.Close()

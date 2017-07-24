@@ -117,7 +117,6 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 			query = query.Order(field + " " + string(dir))
 		}
 	} else {
-		fmt.Println("Sorting by created_at desc")
 		query = query.Order("created_at desc")
 	}
 

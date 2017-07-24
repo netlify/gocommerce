@@ -4,17 +4,15 @@ import (
 	"context"
 	"net/http"
 	"regexp"
-	"time"
 
 	"github.com/pkg/errors"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/guregu/kami"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
-	"github.com/zenazn/goji/web/mutil"
+	"github.com/sirupsen/logrus"
 
+	"github.com/go-chi/chi"
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
@@ -32,7 +30,6 @@ type API struct {
 	db         *gorm.DB
 	config     *conf.GlobalConfiguration
 	httpClient *http.Client
-	log        *logrus.Entry
 	version    string
 }
 
@@ -59,59 +56,62 @@ func NewSingleTenantAPIWithVersion(globalConfig *conf.GlobalConfiguration, confi
 // NewAPIWithVersion instantiates a new REST API.
 func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
 	api := &API{
-		log:        logrus.WithField("component", "api"),
 		config:     config,
 		db:         db,
 		httpClient: &http.Client{},
 		version:    version,
 	}
 
-	mux := kami.New()
-	mux.Context = ctx
-	mux.Use("/", api.populateContext)
-	mux.Use("/", api.withToken)
-	mux.LogHandler = api.logCompleted
+	r := newRouter()
+	r.Use(withRequestID)
+	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
+	r.Use(recoverer)
+	r.Use(api.instanceConfigCtx)
+	r.Use(withToken)
 
 	// endpoints
-	mux.Get("/", api.Index)
+	r.Get("/", api.Index)
 
-	mux.Get("/orders", api.OrderList)
-	mux.Post("/orders", api.OrderCreate)
-	mux.Get("/orders/:id", api.OrderView)
-	mux.Put("/orders/:id", api.OrderUpdate)
-	mux.Get("/orders/:order_id/payments", api.PaymentListForOrder)
-	mux.Post("/orders/:order_id/payments", api.PaymentCreate)
-	mux.Post("/orders/:order_id/receipt", api.ResendOrderReceipt)
+	r.Route("/orders", api.orderRoutes)
+	r.Route("/users", api.userRoutes)
 
-	mux.Get("/users", api.UserList)
-	mux.Get("/users/:user_id", api.UserView)
-	mux.Get("/users/:user_id/payments", api.PaymentListForUser)
-	mux.Delete("/users/:user_id", api.UserDelete)
-	mux.Get("/users/:user_id/addresses", api.AddressList)
-	mux.Get("/users/:user_id/addresses/:addr_id", api.AddressView)
-	mux.Delete("/users/:user_id/addresses/:addr_id", api.AddressDelete)
-	mux.Get("/users/:user_id/orders", api.OrderList)
+	r.Route("/downloads", func(r *router) {
+		r.With(authRequired).Get("/", api.DownloadList)
+		r.Get("/{download_id}", api.DownloadURL)
+	})
 
-	mux.Get("/downloads/:id", api.DownloadURL)
-	mux.Get("/downloads", api.DownloadList)
-	mux.Get("/orders/:order_id/downloads", api.DownloadList)
+	r.Route("/vatnumbers", func(r *router) {
+		r.Get("/{vat_number}", api.VatNumberLookup)
+	})
 
-	mux.Get("/vatnumbers/:number", api.VatNumberLookup)
+	r.Route("/payments", func(r *router) {
+		r.Use(adminRequired)
 
-	mux.Get("/payments", api.PaymentList)
-	mux.Get("/payments/:pay_id", api.PaymentView)
-	mux.Post("/payments/:pay_id/refund", api.PaymentRefund)
+		r.Get("/", api.PaymentList)
+		r.Route("/{payment_id}", func(r *router) {
+			r.Get("/", api.PaymentView)
+			r.Post("/refund", api.PaymentRefund)
+		})
+	})
 
-	mux.Post("/paypal", api.PreauthorizePayment)
-	// TODO is this needed? I did not see a use case in the PayPal payment flow.
-	// mux.Get("/paypal/:payment_id", api.PayPalGetPayment)
+	r.Route("/paypal", func(r *router) {
+		r.Post("/", api.PreauthorizePayment)
+		// TODO is this needed? I did not see a use case in the PayPal payment flow.
+		// r.Get("/{payment_id}", api.PayPalGetPayment)
+	})
 
-	mux.Get("/reports/sales", api.SalesReport)
-	mux.Get("/reports/products", api.ProductsReport)
+	r.Route("/reports", func(r *router) {
+		r.Use(adminRequired)
 
-	mux.Get("/coupons/:code", api.CouponView)
+		r.Get("/sales", api.SalesReport)
+		r.Get("/products", api.ProductsReport)
+	})
 
-	mux.Post("/claim", api.ClaimOrders)
+	r.Route("/coupons", func(r *router) {
+		r.Get("/{coupon_code}", api.CouponView)
+	})
+
+	r.With(authRequired).Post("/claim", api.ClaimOrders)
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
@@ -120,42 +120,68 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		AllowCredentials: true,
 	})
 
-	api.handler = corsHandler.Handler(mux)
+	api.handler = corsHandler.Handler(chi.ServerBaseContext(r, ctx))
 
 	return api
 }
 
-func (a *API) logCompleted(ctx context.Context, wp mutil.WriterProxy, r *http.Request) {
-	log := gcontext.GetLogger(ctx).WithField("status", wp.Status())
+func (a *API) orderRoutes(r *router) {
+	r.With(authRequired).Get("/", a.OrderList)
+	r.Post("/", a.OrderCreate)
 
-	start := gcontext.GetStartTime(ctx)
-	if start != nil {
-		log = log.WithField("duration", time.Since(*start))
-	}
+	r.Route("/{order_id}", func(r *router) {
+		r.Use(a.withOrderID)
+		r.Get("/", a.OrderView)
+		r.With(adminRequired).Put("/", a.OrderUpdate)
 
-	log.Infof("Completed request %s. path: %s, method: %s, status: %d", gcontext.GetRequestID(ctx), r.URL.Path, r.Method, wp.Status())
+		r.Route("/payments", func(r *router) {
+			r.With(authRequired).Get("/", a.PaymentListForOrder)
+			r.Post("/", a.PaymentCreate)
+		})
+
+		r.Get("/downloads", a.DownloadList)
+		r.Post("/receipt", a.ResendOrderReceipt)
+	})
 }
 
-func (a *API) populateContext(ctx context.Context, w http.ResponseWriter, r *http.Request) context.Context {
-	id := uuid.NewRandom().String()
-	log := a.log.WithField("request_id", id)
+func (a *API) userRoutes(r *router) {
+	r.Use(authRequired)
+	r.With(adminRequired).Get("/", a.UserList)
 
-	log = log.WithFields(logrus.Fields{
-		"method": r.Method,
-		"path":   r.URL.Path,
+	r.Route("/{user_id}", func(r *router) {
+		r.Use(a.withUserID)
+		r.Use(ensureUserAccess)
+
+		r.Get("/", a.UserView)
+		r.With(adminRequired).Delete("/", a.UserDelete)
+
+		r.Get("/payments", a.PaymentListForUser)
+		r.Get("/orders", a.OrderList)
+
+		r.Route("/addresses", func(r *router) {
+			r.Get("/", a.AddressList)
+			r.With(adminRequired).Post("/", a.CreateNewAddress)
+			r.Route("/{addr_id}", func(r *router) {
+				r.Get("/", a.AddressView)
+				r.With(adminRequired).Delete("/", a.AddressDelete)
+			})
+		})
 	})
+}
 
+func withRequestID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	id := uuid.NewRandom().String()
+	ctx := r.Context()
 	ctx = gcontext.WithRequestID(ctx, id)
-	ctx = gcontext.WithLogger(ctx, log)
-	ctx = gcontext.WithStartTime(ctx, time.Now())
+	return ctx, nil
+}
 
+func (a *API) instanceConfigCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	ctx := r.Context()
 	if gcontext.GetPaymentProviders(ctx) == nil {
-		internalServerError(w, "No payment providers configured")
-		return nil
+		return nil, internalServerError("No payment providers configured")
 	}
-
-	log.Info("request started")
-	return ctx
+	return ctx, nil
 }
 
 func withTenantConfig(ctx context.Context, config *conf.Configuration) (context.Context, error) {

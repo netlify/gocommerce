@@ -1,4 +1,4 @@
-FROM brycekahle/go-glide:v0.12.3
+FROM netlify/go-glide:v0.12.3
 
 ADD . /go/src/github.com/netlify/gocommerce
 

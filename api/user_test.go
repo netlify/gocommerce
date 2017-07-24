@@ -2,376 +2,302 @@ package api
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
-	"github.com/guregu/kami"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/netlify/gocommerce/models"
 )
 
-func TestUsersQueryForAllUsersAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, false)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
-}
-
-func TestUsersQueryForAllUsersWithParams(t *testing.T) {
-	db, globalConfig, config := db(t)
-	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-	}
-	rsp := db.Create(&toDie)
-	if rsp.Error != nil {
-		assert.FailNow(t, "failed b/c of db error: "+rsp.Error.Error())
-	}
-	defer db.Unscoped().Delete(&toDie)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-
-	req := httptest.NewRequest("GET", "http://junk?email=dc.com", nil)
-	recorder := httptest.NewRecorder()
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
-
-	users := []models.User{}
-	extractPayload(t, http.StatusOK, recorder, &users)
-	assert.Equal(t, 1, len(users))
-	assert.Equal(t, "villian", users[0].ID)
-}
-
-func TestUsersQueryForAllUsers(t *testing.T) {
-	db, globalConfig, config := db(t)
-	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-	}
-	db.Create(&toDie)
-	defer db.Unscoped().Delete(&toDie)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-
-	NewAPI(globalConfig, config, db).UserList(ctx, recorder, req)
-
-	users := []models.User{}
-	extractPayload(t, http.StatusOK, recorder, &users)
-	for _, u := range users {
-		switch u.ID {
-		case toDie.ID:
-			assert.Equal(t, "twoface@dc.com", u.Email)
-		case testUser.ID:
-			assert.Equal(t, testUser.Email, u.Email)
-		default:
-			assert.Fail(t, "unexpected user %v\n", u)
+func TestUsersList(t *testing.T) {
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "villian",
+			Email: "twoface@dc.com",
 		}
-	}
-}
+		rsp := test.DB.Create(&toDie)
+		require.NoError(t, rsp.Error, "DB Error")
+		defer test.DB.Unscoped().Delete(&toDie)
 
-//func TestUsersQueryForDeletedUser(t *testing.T) {
-//	toDie := models.User{
-//		ID:    "def-should-not-exist",
-//		Email: "twoface@dc.com",
-//	}
-//	db.Create(&toDie)
-//	db.Delete(&toDie) // soft delete
-//	defer db.Unscoped().Delete(&toDie)
-//
-//	recorder := httptest.NewRecorder()
-//	req := httptest.NewRequest("GET", urlWithUserID, nil)
-//
-//	globalConfig := testConfig()
-//	ctx := testContext(testToken(toDie.ID, toDie.Email, nil), globalConfig)
-//	ctx = kami.SetParam(ctx, "user_id", toDie.ID)
-//
-//	api := NewAPI(globalConfig, db, nil)
-//	api.UserView(ctx, recorder, req)
-//	validateError(t, http.StatusNotFound, recorder)
-//}
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
 
-func TestUsersQueryForUserAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	ctx := testContext(testToken(testUser.ID, testUser.Email), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	api := NewAPI(globalConfig, config, db)
-	api.UserView(ctx, recorder, req)
-	user := new(models.User)
-	extractPayload(t, http.StatusOK, recorder, user)
-
-	validateUser(t, &testUser, user)
-}
-
-func TestUsersQueryForUserAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	api := NewAPI(globalConfig, config, db)
-	api.UserView(ctx, recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
-}
-
-func TestUsersQueryForUserAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	NewAPI(globalConfig, config, db).UserView(ctx, recorder, req)
-
-	user := new(models.User)
-	extractPayload(t, http.StatusOK, recorder, user)
-	validateUser(t, &testUser, user)
-}
-
-func TestUsersQueryForAllAddressesAsAdmin(t *testing.T) {
-	db, globalConfig, config := db(t)
-	second := getTestAddress()
-	second.UserID = testUser.ID
-	assert.Nil(t, second.Validate())
-	db.Create(&second)
-	defer db.Unscoped().Delete(&second)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), testUser.ID)
-	assert.Equal(t, 2, len(addrs))
-	for _, a := range addrs {
-		assert.Nil(t, a.Validate())
-		switch a.ID {
-		case second.ID:
-			validateAddress(t, *second, a)
-		case testAddress.ID:
-			validateAddress(t, testAddress, a)
-		default:
-			assert.Fail(t, fmt.Sprintf("Unexpected address: %+v", a))
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 2)
+		for _, u := range users {
+			switch u.ID {
+			case toDie.ID:
+				assert.Equal(t, "twoface@dc.com", u.Email)
+			case test.Data.testUser.ID:
+				assert.Equal(t, test.Data.testUser.Email, u.Email)
+			default:
+				assert.Fail(t, "unexpected user %v\n", u)
+			}
 		}
-	}
+	})
+	t.Run("WithParams", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "villian",
+			Email: "twoface@dc.com",
+		}
+		rsp := test.DB.Create(&toDie)
+		require.NoError(t, rsp.Error, "DB Error")
+		defer test.DB.Unscoped().Delete(&toDie)
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users?email=dc.com", nil, token)
+
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 1)
+		assert.Equal(t, "villian", users[0].ID)
+	})
 }
 
-func TestUsersQueryForAllAddressesAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), testUser.ID)
-	assert.Equal(t, 1, len(addrs))
-	validateAddress(t, testAddress, addrs[0])
+func TestUsersView(t *testing.T) {
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID
+		token := test.Data.testUserToken
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+		user := new(models.User)
+		extractPayload(t, http.StatusOK, recorder, user)
+		validateUser(t, test.Data.testUser, user)
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID
+		token := testToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+		user := new(models.User)
+		extractPayload(t, http.StatusOK, recorder, user)
+		validateUser(t, test.Data.testUser, user)
+	})
+	t.Run("Deleted", func(t *testing.T) {
+		test := NewRouteTest(t)
+		toDie := models.User{
+			ID:    "def-should-not-exist",
+			Email: "twoface@dc.com",
+		}
+		test.DB.Create(&toDie)
+		test.DB.Delete(&toDie) // soft delete
+		defer test.DB.Unscoped().Delete(&toDie)
+
+		token := testToken(toDie.ID, toDie.Email)
+		recorder := test.TestEndpoint(http.MethodGet, "/users/"+toDie.ID, nil, token)
+		validateError(t, http.StatusNotFound, recorder)
+	})
 }
 
-func TestUsersQueryForAllAddressesAsStranger(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("stranger-danger", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+func TestUserAddressesList(t *testing.T) {
+	t.Run("AsAdmin", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
+		second := getTestAddress()
+		second.UserID = test.Data.testUser.ID
+		assert.Nil(t, second.Validate())
+		test.DB.Create(&second)
+		defer test.DB.Unscoped().Delete(&second)
 
-	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
-	validateError(t, http.StatusUnauthorized, recorder)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		assert.Len(t, addrs, 2)
+		for _, a := range addrs {
+			assert.Nil(t, a.Validate())
+			switch a.ID {
+			case second.ID:
+				validateAddress(t, *second, a)
+			case test.Data.testAddress.ID:
+				validateAddress(t, test.Data.testAddress, a)
+			default:
+				assert.Fail(t, fmt.Sprintf("Unexpected address: %+v", a))
+			}
+		}
+	})
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
+		token := testToken(test.Data.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		require.Len(t, addrs, 1)
+		validateAddress(t, test.Data.testAddress, addrs[0])
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses"
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+	t.Run("NoAddresses", func(t *testing.T) {
+		test := NewRouteTest(t)
+		u := models.User{
+			ID:    "temporary",
+			Email: "junk@junk.com",
+		}
+		test.DB.Create(u)
+		defer test.DB.Unscoped().Delete(u)
+
+		token := testToken(u.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users/"+u.ID+"/addresses", nil, token)
+		addrs := []models.Address{}
+		extractPayload(t, http.StatusOK, recorder, &addrs)
+		assert.Len(t, addrs, 0)
+	})
+	t.Run("MissingUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("dne", "")
+		recorder := test.TestEndpoint(http.MethodGet, "/users/dne/addresses", nil, token)
+		validateError(t, http.StatusNotFound, recorder)
+	})
 }
 
-func TestUsersQueryForAllAddressesNoAddresses(t *testing.T) {
-	db, globalConfig, config := db(t)
-	u := models.User{
-		ID:    "temporary",
-		Email: "junk@junk.com",
-	}
-	db.Create(u)
-	defer db.Unscoped().Delete(u)
+func TestUserAddressView(t *testing.T) {
+	t.Run("AsUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		url := "/users/" + test.Data.testUser.ID + "/addresses/" + test.Data.testAddress.ID
+		token := testToken(test.Data.testUser.ID, "")
+		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
 
-	ctx := testContext(testToken(u.ID, ""), config, false)
-	addrs := queryForAddresses(ctx, t, NewAPI(globalConfig, config, db), u.ID)
-	assert.Equal(t, 0, len(addrs))
+		addr := new(models.Address)
+		extractPayload(t, http.StatusOK, recorder, addr)
+		validateAddress(t, test.Data.testAddress, *addr)
+	})
 }
 
-func TestUsersQueryForAllAddressesMissingUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("dne", ""), config, false)
-	ctx = kami.SetParam(ctx, "user_id", "dne")
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
+func TestUserDelete(t *testing.T) {
+	t.Run("NonExistentUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users/dne", nil, token)
 
-	NewAPI(globalConfig, config, db).AddressList(ctx, recorder, req)
-	validateError(t, http.StatusNotFound, recorder)
-}
-
-func TestUsersQueryForSingleAddressAsUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken(testUser.ID, ""), config, false)
-
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	NewAPI(globalConfig, config, db).AddressView(ctx, recorder, req)
-
-	addr := new(models.Address)
-	extractPayload(t, http.StatusOK, recorder, addr)
-	validateAddress(t, testAddress, *addr)
-}
-
-func TestUsersDeleteNonExistentUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", "dne")
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
-
-	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
-	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "", recorder.Body.String())
-}
-
-func TestUsersDeleteSingleUser(t *testing.T) {
-	db, globalConfig, config := db(t)
-	dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
-	dyingAddr := getTestAddress()
-	dyingAddr.UserID = dyingUser.ID
-	dyingOrder := models.NewOrder("session2", dyingUser.Email, "usd")
-	dyingOrder.UserID = dyingUser.ID
-	dyingTransaction := models.NewTransaction(dyingOrder)
-	dyingTransaction.UserID = dyingUser.ID
-	dyingLineItem := models.LineItem{
-		ID:          123,
-		OrderID:     dyingOrder.ID,
-		Title:       "coffin",
-		Sku:         "123-cough-cough-123",
-		Type:        "home",
-		Description: "nappytimeplace",
-		Price:       100,
-		Quantity:    1,
-		Path:        "/right/to/the/grave",
-	}
-	items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
-	for _, i := range items {
-		db.Create(i)
-	}
-	defer func() {
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+	})
+	t.Run("SingleUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
+		dyingAddr := getTestAddress()
+		dyingAddr.UserID = dyingUser.ID
+		dyingOrder := models.NewOrder("session2", dyingUser.Email, "usd")
+		dyingOrder.UserID = dyingUser.ID
+		dyingTransaction := models.NewTransaction(dyingOrder)
+		dyingTransaction.UserID = dyingUser.ID
+		dyingLineItem := models.LineItem{
+			ID:          123,
+			OrderID:     dyingOrder.ID,
+			Title:       "coffin",
+			Sku:         "123-cough-cough-123",
+			Type:        "home",
+			Description: "nappytimeplace",
+			Price:       100,
+			Quantity:    1,
+			Path:        "/right/to/the/grave",
+		}
+		items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
 		for _, i := range items {
-			db.Unscoped().Delete(i)
+			test.DB.Create(i)
 		}
-	}()
+		defer func() {
+			for _, i := range items {
+				test.DB.Unscoped().Delete(i)
+			}
+		}()
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", dyingUser.ID)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users/"+dyingUser.ID, nil, token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
 
-	NewAPI(globalConfig, config, db).UserDelete(ctx, recorder, req)
-	assert.Equal(t, http.StatusOK, recorder.Code)
-	assert.Equal(t, "", recorder.Body.String())
-
-	// now load it back and it should be soft deleted
-	//found := &models.User{ID: dyingUser.ID}
-	assert.False(t, db.Unscoped().First(&dyingUser).RecordNotFound())
-	assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingAddr).RecordNotFound())
-	assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
-	assert.False(t, db.Unscoped().First(dyingOrder).RecordNotFound())
-	assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingTransaction).RecordNotFound())
-	assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
-	assert.False(t, db.Unscoped().First(&dyingLineItem).RecordNotFound())
-	assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+		// now load it back and it should be soft deleted
+		//found := &models.User{ID: dyingUser.ID}
+		assert.False(t, test.DB.Unscoped().First(&dyingUser).RecordNotFound())
+		assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingAddr).RecordNotFound())
+		assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(dyingOrder).RecordNotFound())
+		assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingTransaction).RecordNotFound())
+		assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingLineItem).RecordNotFound())
+		assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+	})
 }
 
-func TestDeleteUserAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
+func TestUserAddressDelete(t *testing.T) {
+	test := NewRouteTest(t)
 	addr := getTestAddress()
-	addr.UserID = testUser.ID
-	db.Create(addr)
+	addr.UserID = test.Data.testUser.ID
+	test.DB.Create(addr)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-	ctx = kami.SetParam(ctx, "addr_id", addr.ID)
+	token := testAdminToken("magical-unicorn", "")
+	recorder := test.TestEndpoint(http.MethodDelete, "/users/"+test.Data.testUser.ID+"/addresses/"+addr.ID, nil, token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("DELETE", urlWithUserID, nil)
-
-	NewAPI(globalConfig, config, db).AddressDelete(ctx, recorder, req)
 	assert.Equal(t, http.StatusOK, recorder.Code)
 	assert.Equal(t, "", recorder.Body.String())
 
-	assert.False(t, db.Unscoped().First(&addr).RecordNotFound())
+	assert.False(t, test.DB.Unscoped().First(&addr).RecordNotFound())
 	assert.NotNil(t, addr.DeletedAt)
 }
 
-func TestCreateAnAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
-	addr := getTestAddress()
-	b, err := json.Marshal(&addr.AddressRequest)
-	assert.Nil(t, err)
+func TestUserAddressCreate(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		test := NewRouteTest(t)
+		addr := getTestAddress()
+		b, err := json.Marshal(&addr.AddressRequest)
+		require.NoError(t, err)
 
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+test.Data.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
 
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
+		results := struct {
+			ID string
+		}{}
+		extractPayload(t, http.StatusOK, recorder, &results)
 
-	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
+		// now pull off the address from the DB
+		dbAddr := &models.Address{ID: results.ID, UserID: test.Data.testUser.ID}
+		rsp := test.DB.First(dbAddr)
+		assert.False(t, rsp.RecordNotFound())
+	})
+	t.Run("Invalid", func(t *testing.T) {
+		test := NewRouteTest(t)
+		addr := getTestAddress()
+		addr.LastName = "" // required field
+		b, err := json.Marshal(&addr.AddressRequest)
+		require.NoError(t, err)
 
-	assert.Equal(t, http.StatusOK, recorder.Code)
-
-	results := struct {
-		ID string
-	}{}
-	err = json.Unmarshal(recorder.Body.Bytes(), &results)
-	assert.Nil(t, err)
-
-	// now pull off the address from the DB
-	dbAddr := &models.Address{ID: results.ID, UserID: testUser.ID}
-	rsp := db.First(dbAddr)
-	assert.False(t, rsp.RecordNotFound())
-}
-
-func TestCreateInvalidAddress(t *testing.T) {
-	db, globalConfig, config := db(t)
-	addr := getTestAddress()
-	addr.LastName = "" // required field
-
-	b, err := json.Marshal(&addr.AddressRequest)
-	assert.Nil(t, err)
-
-	ctx := testContext(testToken("magical-unicorn", ""), config, true)
-	ctx = kami.SetParam(ctx, "user_id", testUser.ID)
-
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("POST", urlWithUserID, bytes.NewBuffer(b))
-
-	NewAPI(globalConfig, config, db).CreateNewAddress(ctx, recorder, req)
-
-	validateError(t, http.StatusBadRequest, recorder)
-}
-
-// ------------------------------------------------------------------------------------------------
-
-func queryForAddresses(ctx context.Context, t *testing.T, api *API, id string) []models.Address {
-	ctx = kami.SetParam(ctx, "user_id", id)
-	recorder := httptest.NewRecorder()
-	req := httptest.NewRequest("GET", urlWithUserID, nil)
-
-	api.AddressList(ctx, recorder, req)
-	addrs := []models.Address{}
-	extractPayload(t, http.StatusOK, recorder, &addrs)
-	return addrs
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodPost, "/users/"+test.Data.testUser.ID+"/addresses", bytes.NewBuffer(b), token)
+		validateError(t, http.StatusBadRequest, recorder)
+	})
 }

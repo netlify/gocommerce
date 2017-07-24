@@ -1,11 +1,10 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"time"
 
-	"github.com/guregu/kami"
+	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
@@ -14,46 +13,35 @@ import (
 const maxIPsPerDay = 50
 
 // DownloadURL returns a signed URL to download a purchased asset.
-func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	id := kami.Param(ctx, "id")
-	log := gcontext.GetLogger(ctx).WithField("download_id", id)
+func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	downloadID := chi.URLParam(r, "download_id")
+	logEntrySetField(r, "download_id", downloadID)
 	claims := gcontext.GetClaims(ctx)
 	assets := gcontext.GetAssetStore(ctx)
 
 	download := &models.Download{}
-	if result := a.db.Where("id = ?", id).First(download); result.Error != nil {
+	if result := a.db.Where("id = ?", downloadID).First(download); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Download not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Download not found")
 		}
-		return
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
 	order := &models.Order{}
 	if result := a.db.Where("id = ?", download.OrderID).First(order); result.Error != nil {
 		if result.RecordNotFound() {
-			log.Debug("Requested record that doesn't exist")
-			notFoundError(w, "Download order not found")
-		} else {
-			log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-			internalServerError(w, "Error during database query: %v", result.Error)
+			return notFoundError("Download order not found")
 		}
-		return
+		return internalServerError("Error during database query").WithInternalError(result.Error)
 	}
 
-	if order.UserID != "" {
-		if (order.UserID != claims.ID) && gcontext.IsAdmin(ctx) {
-			unauthorizedError(w, "Not Authorized to access this download")
-			return
-		}
+	if !hasOrderAccess(ctx, order) {
+		return unauthorizedError("Not Authorized to access this download")
 	}
 
 	if order.PaymentState != "paid" {
-		unauthorizedError(w, "This download has not been paid yet")
-		return
+		return unauthorizedError("This download has not been paid yet")
 	}
 
 	rows, err := a.db.Model(&models.Event{}).
@@ -61,28 +49,21 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 		Where("order_id = ? and created_at > ? and changes = 'download'", order.ID, time.Now().Add(-24*time.Hour)).
 		Rows()
 	if err != nil {
-		log.WithError(err).Warnf("Error while signing download: %s", err)
-		internalServerError(w, "Error signing download: %v", err)
-		return
+		return internalServerError("Error signing download").WithInternalError(err)
 	}
 	var count uint64
 	for rows.Next() {
 		err = rows.Scan(&count)
 		if err != nil {
-			log.WithError(err).Warnf("Error while signing download: %s", err)
-			internalServerError(w, "Error signing download: %v", err)
-			return
+			return internalServerError("Error signing download").WithInternalError(err)
 		}
 	}
 	if count > maxIPsPerDay {
-		unauthorizedError(w, "This download has been accessed from too many IPs within the last day")
-		return
+		return unauthorizedError("This download has been accessed from too many IPs within the last day")
 	}
 
 	if err := download.SignURL(assets); err != nil {
-		log.WithError(err).Warnf("Error while signing download: %s", err)
-		internalServerError(w, "Error signing download: %v", err)
-		return
+		return internalServerError("Error signing download").WithInternalError(err)
 	}
 
 	tx := a.db.Begin()
@@ -90,47 +71,36 @@ func (a *API) DownloadURL(ctx context.Context, w http.ResponseWriter, r *http.Re
 	models.LogEvent(tx, r.RemoteAddr, claims.ID, order.ID, models.EventUpdated, []string{"download"})
 	tx.Commit()
 
-	sendJSON(w, http.StatusOK, download)
+	return sendJSON(w, http.StatusOK, download)
 }
 
 // DownloadList lists all purchased downloads for an order or a user.
-func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	orderID := kami.Param(ctx, "order_id")
-	log := gcontext.GetLogger(ctx)
-	if orderID != "" {
-		log = log.WithField("order_id", orderID)
-	}
+func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	orderID := gcontext.GetOrderID(ctx)
+	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
-
-	if orderID == "" && (claims == nil || claims.ID == "") {
-		unauthorizedError(w, "Listing all downloads requires authentication")
-		return
-	}
 
 	order := &models.Order{}
 	if orderID != "" {
 		if result := a.db.Where("id = ?", orderID).First(order); result.Error != nil {
 			if result.RecordNotFound() {
-				log.Debug("Requested record that doesn't exist")
-				notFoundError(w, "Download order not found")
-			} else {
-				log.WithError(result.Error).Warnf("Error while querying database: %s", result.Error.Error())
-				internalServerError(w, "Error during database query: %v", result.Error)
+				return notFoundError("Download order not found")
 			}
-			return
+			return internalServerError("Error during database query").WithInternalError(result.Error)
 		}
 	} else {
 		order = nil
 	}
 
-	if order != nil && order.UserID != "" && order.UserID != claims.ID {
-		unauthorizedError(w, "You don't have permission to access this order")
-		return
-	}
+	if order != nil {
+		if !hasOrderAccess(ctx, order) {
+			return unauthorizedError("You don't have permission to access this order")
+		}
 
-	if order != nil && order.PaymentState != "paid" {
-		unauthorizedError(w, "This order has not been completed yet")
-		return
+		if order.PaymentState != "paid" {
+			return unauthorizedError("This order has not been completed yet")
+		}
 	}
 
 	orderTable := models.Order{}.TableName()
@@ -145,18 +115,15 @@ func (a *API) DownloadList(ctx context.Context, w http.ResponseWriter, r *http.R
 
 	offset, limit, err := paginate(w, r, query.Model(&models.Download{}))
 	if err != nil {
-		badRequestError(w, "Bad Pagination Parameters: %v", err)
-		return
+		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
 	var downloads []models.Download
 	query.LogMode(true)
 	if result := query.Offset(offset).Limit(limit).Find(&downloads); result.Error != nil {
-		log.WithError(result.Error).Warn("Error while querying database")
-		internalServerError(w, "Error during database query: %v", result.Error)
-		return
+		return internalServerError("Error during database query").WithInternalError(err)
 	}
 
 	log.WithField("download_count", len(downloads)).Debugf("Successfully retrieved %d downloads", len(downloads))
-	sendJSON(w, http.StatusOK, downloads)
+	return sendJSON(w, http.StatusOK, downloads)
 }

@@ -41,6 +41,10 @@ type couponCacheFromURL struct {
 
 // NewCouponCacheFromURL creates a coupon cache using the provided configuration.
 func NewCouponCacheFromURL(config *conf.Configuration) Cache {
+	if config.Coupons.URL == "" {
+		return nil
+	}
+
 	return &couponCacheFromURL{
 		url:      config.Coupons.URL,
 		user:     config.Coupons.User,

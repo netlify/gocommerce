@@ -8,8 +8,8 @@ import (
 
 	"bufio"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
 
@@ -181,7 +181,7 @@ func configureLogging(config *GlobalConfiguration) error {
 	}
 
 	if config.LogConf.Level != "" {
-		level, err := logrus.ParseLevel(strings.ToUpper(config.LogConf.Level))
+		level, err := logrus.ParseLevel(config.LogConf.Level)
 		if err != nil {
 			return err
 		}
