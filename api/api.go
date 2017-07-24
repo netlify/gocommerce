@@ -102,12 +102,12 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		r.Get("/", api.PaymentList)
 		r.Route("/{payment_id}", func(r *router) {
 			r.Get("/", api.PaymentView)
-			r.Post("/refund", api.PaymentRefund)
+			r.With(addGetBody).Post("/refund", api.PaymentRefund)
 		})
 	})
 
 	r.Route("/paypal", func(r *router) {
-		r.Post("/", api.PreauthorizePayment)
+		r.With(addGetBody).Post("/", api.PreauthorizePayment)
 	})
 
 	r.Route("/reports", func(r *router) {
@@ -146,7 +146,7 @@ func (a *API) orderRoutes(r *router) {
 
 		r.Route("/payments", func(r *router) {
 			r.With(authRequired).Get("/", a.PaymentListForOrder)
-			r.Post("/", a.PaymentCreate)
+			r.With(addGetBody).Post("/", a.PaymentCreate)
 		})
 
 		r.Get("/downloads", a.DownloadList)
