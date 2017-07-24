@@ -17,7 +17,7 @@ type stripePaymentProvider struct {
 }
 
 type stripeBodyParams struct {
-	StripeToken string `mapstructure:"stripe_token"`
+	StripeToken string `json:"stripe_token"`
 }
 
 // Config contains the Stripe-specific configuration for payment providers.
