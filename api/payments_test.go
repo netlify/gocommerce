@@ -320,6 +320,60 @@ func runPaymentRefund(test *RouteTest, url string, params interface{}) *httptest
 	return test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
 }
 
+func TestPaymentCreate(t *testing.T) {
+	t.Run("PayPal", func(t *testing.T) {
+		t.Run("Simple", func(t *testing.T) {
+			test := NewRouteTest(t)
+			var loginCount, paymentCount int
+			paymentID := "4CF18861HF410323V"
+			amtString := fmt.Sprintf("%.2f", float64(test.Data.secondOrder.Total)/100)
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/v1/oauth2/token":
+					w.Header().Add("Content-Type", "application/json")
+					fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
+					loginCount++
+				case "/v1/payments/payment/" + paymentID:
+					w.Header().Add("Content-Type", "application/json")
+					fmt.Fprint(w, `{"id":"`+paymentID+`","transactions":[{"amount":{"total":"`+amtString+`","currency":"`+test.Data.secondOrder.Currency+`"}}]}`)
+					paymentCount++
+				case "/v1/payments/payment/" + paymentID + "/execute":
+					w.Header().Add("Content-Type", "application/json")
+					fmt.Fprint(w, `{"id":"`+paymentID+`"}`)
+					paymentCount++
+				default:
+					w.WriteHeader(500)
+					t.Fatalf("unknown PayPal API call to %s", r.URL.Path)
+				}
+			}))
+			defer server.Close()
+			test.Config.Payment.PayPal.Enabled = true
+			test.Config.Payment.PayPal.ClientID = "clientid"
+			test.Config.Payment.PayPal.Secret = "secret"
+			test.Config.Payment.PayPal.Env = server.URL
+
+			params := &paypalPaymentParams{
+				Amount:       test.Data.secondOrder.Total,
+				Currency:     test.Data.secondOrder.Currency,
+				PaypalID:     paymentID,
+				PaypalUserID: "456",
+				Provider:     payments.PayPalProvider,
+			}
+
+			body, err := json.Marshal(params)
+			require.NoError(t, err)
+
+			recorder := test.TestEndpoint(http.MethodPost, "/orders/second-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
+
+			rsp := models.Transaction{}
+			extractPayload(t, http.StatusOK, recorder, &rsp)
+			assert.Equal(t, paymentID, rsp.ProcessorID)
+			assert.Equal(t, 1, loginCount, "too many login calls")
+			assert.Equal(t, 2, paymentCount, "too many payment calls")
+		})
+	})
+}
+
 func TestPaymentPreauthorize(t *testing.T) {
 	t.Run("PayPal", func(t *testing.T) {
 		testURL := "/paypal"
@@ -457,6 +511,7 @@ type stripePaymentParams struct {
 	Amount      uint64
 	Currency    string
 	StripeToken string `json:"stripe_token"`
+	Provider    string
 }
 
 type paypalPaymentParams struct {
@@ -464,6 +519,7 @@ type paypalPaymentParams struct {
 	Currency     string
 	PaypalID     string
 	PaypalUserID string
+	Provider     string
 }
 
 type paypalPreauthorizeParams struct {
