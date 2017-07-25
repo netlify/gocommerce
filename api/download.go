@@ -40,7 +40,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 		return unauthorizedError("Not Authorized to access this download")
 	}
 
-	if order.PaymentState != "paid" {
+	if order.PaymentState != models.PaidState {
 		return unauthorizedError("This download has not been paid yet")
 	}
 
@@ -98,7 +98,7 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 			return unauthorizedError("You don't have permission to access this order")
 		}
 
-		if order.PaymentState != "paid" {
+		if order.PaymentState != models.PaidState {
 			return unauthorizedError("This order has not been completed yet")
 		}
 	}
