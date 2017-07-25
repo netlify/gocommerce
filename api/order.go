@@ -697,13 +697,14 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 	}
 	metaProducts := []*models.LineItemMetadata{}
 	var parsingErr error
-	metaTag.Each(func(_ int, tag *goquery.Selection) {
+	metaTag.EachWithBreak(func(_ int, tag *goquery.Selection) bool {
 		meta := &models.LineItemMetadata{}
 		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
 		if parsingErr != nil {
-			return
+			return false
 		}
 		metaProducts = append(metaProducts, meta)
+		return true
 	})
 	if parsingErr != nil {
 		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
