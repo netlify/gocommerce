@@ -693,19 +693,18 @@ func (a *API) processLineItem(ctx context.Context, order *models.Order, item *mo
 
 	metaTag := doc.Find(".gocommerce-product")
 	if metaTag.Length() == 0 {
-		return fmt.Errorf("No script tag with id gocommerce-product tag found for '%v'", item.Title)
+		return fmt.Errorf("No script tag with class gocommerce-product tag found for '%v'", item.Title)
 	}
 	metaProducts := []*models.LineItemMetadata{}
 	var parsingErr error
-	metaTag.Each(func(_ int, tag *goquery.Selection) {
-		if parsingErr != nil {
-			return
-		}
+	metaTag.EachWithBreak(func(_ int, tag *goquery.Selection) bool {
 		meta := &models.LineItemMetadata{}
 		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
-		if parsingErr == nil {
-			metaProducts = append(metaProducts, meta)
+		if parsingErr != nil {
+			return false
 		}
+		metaProducts = append(metaProducts, meta)
+		return true
 	})
 	if parsingErr != nil {
 		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)

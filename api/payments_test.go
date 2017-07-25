@@ -370,6 +370,7 @@ func TestPaymentCreate(t *testing.T) {
 			rsp := models.Transaction{}
 			extractPayload(t, http.StatusOK, recorder, &rsp)
 			assert.Equal(t, paymentID, rsp.ProcessorID)
+			assert.Equal(t, models.PaidState, rsp.Status)
 			assert.Equal(t, 1, loginCount, "too many login calls")
 			assert.Equal(t, 2, paymentCount, "too many payment calls")
 		})
@@ -401,6 +402,7 @@ func TestPaymentCreate(t *testing.T) {
 
 		rsp := models.Transaction{}
 		extractPayload(t, http.StatusOK, recorder, &rsp)
+		assert.Equal(t, models.PaidState, rsp.Status)
 		assert.Equal(t, 1, callCount)
 	})
 }

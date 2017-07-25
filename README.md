@@ -34,7 +34,7 @@ The metadata can be anywhere on the page, and goes in a script tag in this forma
 
 ```html
 <script class="gocommerce-product" type="application/json">
-{"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99"}], "type": "ebook"}
+{"sku": "my-product", "title": "My Product", "prices": [{"amount": "49.99", "currency": "USD"}], "type": "ebook"}
 </script>
 ```
 
