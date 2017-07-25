@@ -21,13 +21,13 @@ type Transaction struct {
 	ProcessorID string `json:"processor_id"`
 
 	User   *User  `json:"-"`
-	UserID string `json:"user_id"`
+	UserID string `json:"user_id,omitempty"`
 
 	Amount   uint64 `json:"amount"`
 	Currency string `json:"currency"`
 
-	FailureCode        string `json:"failure_code"`
-	FailureDescription string `json:"failure_description"`
+	FailureCode        string `json:"failure_code,omitempty"`
+	FailureDescription string `json:"failure_description,omitempty"`
 
 	Status string `json:"status"`
 	Type   string `json:"type"`
