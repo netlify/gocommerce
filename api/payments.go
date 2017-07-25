@@ -148,25 +148,22 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
 	tr := models.NewTransaction(order)
-
-	order.PaymentProcessor = provider.Name()
 	processorID, err := charge(params.Amount, params.Currency)
 	tr.ProcessorID = processorID
 
 	if err != nil {
 		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		tr.FailureDescription = err.Error()
-		tr.Status = "failed"
-	} else {
-		tr.Status = "pending"
-	}
-	tx.Create(tr)
-
-	if err != nil {
+		tr.Status = models.FailedState
+		tx.Create(tr)
 		tx.Commit()
 		return internalServerError("There was an error charging your card: %v", err).WithInternalError(err)
 	}
 
+	// mark order and transaction as paid
+	tr.Status = models.PaidState
+	tx.Create(tr)
+	order.PaymentProcessor = provider.Name()
 	order.PaymentState = models.PaidState
 	tx.Save(order)
 
