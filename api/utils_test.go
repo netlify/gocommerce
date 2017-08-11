@@ -147,6 +147,7 @@ func setupTestData() *TestData {
 	firstOrder := models.NewOrder("session1", testUser.Email, "usd")
 	firstOrder.UserID = testUser.ID
 	firstOrder.PaymentProcessor = "stripe"
+	firstOrder.PaymentState = models.PaidState
 	firstTransaction := models.NewTransaction(firstOrder)
 	firstTransaction.ProcessorID = "stripe"
 	firstTransaction.Amount = 100
@@ -174,6 +175,7 @@ func setupTestData() *TestData {
 	secondOrder := models.NewOrder("session2", testUser.Email, "usd")
 	secondOrder.UserID = testUser.ID
 	secondOrder.PaymentProcessor = "paypal"
+	secondOrder.PaymentState = models.PaidState
 	secondTransaction := models.NewTransaction(secondOrder)
 	secondTransaction.ProcessorID = "paypal"
 	secondLineItem1 := &models.LineItem{

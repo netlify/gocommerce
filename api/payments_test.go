@@ -326,6 +326,10 @@ func TestPaymentCreate(t *testing.T) {
 	t.Run("PayPal", func(t *testing.T) {
 		t.Run("Simple", func(t *testing.T) {
 			test := NewRouteTest(t)
+			test.Data.secondOrder.PaymentState = models.PendingState
+			rsp := test.DB.Save(test.Data.secondOrder)
+			require.NoError(t, rsp.Error, "Failed to update order")
+
 			var loginCount, paymentCount int
 			paymentID := "4CF18861HF410323V"
 			amtString := fmt.Sprintf("%.2f", float64(test.Data.secondOrder.Total)/100)
@@ -367,10 +371,10 @@ func TestPaymentCreate(t *testing.T) {
 
 			recorder := test.TestEndpoint(http.MethodPost, "/orders/second-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
 
-			rsp := models.Transaction{}
-			extractPayload(t, http.StatusOK, recorder, &rsp)
-			assert.Equal(t, paymentID, rsp.ProcessorID)
-			assert.Equal(t, models.PaidState, rsp.Status)
+			trans := models.Transaction{}
+			extractPayload(t, http.StatusOK, recorder, &trans)
+			assert.Equal(t, paymentID, trans.ProcessorID)
+			assert.Equal(t, models.PaidState, trans.Status)
 			assert.Equal(t, 1, loginCount, "too many login calls")
 			assert.Equal(t, 2, paymentCount, "too many payment calls")
 		})
@@ -388,6 +392,10 @@ func TestPaymentCreate(t *testing.T) {
 		defer stripe.SetBackend(stripe.APIBackend, nil)
 
 		test := NewRouteTest(t)
+		test.Data.firstOrder.PaymentState = models.PendingState
+		rsp := test.DB.Save(test.Data.firstOrder)
+		require.NoError(t, rsp.Error, "Failed to update order")
+
 		params := &stripePaymentParams{
 			Amount:      test.Data.firstOrder.Total,
 			Currency:    test.Data.firstOrder.Currency,
@@ -400,9 +408,9 @@ func TestPaymentCreate(t *testing.T) {
 
 		recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
 
-		rsp := models.Transaction{}
-		extractPayload(t, http.StatusOK, recorder, &rsp)
-		assert.Equal(t, models.PaidState, rsp.Status)
+		trans := models.Transaction{}
+		extractPayload(t, http.StatusOK, recorder, &trans)
+		assert.Equal(t, models.PaidState, trans.Status)
 		assert.Equal(t, 1, callCount)
 	})
 }

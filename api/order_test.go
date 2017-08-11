@@ -366,6 +366,10 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 func TestOrderUpdate(t *testing.T) {
 	t.Run("FieldsUpdate", func(t *testing.T) {
 		test := NewRouteTest(t)
+		test.Data.firstOrder.PaymentState = models.PendingState
+		rsp := test.DB.Save(test.Data.firstOrder)
+		require.NoError(t, rsp.Error, "Failed to update email")
+
 		op := &orderRequestParams{
 			Email:    "mrfreeze@dc.com",
 			Currency: "monopoly-dollars",
@@ -379,7 +383,7 @@ func TestOrderUpdate(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
 
 		saved := new(models.Order)
-		rsp := test.DB.Preload("LineItems").First(saved, "id = ?", test.Data.firstOrder.ID)
+		rsp = test.DB.Preload("LineItems").First(saved, "id = ?", test.Data.firstOrder.ID)
 		require.False(t, rsp.RecordNotFound())
 
 		assert.Equal("mrfreeze@dc.com", rspOrder.Email)
