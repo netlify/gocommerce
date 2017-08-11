@@ -136,7 +136,7 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 	go func() {
 		id := uuid.NewRandom().String()
 		sem := make(chan bool, maxConcurrentHooks)
-		table := db.NewScope(Hook{}).QuotedTableName()
+		table := Hook{}.TableName()
 		client := &http.Client{}
 		for {
 			hooks := []*Hook{}
@@ -148,7 +148,9 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 				Updates(map[string]interface{}{"locked_at": now, "locked_by": id})
 
 			tx.Where("locked_by = ?", id).Find(&hooks)
-			tx.Commit()
+			if rsp := tx.Commit(); rsp.Error != nil {
+				log.WithError(rsp.Error).Error("Error querying for hooks")
+			}
 
 			for _, hook := range hooks {
 				sem <- true

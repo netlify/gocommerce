@@ -52,11 +52,12 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 }
 
 func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	query = addFilters(query, query.NewScope(models.User{}).QuotedTableName(), params, []string{
+	userTable := query.NewScope(models.User{}).QuotedTableName()
+	query = addFilters(query, userTable, params, []string{
 		"id",
 	})
 
-	query = addLikeFilters(query, query.NewScope(models.User{}).QuotedTableName(), params, []string{
+	query = addLikeFilters(query, userTable, params, []string{
 		"email",
 	})
 
@@ -80,17 +81,16 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		}
 	}
 
+	addressTable := query.NewScope(models.Address{}).QuotedTableName()
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
+
 	if billingCountries := params.Get("billing_countries"); billingCountries != "" {
-		addressTable := query.NewScope(models.Address{}).QuotedTableName()
-		orderTable := query.NewScope(models.Order{}).QuotedTableName()
 		statement := "JOIN " + addressTable + " as billing_address on billing_address.id = " +
 			orderTable + ".billing_address_id AND " + "billing_address.country in (?)"
 		query = query.Joins(statement, strings.Split(billingCountries, ","))
 	}
 
 	if shippingCountries := params.Get("shipping_countries"); shippingCountries != "" {
-		addressTable := query.NewScope(models.Address{}).QuotedTableName()
-		orderTable := query.NewScope(models.Order{}).QuotedTableName()
 		statement := "JOIN " + addressTable + " as shipping_address on shipping_address.id = " +
 			orderTable + ".shipping_address_id AND " + "shipping_address.country in (?)"
 		query = query.Joins(statement, strings.Split(shippingCountries, ","))
@@ -121,12 +121,11 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	}
 
 	if email := params.Get("email"); email != "" {
-		query = query.Where(query.NewScope(models.Order{}).QuotedTableName()+".email LIKE ?", "%"+email+"%")
+		query = query.Where(orderTable+".email LIKE ?", "%"+email+"%")
 	}
 
 	if items := params.Get("items"); items != "" {
 		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
-		orderTable := query.NewScope(models.Order{}).QuotedTableName()
 		statement := "JOIN " + lineItemTable + " as line_item on line_item.order_id = " +
 			orderTable + ".id AND line_item.title LIKE ?"
 		query = query.Joins(statement, "%"+items+"%")
