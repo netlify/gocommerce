@@ -136,7 +136,7 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 	go func() {
 		id := uuid.NewRandom().String()
 		sem := make(chan bool, maxConcurrentHooks)
-		table := Hook{}.TableName()
+		table := db.NewScope(Hook{}).QuotedTableName()
 		client := &http.Client{}
 		for {
 			hooks := []*Hook{}

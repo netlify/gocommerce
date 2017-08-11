@@ -53,8 +53,8 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 
 // ProductsReport list the products sold within a period
 func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
-	ordersTable := models.Order{}.TableName()
-	itemsTable := models.LineItem{}.TableName()
+	ordersTable := a.db.NewScope(models.Order{}).QuotedTableName()
+	itemsTable := a.db.NewScope(models.LineItem{}).QuotedTableName()
 	query := a.db.
 		Model(&models.LineItem{}).
 		Select("sku, path, sum(quantity * price) as total, currency").

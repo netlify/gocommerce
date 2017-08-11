@@ -164,8 +164,15 @@ func setupTestData() *TestData {
 		Path:        "/i/believe/i/can/fly",
 	}
 
+	firstDownload := models.Download{
+		Title: firstLineItem.Title,
+		Sku:   firstLineItem.Sku,
+		ID:    "first-download",
+	}
+
 	firstOrder.ID = "first-order"
 	firstOrder.LineItems = []*models.LineItem{firstLineItem}
+	firstOrder.Downloads = []models.Download{firstDownload}
 	firstOrder.CalculateTotal(&calculator.Settings{}, nil)
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress

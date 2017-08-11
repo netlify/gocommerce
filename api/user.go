@@ -43,8 +43,8 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 	log.Debug("Parsed url params")
 
 	var users []models.User
-	orderTable := models.Order{}.TableName()
-	userTable := models.User{}.TableName()
+	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
+	userTable := a.db.NewScope(models.User{}).QuotedTableName()
 	query = query.
 		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = orders.user_id").
 		Select(userTable + ".id, " + userTable + ".email, " + userTable + ".created_at, " + userTable + ".updated_at, count(orders.id) as order_count").

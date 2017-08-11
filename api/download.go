@@ -103,8 +103,8 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	orderTable := models.Order{}.TableName()
-	downloadsTable := models.Download{}.TableName()
+	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
+	downloadsTable := a.db.NewScope(models.Download{}).QuotedTableName()
 
 	query := a.db.Joins("join " + orderTable + " as orders ON " + downloadsTable + ".order_id = orders.id and orders.payment_state = 'paid'")
 	if order != nil {
@@ -119,7 +119,6 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	var downloads []models.Download
-	query.LogMode(true)
 	if result := query.Offset(offset).Limit(limit).Find(&downloads); result.Error != nil {
 		return internalServerError("Error during database query").WithInternalError(err)
 	}
