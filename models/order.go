@@ -78,7 +78,7 @@ type Order struct {
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"-" sql:"index"`
+	DeletedAt *time.Time `json:"-" sql:"index:idx_orders_deleted_at"`
 }
 
 // TableName returns the database table name for the Order model.
