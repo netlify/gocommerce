@@ -235,13 +235,13 @@ func loadTestData(t *testing.T, db *gorm.DB) *TestData {
 	require.NoError(t, db.Create(&testData.testAddress).Error)
 
 	require.NoError(t, db.Create(testData.firstLineItem).Error)
-	require.NoError(t, db.Create(testData.firstTransaction).Error)
 	require.NoError(t, db.Create(testData.firstOrder).Error)
+	require.NoError(t, db.Create(testData.firstTransaction).Error)
 
 	require.NoError(t, db.Create(testData.secondLineItem1).Error)
 	require.NoError(t, db.Create(testData.secondLineItem2).Error)
-	require.NoError(t, db.Create(testData.secondTransaction).Error)
 	require.NoError(t, db.Create(testData.secondOrder).Error)
+	require.NoError(t, db.Create(testData.secondTransaction).Error)
 	return testData
 }
 

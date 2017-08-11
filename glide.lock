@@ -1,5 +1,5 @@
-hash: d8b5996b295302f678b4559566ba9bcbdb639d4bc3ef033f1ee6b5eb65577d07
-updated: 2017-07-24T11:21:56.156568708-04:00
+hash: 999929e1f25b42ca3bda82a3ccf77a87c77e3ec36f824834d2eb5fdf7a235d6b
+updated: 2017-08-10T19:59:17.063825366-04:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -27,11 +27,11 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jinzhu/gorm
-  version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
+  version: 6f64b8610da6d5214e9197ed3c1bf8ecf8983c89
 - name: github.com/jinzhu/inflection
   version: 1c35d901db3da928c72a72d8458480cc9ade058f
 - name: github.com/lib/pq
-  version: ca5bc43047f2138703da0f3d3ca89a59f3d597f1
+  version: e42267488fe361b9dc034be7a6bffef5b195bceb
   subpackages:
   - oid
 - name: github.com/logpacker/PayPal-Go-SDK
@@ -39,7 +39,7 @@ imports:
 - name: github.com/magiconair/properties
   version: be5ece7dd465ab0765a9682137865547526d1dfb
 - name: github.com/mattes/vat
-  version: 805d21ad07390288471b830934b4c08304774dc6
+  version: 7e3ac83b1a993ff072fd515900f470fa3b42f39f
 - name: github.com/mattn/go-sqlite3
   version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
@@ -47,7 +47,7 @@ imports:
 - name: github.com/netlify/mailme
   version: 3b136431fdebea1d886bbd1a30b23c43e2d8b4d0
 - name: github.com/netlify/netlify-commons
-  version: f68ed34018cacf559b24b1ebe0a1007e938b8f5c
+  version: 2d430710535c15be9658d227e658e70f87f605c8
   subpackages:
   - graceful
 - name: github.com/pborman/uuid
@@ -57,7 +57,7 @@ imports:
 - name: github.com/pkg/errors
   version: 645ef00459ed84a119197bfb8d8205042c6df63d
 - name: github.com/PuerkitoBio/goquery
-  version: e1271ee34c6a305e38566ecd27ae374944907ee9
+  version: 8806ada2a4ab225c06e9106f9631be80932db7ce
 - name: github.com/rs/cors
   version: 8dd4211afb5d08dbb39a533b9bb9e4b486351df6
 - name: github.com/sirupsen/logrus
@@ -71,13 +71,13 @@ imports:
 - name: github.com/spf13/cast
   version: acbeb36b902d72a7a4c18e8f3241075e7ab763e4
 - name: github.com/spf13/cobra
-  version: fcd0c5a1df88f5d6784cb4feead962c3f3d0b66c
+  version: b26b538f693051ac6518e65672de3144ce3fbedc
 - name: github.com/spf13/jwalterweatherman
   version: 0efa5202c04663c757d84f90f5219c1250baf94f
 - name: github.com/spf13/pflag
   version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
 - name: github.com/spf13/viper
-  version: 7538d73b4eb9511d85a9f1dfef202eeb8ac260f4
+  version: 25b30aa063fc18e48662b86996252eabdcf2f0c7
 - name: github.com/stripe/stripe-go
   version: 250fb5fdb3e4001e3388f6410f648ea178b3262e
   subpackages:
@@ -119,16 +119,16 @@ imports:
   - token
   - transfer
 - name: golang.org/x/net
-  version: ab5485076ff3407ad2d02db054635913f017b0ed
+  version: 1c05540f6879653db88113bc4a2b70aec4bd491f
   subpackages:
   - html
   - html/atom
 - name: golang.org/x/sys
-  version: c4489faa6e5ab84c0ef40d6ee878f7a030281f0f
+  version: e42485b6e20ae7d2304ec72e535b103ed350cc02
   subpackages:
   - unix
 - name: golang.org/x/text
-  version: 836efe42bb4aa16aaa17b9c155d8813d336ed720
+  version: b19bf474d317b857955b12035d2c5acb57ce8b01
   subpackages:
   - transform
   - unicode/norm

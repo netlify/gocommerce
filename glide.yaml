@@ -6,7 +6,6 @@ import:
 - package: github.com/go-sql-driver/mysql
   version: v1.2
 - package: github.com/jinzhu/gorm
-  version: v1.0
 - package: github.com/lib/pq
 - package: github.com/mattn/go-sqlite3
   version: v1.1.0
@@ -32,7 +31,7 @@ import:
 - package: github.com/sirupsen/logrus
   version: 1.0.2
 - package: github.com/netlify/netlify-commons
-  version: v0.4.0
+  version: v0.4.5
   subpackages:
   - graceful
 testImport:
