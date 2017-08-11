@@ -6,6 +6,7 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 
 	"github.com/jinzhu/gorm"
 
@@ -29,6 +30,10 @@ func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
 	db, err := gorm.Open(config.DB.Driver, config.DB.ConnURL)
 	if err != nil {
 		return nil, errors.Wrap(err, "opening database connection")
+	}
+
+	if logrus.StandardLogger().Level == logrus.DebugLevel {
+		db.LogMode(true)
 	}
 
 	err = db.DB().Ping()
