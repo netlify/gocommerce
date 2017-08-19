@@ -139,6 +139,44 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	return sendJSON(w, http.StatusNoContent, "")
 }
 
+// ReceiptView renders an HTML receipt for an order
+func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	id := gcontext.GetOrderID(ctx)
+	logEntrySetField(r, "order_id", id)
+
+	order := &models.Order{}
+	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
+		if result.RecordNotFound() {
+			return notFoundError("Order not found")
+		}
+		return internalServerError("Error during database query").WithInternalError(result.Error)
+	}
+
+	if !hasOrderAccess(ctx, order) {
+		return unauthorizedError("Order History Requires Authentication")
+	}
+
+	template := chi.URLParam(r, "*")
+
+	mailer := gcontext.GetMailer(ctx)
+	for _, transaction := range order.Transactions {
+		if transaction.Type == models.ChargeTransactionType {
+			transaction.Order = order
+			html, err := mailer.OrderReceivedMailBody(transaction, template)
+			if err != nil {
+				return internalServerError("Error creating receipt").WithInternalError(err)
+			}
+			w.WriteHeader(200)
+			w.Header().Add("Content-Type", "text/html")
+			w.Write([]byte(html))
+			return nil
+		}
+	}
+
+	return notFoundError("Receipt not found")
+}
+
 // ResendOrderReceipt resends the email receipt for an order
 func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()

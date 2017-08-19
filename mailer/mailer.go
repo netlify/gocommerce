@@ -14,6 +14,7 @@ import (
 type Mailer interface {
 	OrderConfirmationMail(transaction *models.Transaction) error
 	OrderReceivedMail(transaction *models.Transaction) error
+	OrderReceivedMailBody(transaction *models.Transaction, templateURL string) (string, error)
 }
 
 type mailer struct {
@@ -124,6 +125,17 @@ func (m *mailer) OrderReceivedMail(transaction *models.Transaction) error {
 			"Transaction": transaction,
 		},
 	)
+}
+
+func (m *mailer) OrderReceivedMailBody(transaction *models.Transaction, templateURL string) (string, error) {
+	if templateURL == "" {
+		templateURL = m.Config.Mailer.Templates.OrderReceived
+	}
+
+	return m.TemplateMailer.MailBody(templateURL, defaultReceivedTemplate, map[string]interface{}{
+		"Order":       transaction.Order,
+		"Transaction": transaction,
+	})
 }
 
 func withDefault(value string, defaultValue string) string {
