@@ -156,8 +156,7 @@ func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
 	if !hasOrderAccess(ctx, order) {
 		return unauthorizedError("Order History Requires Authentication")
 	}
-
-	template := chi.URLParam(r, "*")
+	template := r.URL.Query().Get("template")
 
 	mailer := gcontext.GetMailer(ctx)
 	for _, transaction := range order.Transactions {
