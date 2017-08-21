@@ -1,5 +1,5 @@
-hash: 999929e1f25b42ca3bda82a3ccf77a87c77e3ec36f824834d2eb5fdf7a235d6b
-updated: 2017-08-21T01:22:39.05407143-07:00
+hash: 4057aaf00bdd99b36c44fd658956554cfb44fd8ec7d7525caee49dc21895205a
+updated: 2017-08-21T01:46:34.972351115-07:00
 imports:
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
@@ -45,7 +45,7 @@ imports:
 - name: github.com/mitchellh/mapstructure
   version: d0303fe809921458f417bcf828397a65db30a7e4
 - name: github.com/netlify/mailme
-  version: 3b136431fdebea1d886bbd1a30b23c43e2d8b4d0
+  version: c4a76ce443c1122ead2518b28cc7ffaf1091cc9a
 - name: github.com/netlify/netlify-commons
   version: 2d430710535c15be9658d227e658e70f87f605c8
   subpackages:
