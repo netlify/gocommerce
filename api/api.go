@@ -151,6 +151,7 @@ func (a *API) orderRoutes(r *router) {
 
 		r.Get("/downloads", a.DownloadList)
 		r.Get("/receipt", a.ReceiptView)
+		r.Post("/receipt", a.ResendOrderReceipt)
 	})
 }
 
