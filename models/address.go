@@ -66,8 +66,8 @@ func (a AddressRequest) Validate() error {
 	return nil
 }
 
-// BeforeUpdate database callback.
-func (a *AddressRequest) BeforeUpdate() (err error) {
+// BeforeSave database callback.
+func (a *AddressRequest) BeforeSave() (err error) {
 	a.combineNames()
 	return err
 }

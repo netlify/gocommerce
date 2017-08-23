@@ -106,8 +106,8 @@ func (o *Order) AfterFind() error {
 	return nil
 }
 
-// BeforeUpdate database callback.
-func (o *Order) BeforeUpdate() error {
+// BeforeSave database callback.
+func (o *Order) BeforeSave() error {
 	if o.MetaData != nil {
 		data, err := json.Marshal(o.MetaData)
 		if err != nil {
