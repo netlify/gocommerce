@@ -531,6 +531,10 @@ func TestClaim(t *testing.T) {
 		assert.Len(t, dbOrders, 1)
 		assert.Equal(t, "villian@wayneindustries.com", dbOrders[0].Email)
 		assert.Equal(t, "villian", dbOrders[0].UserID)
+
+		stored := &models.Address{ID: dbOrders[0].BillingAddressID}
+		require.NoError(t, test.DB.First(stored).Error)
+		assert.Equal(t, stored.UserID, dbOrders[0].UserID)
 	})
 
 	t.Run("NoEmail", func(t *testing.T) {
