@@ -272,12 +272,12 @@ func TestOrderView(t *testing.T) {
 // --------------------------------------------------------------------------------------------------------------------
 func TestOrderSetUserIDLogic(t *testing.T) {
 	t.Run("AnonymousUser", func(t *testing.T) {
-		simpleOrder := models.NewOrder("", "session", "params@email.com", "usd")
+		simpleOrder := models.NewOrder("", "session", "params@email.com", "USD")
 		require.NoError(t, setOrderEmail(nil, simpleOrder, nil, testLogger))
 		assert.Equal(t, "params@email.com", simpleOrder.Email)
 	})
 	t.Run("AnonymousUserNoEmail", func(t *testing.T) {
-		simpleOrder := models.NewOrder("", "session", "", "usd")
+		simpleOrder := models.NewOrder("", "session", "", "USD")
 		err := setOrderEmail(nil, simpleOrder, nil, testLogger)
 		require.Error(t, err)
 		assert.Equal(t, http.StatusBadRequest, err.Code)
@@ -285,7 +285,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 	t.Run("NewUserNoEmailOnRequest", func(t *testing.T) {
 		validateNewUserEmail(
 			t,
-			models.NewOrder("", "session", "", "usd"),
+			models.NewOrder("", "session", "", "USD"),
 			testToken("alfred", "alfred@wayne.com").Claims.(*claims.JWTClaims),
 			"alfred@wayne.com",
 			"alfred@wayne.com",
@@ -294,7 +294,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 	t.Run("NewUserNoEmailOnClaim", func(t *testing.T) {
 		validateNewUserEmail(
 			t,
-			models.NewOrder("", "session", "joker@wayne.com", "usd"),
+			models.NewOrder("", "session", "joker@wayne.com", "USD"),
 			testToken("alfred", "").Claims.(*claims.JWTClaims),
 			"",
 			"joker@wayne.com",
@@ -303,7 +303,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 	t.Run("NewUserAllTheEmails", func(t *testing.T) {
 		validateNewUserEmail(
 			t,
-			models.NewOrder("", "session", "joker@wayne.com", "usd"),
+			models.NewOrder("", "session", "joker@wayne.com", "USD"),
 			testToken("alfred", "alfred@wayne.com").Claims.(*claims.JWTClaims),
 			"alfred@wayne.com",
 			"joker@wayne.com",
@@ -311,7 +311,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 	})
 	t.Run("NewUserNoEmails", func(t *testing.T) {
 		db, _, _, _ := db(t)
-		simpleOrder := models.NewOrder("", "session", "", "usd")
+		simpleOrder := models.NewOrder("", "session", "", "USD")
 		claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 		err := setOrderEmail(db, simpleOrder, claims, testLogger)
 		require.Error(t, err)
@@ -322,7 +322,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		validateExistingUserEmail(
 			t,
 			db,
-			models.NewOrder("", "session", "joker@wayne.com", "usd"),
+			models.NewOrder("", "session", "joker@wayne.com", "USD"),
 			testToken(testData.testUser.ID, "").Claims.(*claims.JWTClaims),
 			"joker@wayne.com",
 		)
@@ -332,7 +332,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		validateExistingUserEmail(
 			t,
 			db,
-			models.NewOrder("", "session", "", "usd"),
+			models.NewOrder("", "session", "", "USD"),
 			testToken(testData.testUser.ID, testData.testUser.Email).Claims.(*claims.JWTClaims),
 			testData.testUser.Email,
 		)
@@ -342,7 +342,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		validateExistingUserEmail(
 			t,
 			db,
-			models.NewOrder("", "session", "joker@wayne.com", "usd"),
+			models.NewOrder("", "session", "joker@wayne.com", "USD"),
 			testToken(testData.testUser.ID, testData.testUser.Email).Claims.(*claims.JWTClaims),
 			"joker@wayne.com",
 		)
@@ -352,7 +352,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		validateExistingUserEmail(
 			t,
 			db,
-			models.NewOrder("", "session", "", "usd"),
+			models.NewOrder("", "session", "", "USD"),
 			testToken(testData.testUser.ID, "").Claims.(*claims.JWTClaims),
 			testData.testUser.Email,
 		)

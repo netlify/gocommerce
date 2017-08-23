@@ -207,7 +207,7 @@ func TestUserDelete(t *testing.T) {
 		dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
 		dyingAddr := getTestAddress()
 		dyingAddr.UserID = dyingUser.ID
-		dyingOrder := models.NewOrder("", "session2", dyingUser.Email, "usd")
+		dyingOrder := models.NewOrder("", "session2", dyingUser.Email, "USD")
 		dyingOrder.UserID = dyingUser.ID
 		dyingTransaction := models.NewTransaction(dyingOrder)
 		dyingTransaction.UserID = dyingUser.ID

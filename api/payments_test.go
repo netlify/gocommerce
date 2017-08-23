@@ -194,7 +194,7 @@ func TestPaymentsRefund(t *testing.T) {
 		url := "/payments/" + test.Data.firstTransaction.ID + "/refund"
 		w := runPaymentRefund(test, url, &PaymentParams{
 			Amount:   1000,
-			Currency: "usd",
+			Currency: "USD",
 		})
 		validateError(t, http.StatusBadRequest, w, "must be between 0 and the total amount")
 	})
@@ -260,7 +260,7 @@ func TestPaymentsRefund(t *testing.T) {
 			assert.NotEmpty(t, payment.ID)
 			assert.Equal(t, test.Data.testUser.ID, payment.UserID)
 			assert.EqualValues(t, 1, payment.Amount)
-			assert.Equal(t, "usd", payment.Currency)
+			assert.Equal(t, "USD", payment.Currency)
 			assert.Empty(t, payment.FailureCode)
 			assert.Empty(t, payment.FailureDescription)
 			assert.Equal(t, models.RefundTransactionType, payment.Type)
