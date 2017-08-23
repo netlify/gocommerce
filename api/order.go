@@ -131,6 +131,9 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 
 	for _, o := range orders {
 		o.UserID = user.ID
+		o.BillingAddress.UserID = user.ID
+		o.ShippingAddress.UserID = user.ID
+
 		if res := tx.Save(&o); res.Error != nil {
 			tx.Rollback()
 			return internalServerError("Failed to update an order with user ID %s", user.ID).WithInternalError(res.Error).WithInternalMessage("Failed to update order ID %s", o.ID)
