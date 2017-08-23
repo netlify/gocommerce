@@ -52,6 +52,10 @@ func TestOrderCreate(t *testing.T) {
 		require.NotNil(t, meta, "Expected meta data for line item")
 		_, ok := meta["attendees"]
 		require.True(t, ok, "Line item should have attendees")
+
+		stored := &models.Address{ID: order.BillingAddressID}
+		require.NoError(t, test.DB.First(stored).Error)
+		assert.Equal(t, stored.UserID, order.UserID)
 	})
 
 	t.Run("NameBackwardsCompatible", func(t *testing.T) {
