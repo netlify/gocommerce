@@ -29,7 +29,8 @@ const (
 
 // Order model
 type Order struct {
-	ID string `json:"id"`
+	InstanceID string `json:"-"`
+	ID         string `json:"id"`
 
 	IP string `json:"ip"`
 
@@ -126,12 +127,13 @@ func (o *Order) BeforeUpdate() error {
 }
 
 // NewOrder creates a new pending Order.
-func NewOrder(sessionID, email, currency string) *Order {
+func NewOrder(instanceID, sessionID, email, currency string) *Order {
 	order := &Order{
-		ID:        uuid.NewRandom().String(),
-		SessionID: sessionID,
-		Email:     email,
-		Currency:  currency,
+		InstanceID: instanceID,
+		ID:         uuid.NewRandom().String(),
+		SessionID:  sessionID,
+		Email:      email,
+		Currency:   currency,
 	}
 	order.PaymentState = PendingState
 	order.FulfillmentState = PendingState

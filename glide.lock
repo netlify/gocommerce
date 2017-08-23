@@ -1,6 +1,10 @@
-hash: 4057aaf00bdd99b36c44fd658956554cfb44fd8ec7d7525caee49dc21895205a
-updated: 2017-08-21T01:46:34.972351115-07:00
+hash: ff7ec30853e07fb66c09076dd548003c0b401aa12904495e13a1d0c471f80a58
+updated: 2017-08-23T12:14:42.067440304-04:00
 imports:
+- name: cloud.google.com/go
+  version: 98f5696b1026056a47f114c4451dbc4703d67191
+  subpackages:
+  - compute/metadata
 - name: github.com/andybalholm/cascadia
   version: 349dd0209470eabd9514242c688c403c0926d266
 - name: github.com/dgrijalva/jwt-go
@@ -12,7 +16,20 @@ imports:
   subpackages:
   - middleware
 - name: github.com/go-sql-driver/mysql
-  version: a732e14c62dde3285440047bba97581bc472ae18
+  version: a0583e0143b1624142adab07e0e97fe106d99561
+- name: github.com/golang/protobuf
+  version: ab9f9a6dab164b7d1246e0e688b0ab7b94d8553e
+  subpackages:
+  - proto
+- name: github.com/GoogleCloudPlatform/cloudsql-proxy
+  version: 571947b0f240c8b2fa4d163065e5b155920ddfa9
+  subpackages:
+  - logging
+  - proxy/certs
+  - proxy/dialers/mysql
+  - proxy/dialers/postgres
+  - proxy/proxy
+  - proxy/util
 - name: github.com/hashicorp/hcl
   version: 392dba7d905ed5d04a5794ba89f558b27e2ba1ca
   subpackages:
@@ -24,12 +41,20 @@ imports:
   - json/parser
   - json/scanner
   - json/token
+- name: github.com/imdario/mergo
+  version: 3e95a51e0639b4cf372f2ccf74c86749d747fbdc
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jinzhu/gorm
   version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
 - name: github.com/jinzhu/inflection
   version: 1c35d901db3da928c72a72d8458480cc9ade058f
+- name: github.com/joho/godotenv
+  version: 726cc8b906e3d31c70a9671c90a13716a8d3f50d
+- name: github.com/kelseyhightower/envconfig
+  version: f611eb38b3875cc3bd991ca91c51d06446afa14c
+- name: github.com/kr/logfmt
+  version: b84e30acd515aadc4b783ad4ff83aff3299bdfe0
 - name: github.com/lib/pq
   version: ca5bc43047f2138703da0f3d3ca89a59f3d597f1
   subpackages:
@@ -44,12 +69,24 @@ imports:
   version: 3b3f1d01b2696af5501697c35629048c227586ab
 - name: github.com/mitchellh/mapstructure
   version: d0303fe809921458f417bcf828397a65db30a7e4
+- name: github.com/nats-io/nats
+  version: 61923ed1eaf8398000991fbbee2ef11ab5a5be0d
+  subpackages:
+  - encoders/builtin
+  - util
+- name: github.com/nats-io/nuid
+  version: 3cf34f9fca4e88afa9da8eabd75e3326c9941b44
 - name: github.com/netlify/mailme
   version: c4a76ce443c1122ead2518b28cc7ffaf1091cc9a
 - name: github.com/netlify/netlify-commons
   version: 2d430710535c15be9658d227e658e70f87f605c8
   subpackages:
   - graceful
+  - messaging
+  - metrics
+  - metrics/transport
+  - nconf
+  - tls
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-toml
@@ -60,6 +97,24 @@ imports:
   version: e1271ee34c6a305e38566ecd27ae374944907ee9
 - name: github.com/rs/cors
   version: 8dd4211afb5d08dbb39a533b9bb9e4b486351df6
+- name: github.com/rybit/nats_logrus_hook
+  version: 8d9e8da6aeca6fe5ab668efa91d1ea0722af8d1a
+- name: github.com/sebest/xff
+  version: 6c115e0ffa35d6a2e3f7a9e797c9cf07f0da4b9f
+- name: github.com/signalfx/com_signalfx_metrics_protobuf
+  version: 93e507b42f43f458a109ca278d1542a26a0b87fc
+- name: github.com/signalfx/gohistogram
+  version: 1ccfd2ff508314074672f4450a917011a2060408
+- name: github.com/signalfx/golib
+  version: cb7680940d605b817db79790c241eed2a00fa6e6
+  subpackages:
+  - datapoint
+  - errors
+  - event
+  - eventcounter
+  - log
+  - sfxclient
+  - timekeeper
 - name: github.com/sirupsen/logrus
   version: a3f95b5c423586578a4e099b11a46c2479628cac
   subpackages:
@@ -78,6 +133,8 @@ imports:
   version: e57e3eeb33f795204c1ca35f56c44f83227c6e66
 - name: github.com/spf13/viper
   version: 7538d73b4eb9511d85a9f1dfef202eeb8ac260f4
+- name: github.com/streadway/amqp
+  version: 2cbfe40c9341ad63ba23e53013b3ddc7989d801c
 - name: github.com/stripe/stripe-go
   version: 250fb5fdb3e4001e3388f6410f648ea178b3262e
   subpackages:
@@ -121,8 +178,17 @@ imports:
 - name: golang.org/x/net
   version: ab5485076ff3407ad2d02db054635913f017b0ed
   subpackages:
+  - context
+  - context/ctxhttp
   - html
   - html/atom
+- name: golang.org/x/oauth2
+  version: 9a379c6b3e95a790ffc43293c2a78dee0d7b6e20
+  subpackages:
+  - google
+  - internal
+  - jws
+  - jwt
 - name: golang.org/x/sys
   version: c4489faa6e5ab84c0ef40d6ee878f7a030281f0f
   subpackages:
@@ -132,10 +198,33 @@ imports:
   subpackages:
   - transform
   - unicode/norm
+- name: google.golang.org/api
+  version: dd6bdadc5852eae2d133075a3690d6ad744add48
+  subpackages:
+  - gensupport
+  - googleapi
+  - googleapi/internal/uritemplates
+  - sqladmin/v1beta4
+- name: google.golang.org/appengine
+  version: d9a072cfa7b9736e44311ef77b3e09d804bfa599
+  subpackages:
+  - internal
+  - internal/app_identity
+  - internal/base
+  - internal/datastore
+  - internal/log
+  - internal/modules
+  - internal/remote_api
+  - internal/urlfetch
+  - urlfetch
 - name: gopkg.in/alexcesaro/quotedprintable.v3
   version: 2caba252f4dc53eaf6b553000885530023f54623
 - name: gopkg.in/gomail.v2
   version: 41f3572897373c5538c50a2402db15db079fa4fd
+- name: gopkg.in/logfmt.v0
+  version: 390ab7935ee28ec6b286364bba9b4dd6410cb3d5
+- name: gopkg.in/stack.v1
+  version: 817915b46b97fd7bb80e8ab6b69f01a53ac3eebf
 - name: gopkg.in/yaml.v2
   version: 25c4ec802a7d637f88d584ab26798e94ad14c13b
 testImports:

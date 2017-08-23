@@ -1,6 +1,7 @@
 config.json
 *.db
 gocommerce
+.env
 
 vendor/
 .idea

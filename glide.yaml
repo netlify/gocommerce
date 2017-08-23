@@ -4,7 +4,7 @@ import:
 - package: github.com/dgrijalva/jwt-go
   version: v3.0.0
 - package: github.com/go-sql-driver/mysql
-  version: v1.2
+  version: v1.3
 - package: github.com/jinzhu/gorm
 - package: github.com/lib/pq
 - package: github.com/mattn/go-sqlite3
@@ -14,7 +14,6 @@ import:
 - package: github.com/rs/cors
   version: v1.1
 - package: github.com/spf13/cobra
-- package: github.com/spf13/viper
 - package: github.com/netlify/mailme
   version: c4a76ce443c1122ead2518b28cc7ffaf1091cc9a
 - package: github.com/stripe/stripe-go
@@ -35,6 +34,15 @@ import:
   version: v0.4.5
   subpackages:
   - graceful
+- package: github.com/sebest/xff
+- package: github.com/GoogleCloudPlatform/cloudsql-proxy
+  version: "1.10"
+- package: github.com/joho/godotenv
+  version: v1.1
+- package: github.com/kelseyhightower/envconfig
+  version: v1.3.0
+- package: github.com/imdario/mergo
+  version: 0.2.2
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3

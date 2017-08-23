@@ -2,15 +2,16 @@ package models
 
 import (
 	// this is where we do the connections
+	_ "github.com/GoogleCloudPlatform/cloudsql-proxy/proxy/dialers/mysql"
+	_ "github.com/GoogleCloudPlatform/cloudsql-proxy/proxy/dialers/postgres"
 	_ "github.com/go-sql-driver/mysql"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 
 	"github.com/jinzhu/gorm"
-
 	"github.com/netlify/gocommerce/conf"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // Namespace puts all tables names under a common
@@ -19,15 +20,12 @@ import (
 // want table names to collide.
 var Namespace string
 
-// Configuration defines the info necessary to connect to a storage engine
-type Configuration struct {
-	Driver  string `json:"driver"`
-	ConnURL string `json:"conn_url"`
-}
-
 // Connect will connect to that storage engine
 func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
-	db, err := gorm.Open(config.DB.Driver, config.DB.ConnURL)
+	if config.DB.Dialect == "" {
+		config.DB.Dialect = config.DB.Driver
+	}
+	db, err := gorm.Open(config.DB.Dialect, config.DB.Driver, config.DB.URL)
 	if err != nil {
 		return nil, errors.Wrap(err, "opening database connection")
 	}
@@ -70,6 +68,7 @@ func AutoMigrate(db *gorm.DB) error {
 		Transaction{},
 		User{},
 		Event{},
+		Instance{},
 	)
 	return db.Error
 }

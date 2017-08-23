@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,13 +20,15 @@ func TestTraceWrapper(t *testing.T) {
 	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 
-	api := NewAPI(globalConfig, config, nil)
+	ctx, err := WithInstanceConfig(context.Background(), config, "")
+	require.NoError(t, err)
+	api := NewAPIWithVersion(ctx, globalConfig, nil, "")
 
 	server := httptest.NewServer(api.handler)
 	defer server.Close()
 
 	client := http.Client{}
-	rsp, err := client.Get(server.URL)
+	rsp, err := client.Get(server.URL + "/health")
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rsp.StatusCode)
 	assert.True(t, len(hook.Entries) > 0)
@@ -36,7 +39,7 @@ func TestTraceWrapper(t *testing.T) {
 		}
 		expected := map[string]string{
 			"method": "GET",
-			"path":   "/",
+			"path":   "/health",
 		}
 		for k, v := range expected {
 			if value, ok := entry.Data[k]; ok {

@@ -232,7 +232,7 @@ func TestPaymentsRefund(t *testing.T) {
 		test.Config.Payment.Stripe.SecretKey = "secret"
 
 		provider := &memProvider{name: payments.StripeProvider}
-		ctx, err := withTenantConfig(context.Background(), test.Config)
+		ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
 		require.NoError(t, err)
 		ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
 
@@ -461,7 +461,10 @@ func TestPaymentPreauthorize(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
-			NewAPI(test.GlobalConfig, test.Config, test.DB).handler.ServeHTTP(recorder, req)
+
+			ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
+			require.NoError(t, err)
+			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
 
 			rsp := payments.PreauthorizationResult{}
 			extractPayload(t, http.StatusOK, recorder, &rsp)
@@ -498,7 +501,9 @@ func TestPaymentPreauthorize(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
-			NewAPI(test.GlobalConfig, test.Config, test.DB).handler.ServeHTTP(recorder, req)
+			ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
+			require.NoError(t, err)
+			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
 
 			rsp := payments.PreauthorizationResult{}
 			extractPayload(t, http.StatusOK, recorder, &rsp)

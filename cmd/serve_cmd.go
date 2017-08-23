@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/netlify/gocommerce/api"
@@ -13,30 +14,9 @@ import (
 var serveCmd = cobra.Command{
 	Use:  "serve",
 	Long: "Start API server",
-	Run:  serveCmdFunc,
-}
-
-func serveCmdFunc(cmd *cobra.Command, args []string) {
-	configFile, err := cmd.Flags().GetString("config")
-	if err != nil {
-		logrus.Fatalf("%+v", err)
-	}
-
-	globalConfig, err := conf.LoadGlobal(configFile)
-	if err != nil {
-		logrus.Fatalf("Failed to load core configuration: %+v", err)
-	}
-
-	if globalConfig.DB.Namespace != "" {
-		models.Namespace = globalConfig.DB.Namespace
-	}
-
-	config, err := conf.Load(configFile)
-	if err != nil {
-		logrus.Fatalf("Failed to load instance configuration: %+v", err)
-	}
-
-	serve(globalConfig, config)
+	Run: func(cmd *cobra.Command, args []string) {
+		execWithConfig(cmd, serve)
+	},
 }
 
 func serve(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
@@ -44,13 +24,19 @@ func serve(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
+	defer db.Close()
 
 	bgDB, err := models.Connect(globalConfig)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
+	defer bgDB.Close()
 
-	api := api.NewSingleTenantAPIWithVersion(globalConfig, config, db.Debug(), Version)
+	ctx, err := api.WithInstanceConfig(context.Background(), config, "")
+	if err != nil {
+		logrus.Fatalf("Error loading instance config: %+v", err)
+	}
+	api := api.NewAPIWithVersion(ctx, globalConfig, db, Version)
 
 	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
 	logrus.Infof("GoCommerce API started on: %s", l)

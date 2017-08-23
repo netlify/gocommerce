@@ -87,6 +87,7 @@ func (a *API) withOrderID(w http.ResponseWriter, r *http.Request) (context.Conte
 func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	claims := gcontext.GetClaims(ctx)
 	if claims.Email == "" {
@@ -105,8 +106,9 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	// now find all the order associated with that email
 	query := orderQuery(a.db)
 	query = query.Where(&models.Order{
-		UserID: "",
-		Email:  claims.Email,
+		InstanceID: instanceID,
+		UserID:     "",
+		Email:      claims.Email,
 	})
 
 	orders := []models.Order{}
@@ -117,7 +119,11 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	tx := a.db.Begin()
 
 	// create the user
-	user := models.User{Email: claims.Email, ID: claims.ID}
+	user := models.User{
+		InstanceID: instanceID,
+		ID:         claims.ID,
+		Email:      claims.Email,
+	}
 	if res := tx.FirstOrCreate(&user); res.Error != nil {
 		tx.Rollback()
 		return internalServerError("Failed to create user with ID %s", claims.ID).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
@@ -166,7 +172,7 @@ func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
 			if err != nil {
 				return internalServerError("Error creating receipt").WithInternalError(err)
 			}
-			w.WriteHeader(200)
+			w.WriteHeader(http.StatusOK)
 			w.Header().Add("Content-Type", "text/html")
 			w.Write([]byte(html))
 			return nil
@@ -224,7 +230,7 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
 // And you can filter on
 //  - fullfilment_state=pending   - only orders pending shipping
-//  - payment_state=pending       - only payd orders
+//  - payment_state=pending       - only paid orders
 //  - type=book  - filter on product type
 //  - email
 //  - items
@@ -234,6 +240,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	var err error
 	params := r.URL.Query()
@@ -242,6 +249,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
+	query = query.Where("instance_id = ?", instanceID)
 
 	userID := gcontext.GetUserID(ctx)
 	if userID == "" {
@@ -294,6 +302,7 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	config := gcontext.GetConfig(ctx)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	params := &orderRequestParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
@@ -303,7 +312,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	claims := gcontext.GetClaims(ctx)
-	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
+	order := models.NewOrder(instanceID, params.SessionID, params.Email, params.Currency)
 
 	if params.CouponCode != "" {
 		coupon, err := a.lookupCoupon(ctx, w, params.CouponCode)
@@ -328,7 +337,6 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
 
-	order.Email = params.Email
 	order.IP = r.RemoteAddr
 	order.MetaData = params.MetaData
 	httpError := setOrderEmail(tx, order, claims, log)
@@ -695,15 +703,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 		if order.UserID != loadedAddress.UserID {
 			return nil, badRequestError("Can't update the order to an %v that doesn't belong to the user", name)
 		}
-
-		if loadedAddress.UserID == "" {
-			loadedAddress.UserID = order.UserID
-			tx.Save(loadedAddress)
-		}
 		return loadedAddress, nil
 	}
 
-	// it is a new address we're  making
+	address.UserID = order.UserID
+	// it is a new address we're making
 	if err := address.Validate(); err != nil {
 		return nil, badRequestError("Failed to validate %v: %v", name, err.Error())
 	}

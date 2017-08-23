@@ -40,6 +40,10 @@ func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	userID := gcontext.GetUserID(ctx)
+	user := gcontext.GetUser(ctx)
+	if user == nil {
+		return notFoundError("Couldn't find a record for " + userID)
+	}
 
 	trans, httpErr := queryForTransactions(a.db, log, "user_id = ?", userID)
 	if httpErr != nil {
@@ -189,7 +193,10 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 // PaymentList will list all the payments that meet the criteria. It is only available to admins.
 func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
-	query, err := parsePaymentQueryParams(a.db, r.URL.Query())
+	instanceID := gcontext.GetInstanceID(r.Context())
+	query := a.db.Where("instance_id = ?", instanceID)
+
+	query, err := parsePaymentQueryParams(query, r.URL.Query())
 	if err != nil {
 		return badRequestError("Malformed request: %v", err)
 	}
@@ -203,7 +210,8 @@ func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) error {
 
 // PaymentView returns information about a single payment. It is only available to admins.
 func (a *API) PaymentView(w http.ResponseWriter, r *http.Request) error {
-	trans, httpErr := a.getTransaction(r)
+	payID := chi.URLParam(r, "payment_id")
+	trans, httpErr := a.getTransaction(payID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -221,7 +229,8 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Could not read params: %v", err)
 	}
 
-	trans, httpErr := a.getTransaction(r)
+	payID := chi.URLParam(r, "payment_id")
+	trans, httpErr := a.getTransaction(payID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -262,13 +271,14 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 
 	// ok make the refund
 	m := &models.Transaction{
-		ID:       uuid.NewRandom().String(),
-		Amount:   params.Amount,
-		Currency: params.Currency,
-		UserID:   trans.UserID,
-		OrderID:  trans.OrderID,
-		Type:     models.RefundTransactionType,
-		Status:   models.PendingState,
+		InstanceID: order.InstanceID,
+		ID:         uuid.NewRandom().String(),
+		Amount:     params.Amount,
+		Currency:   params.Currency,
+		UserID:     trans.UserID,
+		OrderID:    trans.OrderID,
+		Type:       models.RefundTransactionType,
+		Status:     models.PendingState,
 	}
 
 	tx := a.db.Begin()
@@ -349,17 +359,14 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
-func (a *API) getTransaction(r *http.Request) (*models.Transaction, *HTTPError) {
-	payID := chi.URLParam(r, "payment_id")
-
-	trans := &models.Transaction{ID: payID}
-	if rsp := a.db.First(trans); rsp.Error != nil {
-		if rsp.RecordNotFound() {
-			return nil, notFoundError("Transaction not found")
-		}
-		return nil, internalServerError("Error while querying for transactions").WithInternalError(rsp.Error)
+func (a *API) getTransaction(payID string) (*models.Transaction, *HTTPError) {
+	trans, err := models.GetTransaction(a.db, payID)
+	if err != nil {
+		return nil, internalServerError("Error while querying for transactions").WithInternalError(err)
 	}
-
+	if trans == nil {
+		return nil, notFoundError("Transaction not found")
+	}
 	return trans, nil
 }
 
