@@ -140,4 +140,11 @@ func (config *Configuration) ApplyDefaults() {
 	if config.JWT.AdminGroupName == "" {
 		config.JWT.AdminGroupName = "admin"
 	}
+
+	if config.Mailer.Templates.OrderConfirmation == "" {
+		config.Mailer.Templates.OrderConfirmation = "/.netlify/gocommerce/templates/order_confirmation.html"
+	}
+	if config.Mailer.Templates.OrderReceived == "" {
+		config.Mailer.Templates.OrderReceived = "/.netlify/gocommerce/templates/order_received.html"
+	}
 }
