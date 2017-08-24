@@ -130,7 +130,7 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 		AllowCredentials: true,
 	})
 
-	api.handler = corsHandler.Handler(chi.ServerBaseContext(r, ctx))
+	api.handler = corsHandler.Handler(chi.ServerBaseContext(ctx, r))
 
 	return api
 }
