@@ -22,7 +22,6 @@ const (
 
 type NetlifyMicroserviceClaims struct {
 	SiteURL    string `json:"site_url"`
-	Env        string `json:"env"`
 	InstanceID string `json:"id"`
 	NetlifyID  string `json:"netlify_id"`
 	jwt.StandardClaims
