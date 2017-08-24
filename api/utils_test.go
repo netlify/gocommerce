@@ -182,6 +182,7 @@ func setupTestData() *TestData {
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress
 	firstOrder.User = testUser
+	firstOrder.CouponCode = "zerodiscount"
 	firstTransaction.ID = "first-trans"
 
 	secondOrder := models.NewOrder("", "session2", testUser.Email, "USD")

@@ -189,6 +189,42 @@ func TestOrdersList(t *testing.T) {
 			extractPayload(t, http.StatusOK, recorder, &orders)
 			assert.Len(t, orders, 1)
 		})
+		t.Run("BillingNameFilterAsTheUser", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := test.Data.testUserToken
+			recorder := test.TestEndpoint(http.MethodGet, "/orders?billing_name=whatname", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 0)
+		})
+		t.Run("ShippingNameFilterAsTheUser", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := test.Data.testUserToken
+			recorder := test.TestEndpoint(http.MethodGet, "/orders?shipping_name=whatname", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 0)
+		})
+		t.Run("ItemTypeFilterAsTheUser", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := test.Data.testUserToken
+			recorder := test.TestEndpoint(http.MethodGet, "/orders?item_type=plane", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 1)
+		})
+		t.Run("CouponCodeFilterAsTheUser", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := test.Data.testUserToken
+			recorder := test.TestEndpoint(http.MethodGet, "/orders?coupon_code=zerodiscount", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 1)
+		})
 	})
 }
 
