@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/imdario/mergo"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/pkg/errors"
@@ -59,13 +58,11 @@ func (i *Instance) Config() (*conf.Configuration, error) {
 		return nil, errors.New("no configuration data available")
 	}
 
-	baseConf := conf.Configuration{}
-	if err := mergo.MergeWithOverwrite(&baseConf, i.BaseConfig); err != nil {
-		return nil, err
-	}
+	baseConf := &conf.Configuration{}
+	*baseConf = *i.BaseConfig
 	baseConf.ApplyDefaults()
 
-	return &baseConf, nil
+	return baseConf, nil
 }
 
 // GetInstance finds an instance by ID

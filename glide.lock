@@ -1,5 +1,5 @@
-hash: ff7ec30853e07fb66c09076dd548003c0b401aa12904495e13a1d0c471f80a58
-updated: 2017-08-23T12:14:42.067440304-04:00
+hash: 7eeb336872ec49085bacddd70568e5a949a5adc57a8fee77a6f5b91af1cc2fc9
+updated: 2017-08-24T11:15:36.759173716-04:00
 imports:
 - name: cloud.google.com/go
   version: 98f5696b1026056a47f114c4451dbc4703d67191
@@ -241,3 +241,4 @@ testImports:
   subpackages:
   - assert
   - require
+  - suite

@@ -49,3 +49,4 @@ testImport:
   subpackages:
   - assert
   - require
+  - suite

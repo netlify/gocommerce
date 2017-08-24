@@ -17,6 +17,12 @@ type DBConfiguration struct {
 	Automigrate bool
 }
 
+// JWTConfiguration holds all the JWT related configuration.
+type JWTConfiguration struct {
+	Secret         string `json:"secret"`
+	AdminGroupName string `json:"admin_group_name" split_words:"true"`
+}
+
 // GlobalConfiguration holds all the global configuration for gocommerce
 type GlobalConfiguration struct {
 	API struct {
@@ -38,12 +44,8 @@ type EmailContentConfiguration struct {
 
 // Configuration holds all the per-tenant configuration for gocommerce
 type Configuration struct {
-	SiteURL string `json:"site_url" split_words:"true"`
-
-	JWT struct {
-		Secret         string `json:"secret"`
-		AdminGroupName string `json:"admin_group_name" split_words:"true"`
-	} `json:"jwt"`
+	SiteURL string           `json:"site_url" split_words:"true"`
+	JWT     JWTConfiguration `json:"jwt"`
 
 	Mailer struct {
 		Host       string                    `json:"host"`
@@ -103,7 +105,7 @@ func loadEnvironment(filename string) error {
 	return err
 }
 
-// LoadGlobal will construct the core config from the file `config.json`
+// LoadGlobal will construct the core config from the file
 func LoadGlobal(filename string) (*GlobalConfiguration, error) {
 	if err := loadEnvironment(filename); err != nil {
 		return nil, err
