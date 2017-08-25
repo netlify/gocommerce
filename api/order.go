@@ -171,7 +171,7 @@ func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
 	for _, transaction := range order.Transactions {
 		if transaction.Type == models.ChargeTransactionType {
 			transaction.Order = order
-			html, err := mailer.OrderReceivedMailBody(transaction, template)
+			html, err := mailer.OrderConfirmationMailBody(transaction, template)
 			if err != nil {
 				return internalServerError("Error creating receipt").WithInternalError(err)
 			}
