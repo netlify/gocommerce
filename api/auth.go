@@ -61,7 +61,7 @@ func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 	}
 
 	log.WithFields(logrus.Fields{
-		"claims_id":    claims.ID,
+		"claims_sub":   claims.Subject,
 		"claims_email": claims.Email,
 		"roles":        roles,
 		"is_admin":     isAdmin,
@@ -91,7 +91,7 @@ func adminRequired(w http.ResponseWriter, r *http.Request) (context.Context, err
 		return nil, unauthorizedError("Admin permissions required")
 	}
 
-	logEntrySetField(r, "admin_id", claims.ID)
+	logEntrySetField(r, "admin_id", claims.Subject)
 	return ctx, nil
 }
 
@@ -101,12 +101,12 @@ func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, 
 	// ensure userID matches authenticated user OR is admin
 	claims := gcontext.GetClaims(ctx)
 	if gcontext.IsAdmin(ctx) {
-		logEntrySetField(r, "admin_id", claims.ID)
+		logEntrySetField(r, "admin_id", claims.Subject)
 		return ctx, nil
 	}
 
 	userID := gcontext.GetUserID(ctx)
-	if claims.ID != userID {
+	if claims.Subject != userID {
 		return nil, unauthorizedError("Can't access a different user unless you're an admin")
 	}
 
@@ -122,5 +122,5 @@ func hasOrderAccess(ctx context.Context, order *models.Order) bool {
 	}
 
 	claims := gcontext.GetClaims(ctx)
-	return claims != nil && order.UserID == claims.ID
+	return claims != nil && order.UserID == claims.Subject
 }

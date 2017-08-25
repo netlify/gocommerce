@@ -77,7 +77,9 @@ func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
 
 func testToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
+		StandardClaims: jwt.StandardClaims{
+			Subject: id,
+		},
 		Email: email,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -85,18 +87,20 @@ func testToken(id, email string) *jwt.Token {
 
 func testExpiredToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
-		Email: email,
 		StandardClaims: jwt.StandardClaims{
+			Subject:   id,
 			ExpiresAt: time.Now().Add(time.Duration(-1) * time.Minute).Unix(),
 		},
+		Email: email,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 }
 
 func testAdminToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
+		StandardClaims: jwt.StandardClaims{
+			Subject: id,
+		},
 		Email: email,
 		AppMetaData: map[string]interface{}{
 			"roles": []interface{}{"admin"},

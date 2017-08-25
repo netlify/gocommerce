@@ -644,28 +644,28 @@ func validateAllOrders(t *testing.T, actual []models.Order, expected *TestData) 
 
 func validateNewUserEmail(t *testing.T, order *models.Order, claims *claims.JWTClaims, expectedUserEmail, expectedOrderEmail string) {
 	db, _, _, _ := db(t)
-	result := db.First(new(models.User), "id = ?", claims.ID)
-	require.True(t, result.RecordNotFound(), "Unclean test env -- user exists with ID "+claims.ID)
+	result := db.First(new(models.User), "id = ?", claims.Subject)
+	require.True(t, result.RecordNotFound(), "Unclean test env -- user exists with ID "+claims.Subject)
 
 	err := setOrderEmail(db, order, claims, testLogger)
 	require.NoError(t, err)
 
 	user := new(models.User)
-	result = db.First(user, "id = ?", claims.ID)
+	result = db.First(user, "id = ?", claims.Subject)
 	require.False(t, result.RecordNotFound())
 	assert := assert.New(t)
-	assert.Equal(claims.ID, user.ID)
-	assert.Equal(claims.ID, order.UserID)
+	assert.Equal(claims.Subject, user.ID)
+	assert.Equal(claims.Subject, order.UserID)
 	assert.Equal(expectedOrderEmail, order.Email)
 	assert.Equal(expectedUserEmail, user.Email)
 
 	db.Unscoped().Delete(user)
-	//t.Logf("Deleted user %s", claims.ID)
+	//t.Logf("Deleted user %s", claims.Subject)
 }
 
 func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, claims *claims.JWTClaims, expectedOrderEmail string) {
 	require.NoError(t, setOrderEmail(db, order, claims, testLogger))
-	assert.Equal(t, claims.ID, order.UserID)
+	assert.Equal(t, claims.Subject, order.UserID)
 	assert.Equal(t, expectedOrderEmail, order.Email)
 }
 

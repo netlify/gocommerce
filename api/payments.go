@@ -66,7 +66,7 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	if !hasOrderAccess(ctx, order) {
-		return unauthorizedError("You don't have access to this order").WithInternalMessage("Attempt to access order as %s, but order.UserID is %s", claims.ID, order.UserID)
+		return unauthorizedError("You don't have access to this order").WithInternalMessage("Attempt to access order as %s, but order.UserID is %s", claims.Subject, order.UserID)
 	}
 
 	// additional check for anonymous orders: only allow admins
@@ -131,7 +131,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	if order.UserID == "" {
 		if token != nil {
 			claims := token.Claims.(*claims.JWTClaims)
-			order.UserID = claims.ID
+			order.UserID = claims.Subject
 			tx.Save(order)
 		}
 	} else {
@@ -140,7 +140,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 			return unauthorizedError("You must be logged in to pay for this order")
 		}
 		claims := token.Claims.(*claims.JWTClaims)
-		if order.UserID != claims.ID {
+		if order.UserID != claims.Subject {
 			tx.Rollback()
 			return unauthorizedError("You must be logged in to pay for this order")
 		}

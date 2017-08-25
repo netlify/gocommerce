@@ -94,12 +94,12 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Must provide an email in the token to claim orders")
 	}
 
-	if claims.ID == "" {
+	if claims.Subject == "" {
 		return badRequestError("Must provide a ID in the token to claim orders")
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"user_id":    claims.ID,
+		"user_id":    claims.Subject,
 		"user_email": claims.Email,
 	})
 
@@ -121,12 +121,12 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	// create the user
 	user := models.User{
 		InstanceID: instanceID,
-		ID:         claims.ID,
+		ID:         claims.Subject,
 		Email:      claims.Email,
 	}
 	if res := tx.FirstOrCreate(&user); res.Error != nil {
 		tx.Rollback()
-		return internalServerError("Failed to create user with ID %s", claims.ID).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
+		return internalServerError("Failed to create user with ID %s", claims.Subject).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
 	}
 
 	for _, o := range orders {
@@ -256,7 +256,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 
 	userID := gcontext.GetUserID(ctx)
 	if userID == "" {
-		userID = claims.ID
+		userID = claims.Subject
 	}
 	if userID != "all" {
 		query = query.Where("user_id = ?", userID)
@@ -561,10 +561,10 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Error saving order updates").WithInternalError(rsp.Error)
 	}
 
-	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
+	models.LogEvent(tx, r.RemoteAddr, claims.Subject, existingOrder.ID, models.EventUpdated, changes)
 	if config.Webhooks.Update != "" {
-		// TODO should this be claims.ID or existingOrder.UserID ?
-		hook := models.NewHook("update", config.Webhooks.Update, claims.ID, config.Webhooks.Secret, existingOrder)
+		// TODO should this be claims.Subject or existingOrder.UserID ?
+		hook := models.NewHook("update", config.Webhooks.Update, claims.Subject, config.Webhooks.Secret, existingOrder)
 		tx.Save(hook)
 	}
 	if rsp := tx.Commit(); rsp.Error != nil {
@@ -586,18 +586,18 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	if claims == nil {
 		log.Debug("No claims provided, proceeding as an anon request")
 	} else {
-		if claims.ID == "" {
-			return badRequestError("Token had an invalid ID: %s", claims.ID)
+		if claims.Subject == "" {
+			return badRequestError("Token had an invalid ID: %s", claims.Subject)
 		}
 
-		log = log.WithField("user_id", claims.ID)
-		order.UserID = claims.ID
+		log = log.WithField("user_id", claims.Subject)
+		order.UserID = claims.Subject
 
 		user := new(models.User)
-		result := tx.First(user, "id = ?", claims.ID)
+		result := tx.First(user, "id = ?", claims.Subject)
 		if result.RecordNotFound() {
-			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.ID)
-			user.ID = claims.ID
+			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.Subject)
+			user.ID = claims.Subject
 			user.Email = claims.Email
 			tx.Create(user)
 		} else if result.Error != nil {
