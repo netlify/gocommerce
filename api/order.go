@@ -259,7 +259,8 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 		userID = claims.Subject
 	}
 	if userID != "all" {
-		query = query.Where("user_id = ?", userID)
+		orderTable := query.NewScope(models.Order{}).QuotedTableName()
+		query = query.Where(orderTable+".user_id = ?", userID)
 	}
 	log.WithField("query_user_id", userID).Debug("URL parsed and query perpared")
 

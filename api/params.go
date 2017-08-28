@@ -72,6 +72,24 @@ func sortField(value string) string {
 	return sortFields[value]
 }
 
+func addAddressFilter(query *gorm.DB, params url.Values, queryField string, dbField string) *gorm.DB {
+	addressTable := query.NewScope(models.Address{}).QuotedTableName()
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
+
+	if billingField := params.Get("billing_" + queryField); billingField != "" {
+		statement := "JOIN " + addressTable + " as billing_address on billing_address.id = " +
+			orderTable + ".billing_address_id AND " + "billing_address." + dbField + " in (?)"
+		query = query.Joins(statement, strings.Split(billingField, ","))
+	}
+
+	if shippingField := params.Get("shipping_" + queryField); shippingField != "" {
+		statement := "JOIN " + addressTable + " as shipping_address on shipping_address.id = " +
+			orderTable + ".shipping_address_id AND " + "shipping_address." + dbField + " in (?)"
+		query = query.Joins(statement, strings.Split(shippingField, ","))
+	}
+	return query
+}
+
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	if tax := params.Get("tax"); tax != "" {
 		if tax == "yes" || tax == "true" {
@@ -81,20 +99,10 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		}
 	}
 
-	addressTable := query.NewScope(models.Address{}).QuotedTableName()
 	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
-	if billingCountries := params.Get("billing_countries"); billingCountries != "" {
-		statement := "JOIN " + addressTable + " as billing_address on billing_address.id = " +
-			orderTable + ".billing_address_id AND " + "billing_address.country in (?)"
-		query = query.Joins(statement, strings.Split(billingCountries, ","))
-	}
-
-	if shippingCountries := params.Get("shipping_countries"); shippingCountries != "" {
-		statement := "JOIN " + addressTable + " as shipping_address on shipping_address.id = " +
-			orderTable + ".shipping_address_id AND " + "shipping_address.country in (?)"
-		query = query.Joins(statement, strings.Split(shippingCountries, ","))
-	}
+	query = addAddressFilter(query, params, "countries", "country")
+	query = addAddressFilter(query, params, "name", "name")
 
 	if values, exists := params["sort"]; exists {
 		for _, value := range values {
@@ -129,6 +137,17 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		statement := "JOIN " + lineItemTable + " as line_item on line_item.order_id = " +
 			orderTable + ".id AND line_item.title LIKE ?"
 		query = query.Joins(statement, "%"+items+"%")
+	}
+
+	if itemType := params.Get("item_type"); itemType != "" {
+		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
+		statement := "JOIN " + lineItemTable + " as line_item on line_item.order_id = " +
+			orderTable + ".id AND line_item.type LIKE ?"
+		query = query.Joins(statement, "%"+itemType+"%")
+	}
+
+	if code := params.Get("coupon_code"); code != "" {
+		query = query.Where(orderTable+".coupon_code LIKE ?", "%"+code+"%")
 	}
 
 	return parseTimeQueryParams(query, params)
