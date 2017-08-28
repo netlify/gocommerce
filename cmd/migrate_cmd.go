@@ -15,13 +15,10 @@ var migrateCmd = cobra.Command{
 	},
 }
 
-func migrate(config *conf.GlobalConfiguration) {
-	db, err := models.Connect(config)
+func migrate(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
+	db, err := models.Connect(globalConfig)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
-
-	if err := models.AutoMigrate(db); err != nil {
-		logrus.Fatalf("Error migrating tables: %+v", err)
-	}
+	defer db.Close()
 }

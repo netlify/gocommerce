@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 
+	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
 
@@ -22,10 +23,12 @@ type productsRow struct {
 
 // SalesReport lists the sales numbers for a period
 func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
+	instanceID := gcontext.GetInstanceID(r.Context())
+
 	query := a.db.
 		Model(&models.Order{}).
 		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency").
-		Where("payment_state = 'paid'").
+		Where("payment_state = 'paid' AND instance_id = ?", instanceID).
 		Group("currency")
 
 	query, err := parseTimeQueryParams(query, r.URL.Query())
@@ -53,6 +56,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 
 // ProductsReport list the products sold within a period
 func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
+	instanceID := gcontext.GetInstanceID(r.Context())
 	ordersTable := a.db.NewScope(models.Order{}).QuotedTableName()
 	itemsTable := a.db.NewScope(models.LineItem{}).QuotedTableName()
 	query := a.db.
@@ -62,6 +66,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 		Group("sku, path, currency").
 		Order("total desc")
 
+	query = query.Where("orders.instance_id = ?", instanceID)
 	from, to, err := getTimeQueryParams(r.URL.Query())
 	if err != nil {
 		return badRequestError(err.Error())

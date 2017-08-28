@@ -12,6 +12,7 @@ import (
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/coupons"
 	"github.com/netlify/gocommerce/mailer"
+	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
 )
 
@@ -31,7 +32,10 @@ const (
 	assetStoreKey      = contextKey("asset_store")
 	paymentProviderKey = contextKey("payment-provider")
 	userIDKey          = contextKey("user_id")
+	userKey            = contextKey("user")
 	orderIDKey         = contextKey("order_id")
+	instanceIDKey      = contextKey("instance_id")
+	instanceKey        = contextKey("instance")
 )
 
 // WithConfig adds the tenant configuration to the context.
@@ -192,6 +196,20 @@ func WithUserID(ctx context.Context, userID string) context.Context {
 	return context.WithValue(ctx, userIDKey, userID)
 }
 
+// GetUser reads the user from the context.
+func GetUser(ctx context.Context) *models.User {
+	u := ctx.Value(userKey)
+	if u == nil {
+		return nil
+	}
+	return u.(*models.User)
+}
+
+// WithUser adds the user to the context.
+func WithUser(ctx context.Context, user *models.User) context.Context {
+	return context.WithValue(ctx, userKey, user)
+}
+
 // GetOrderID reads the order ID from the context.
 func GetOrderID(ctx context.Context) string {
 	id, _ := ctx.Value(orderIDKey).(string)
@@ -201,4 +219,32 @@ func GetOrderID(ctx context.Context) string {
 // WithOrderID adds the order ID to the context.
 func WithOrderID(ctx context.Context, orderID string) context.Context {
 	return context.WithValue(ctx, orderIDKey, orderID)
+}
+
+// WithInstanceID adds the instance id to the context.
+func WithInstanceID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, instanceIDKey, id)
+}
+
+// GetInstanceID reads the instance id from the context.
+func GetInstanceID(ctx context.Context) string {
+	obj := ctx.Value(instanceIDKey)
+	if obj == nil {
+		return ""
+	}
+	return obj.(string)
+}
+
+// WithInstance adds the instance id to the context.
+func WithInstance(ctx context.Context, i *models.Instance) context.Context {
+	return context.WithValue(ctx, instanceKey, i)
+}
+
+// GetInstance reads the instance id from the context.
+func GetInstance(ctx context.Context) *models.Instance {
+	obj := ctx.Value(instanceKey)
+	if obj == nil {
+		return nil
+	}
+	return obj.(*models.Instance)
 }

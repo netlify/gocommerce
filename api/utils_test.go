@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -49,7 +50,7 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration,
 
 	globalConfig, config := testConfig()
 	globalConfig.DB.Driver = "sqlite3"
-	globalConfig.DB.ConnURL = f.Name()
+	globalConfig.DB.URL = f.Name()
 
 	db, err := models.Connect(globalConfig)
 	if err != nil {
@@ -76,7 +77,9 @@ func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
 
 func testToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
+		StandardClaims: jwt.StandardClaims{
+			Subject: id,
+		},
 		Email: email,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -84,18 +87,20 @@ func testToken(id, email string) *jwt.Token {
 
 func testExpiredToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
-		Email: email,
 		StandardClaims: jwt.StandardClaims{
+			Subject:   id,
 			ExpiresAt: time.Now().Add(time.Duration(-1) * time.Minute).Unix(),
 		},
+		Email: email,
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 }
 
 func testAdminToken(id, email string) *jwt.Token {
 	claims := &claims.JWTClaims{
-		ID:    id,
+		StandardClaims: jwt.StandardClaims{
+			Subject: id,
+		},
 		Email: email,
 		AppMetaData: map[string]interface{}{
 			"roles": []interface{}{"admin"},
@@ -144,7 +149,7 @@ func setupTestData() *TestData {
 		User: testUser,
 	}
 
-	firstOrder := models.NewOrder("session1", testUser.Email, "usd")
+	firstOrder := models.NewOrder("", "session1", testUser.Email, "USD")
 	firstOrder.UserID = testUser.ID
 	firstOrder.PaymentProcessor = "stripe"
 	firstOrder.PaymentState = models.PaidState
@@ -179,7 +184,7 @@ func setupTestData() *TestData {
 	firstOrder.User = testUser
 	firstTransaction.ID = "first-trans"
 
-	secondOrder := models.NewOrder("session2", testUser.Email, "usd")
+	secondOrder := models.NewOrder("", "session2", testUser.Email, "USD")
 	secondOrder.UserID = testUser.ID
 	secondOrder.PaymentProcessor = "paypal"
 	secondOrder.PaymentState = models.PaidState
@@ -246,6 +251,9 @@ func loadTestData(t *testing.T, db *gorm.DB) *TestData {
 	require.NoError(t, db.Create(testData.firstLineItem).Error)
 	require.NoError(t, db.Create(testData.firstOrder).Error)
 	require.NoError(t, db.Create(testData.firstTransaction).Error)
+	for _, d := range testData.firstOrder.Downloads {
+		require.NoError(t, db.Create(d).Error)
+	}
 
 	require.NoError(t, db.Create(testData.secondLineItem1).Error)
 	require.NoError(t, db.Create(testData.secondLineItem2).Error)
@@ -339,7 +347,9 @@ func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, toke
 	if token != nil {
 		require.NoError(r.T, signHTTPRequest(req, token, r.Config.JWT.Secret))
 	}
-	NewAPI(r.GlobalConfig, r.Config, r.DB).handler.ServeHTTP(recorder, req)
+	ctx, err := WithInstanceConfig(context.Background(), r.Config, "")
+	require.NoError(r.T, err)
+	NewAPIWithVersion(ctx, r.GlobalConfig, r.DB, "").handler.ServeHTTP(recorder, req)
 
 	return recorder
 }

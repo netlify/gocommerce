@@ -5,18 +5,16 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/pkg/errors"
-
 	"github.com/jinzhu/gorm"
+	"github.com/sebest/xff"
+
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
 
 	"github.com/go-chi/chi"
-	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
-	"github.com/netlify/gocommerce/mailer"
 	"github.com/netlify/netlify-commons/graceful"
 )
 
@@ -51,77 +49,91 @@ func (a *API) ListenAndServe(hostAndPort string) {
 }
 
 // NewAPI instantiates a new REST API using the default version.
-func NewAPI(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB) *API {
-	return NewSingleTenantAPIWithVersion(globalConfig, config, db, defaultVersion)
-}
-
-// NewSingleTenantAPIWithVersion creates a single-tenant version of the REST API
-func NewSingleTenantAPIWithVersion(globalConfig *conf.GlobalConfiguration, config *conf.Configuration, db *gorm.DB, version string) *API {
-	ctx, err := withTenantConfig(context.Background(), config)
-	if err != nil {
-		logrus.WithError(err).Fatal("Failed to get tenant configuration")
-	}
-
-	return NewAPIWithVersion(ctx, globalConfig, db, version)
+func NewAPI(globalConfig *conf.GlobalConfiguration, db *gorm.DB) *API {
+	return NewAPIWithVersion(context.Background(), globalConfig, db, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API.
-func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
+func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
 	api := &API{
-		config:     config,
+		config:     globalConfig,
 		db:         db,
 		httpClient: &http.Client{},
 		version:    version,
 	}
 
+	xffmw, _ := xff.Default()
+
 	r := newRouter()
+	r.UseBypass(xffmw.Handler)
 	r.Use(withRequestID)
 	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
 	r.Use(recoverer)
-	r.Use(api.instanceConfigCtx)
-	r.Use(withToken)
 
-	// endpoints
-	r.Get("/", api.Index)
+	r.Get("/health", api.HealthCheck)
 
-	r.Route("/orders", api.orderRoutes)
-	r.Route("/users", api.userRoutes)
+	r.Route("/", func(r *router) {
+		r.Use(withToken)
+		if globalConfig.MultiInstanceMode {
+			r.Use(api.loadInstanceConfig)
+		}
 
-	r.Route("/downloads", func(r *router) {
-		r.With(authRequired).Get("/", api.DownloadList)
-		r.Get("/{download_id}", api.DownloadURL)
-	})
+		r.Route("/orders", api.orderRoutes)
+		r.Route("/users", api.userRoutes)
 
-	r.Route("/vatnumbers", func(r *router) {
-		r.Get("/{vat_number}", api.VatNumberLookup)
-	})
-
-	r.Route("/payments", func(r *router) {
-		r.Use(adminRequired)
-
-		r.Get("/", api.PaymentList)
-		r.Route("/{payment_id}", func(r *router) {
-			r.Get("/", api.PaymentView)
-			r.With(addGetBody).Post("/refund", api.PaymentRefund)
+		r.Route("/downloads", func(r *router) {
+			r.With(authRequired).Get("/", api.DownloadList)
+			r.Get("/{download_id}", api.DownloadURL)
 		})
+
+		r.Route("/vatnumbers", func(r *router) {
+			r.Get("/{vat_number}", api.VatNumberLookup)
+		})
+
+		r.Route("/payments", func(r *router) {
+			r.Use(adminRequired)
+
+			r.Get("/", api.PaymentList)
+			r.Route("/{payment_id}", func(r *router) {
+				r.Get("/", api.PaymentView)
+				r.With(addGetBody).Post("/refund", api.PaymentRefund)
+			})
+		})
+
+		r.Route("/paypal", func(r *router) {
+			r.With(addGetBody).Post("/", api.PreauthorizePayment)
+		})
+
+		r.Route("/reports", func(r *router) {
+			r.Use(adminRequired)
+
+			r.Get("/sales", api.SalesReport)
+			r.Get("/products", api.ProductsReport)
+		})
+
+		r.Route("/coupons", func(r *router) {
+			r.Get("/{coupon_code}", api.CouponView)
+		})
+
+		r.With(authRequired).Post("/claim", api.ClaimOrders)
 	})
 
-	r.Route("/paypal", func(r *router) {
-		r.With(addGetBody).Post("/", api.PreauthorizePayment)
-	})
+	if globalConfig.MultiInstanceMode {
+		// Operator microservice API
+		r.With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
+		r.Route("/instances", func(r *router) {
+			r.Use(api.verifyOperatorRequest)
 
-	r.Route("/reports", func(r *router) {
-		r.Use(adminRequired)
+			r.Post("/", api.CreateInstance)
+			r.Route("/{instance_id}", func(r *router) {
+				r.Use(api.loadInstance)
 
-		r.Get("/sales", api.SalesReport)
-		r.Get("/products", api.ProductsReport)
-	})
-
-	r.Route("/coupons", func(r *router) {
-		r.Get("/{coupon_code}", api.CouponView)
-	})
-
-	r.With(authRequired).Post("/claim", api.ClaimOrders)
+				r.Get("/", api.GetInstance)
+				r.Put("/", api.UpdateInstance)
+				r.Delete("/", api.DeleteInstance)
+			})
+		})
+	}
 
 	corsHandler := cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE"},
@@ -131,7 +143,6 @@ func NewAPIWithVersion(ctx context.Context, config *conf.GlobalConfiguration, db
 	})
 
 	api.handler = corsHandler.Handler(chi.ServerBaseContext(r, ctx))
-
 	return api
 }
 
@@ -160,7 +171,7 @@ func (a *API) userRoutes(r *router) {
 	r.With(adminRequired).Get("/", a.UserList)
 
 	r.Route("/{user_id}", func(r *router) {
-		r.Use(a.withUserID)
+		r.Use(a.withUser)
 		r.Use(ensureUserAccess)
 
 		r.Get("/", a.UserView)
@@ -184,38 +195,5 @@ func withRequestID(w http.ResponseWriter, r *http.Request) (context.Context, err
 	id := uuid.NewRandom().String()
 	ctx := r.Context()
 	ctx = gcontext.WithRequestID(ctx, id)
-	return ctx, nil
-}
-
-func (a *API) instanceConfigCtx(w http.ResponseWriter, r *http.Request) (context.Context, error) {
-	ctx := r.Context()
-	if gcontext.GetPaymentProviders(ctx) == nil {
-		return nil, internalServerError("No payment providers configured")
-	}
-	return ctx, nil
-}
-
-func withTenantConfig(ctx context.Context, config *conf.Configuration) (context.Context, error) {
-	ctx = gcontext.WithConfig(ctx, config)
-	ctx = gcontext.WithCoupons(ctx, config)
-
-	mailer := mailer.NewMailer(config)
-	ctx = gcontext.WithMailer(ctx, mailer)
-
-	store, err := assetstores.NewStore(config)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error initializing asset store")
-	}
-	ctx = gcontext.WithAssetStore(ctx, store)
-
-	provs, err := createPaymentProviders(config)
-	if err != nil {
-		return nil, errors.Wrap(err, "error creating payment providers")
-	}
-	if len(provs) == 0 {
-		return nil, errors.Wrap(err, "No payment providers enabled")
-	}
-	ctx = gcontext.WithPaymentProviders(ctx, provs)
-
 	return ctx, nil
 }

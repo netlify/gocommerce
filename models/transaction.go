@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 )
 
@@ -14,9 +15,10 @@ const RefundTransactionType = "refund"
 
 // Transaction is an transaction with a payment provider
 type Transaction struct {
-	ID      string `json:"id"`
-	Order   *Order `json:"-"`
-	OrderID string `json:"order_id"`
+	InstanceID string `json:"-"`
+	ID         string `json:"id"`
+	Order      *Order `json:"-"`
+	OrderID    string `json:"order_id"`
 
 	ProcessorID string `json:"processor_id"`
 
@@ -44,13 +46,25 @@ func (Transaction) TableName() string {
 // NewTransaction returns a new transaction for an order
 func NewTransaction(order *Order) *Transaction {
 	return &Transaction{
-		ID:       uuid.NewRandom().String(),
-		Order:    order,
-		OrderID:  order.ID,
-		User:     order.User,
-		UserID:   order.UserID,
-		Currency: order.Currency,
-		Amount:   order.Total,
-		Type:     ChargeTransactionType,
+		InstanceID: order.InstanceID,
+		ID:         uuid.NewRandom().String(),
+		Order:      order,
+		OrderID:    order.ID,
+		User:       order.User,
+		UserID:     order.UserID,
+		Currency:   order.Currency,
+		Amount:     order.Total,
+		Type:       ChargeTransactionType,
 	}
+}
+
+func GetTransaction(db *gorm.DB, id string) (*Transaction, error) {
+	trans := &Transaction{ID: id}
+	if rsp := db.First(trans); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			return nil, nil
+		}
+		return nil, rsp.Error
+	}
+	return trans, nil
 }

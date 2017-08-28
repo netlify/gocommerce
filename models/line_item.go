@@ -45,8 +45,8 @@ func (LineItem) TableName() string {
 	return tableName("line_items")
 }
 
-// BeforeUpdate database callback.
-func (i *LineItem) BeforeUpdate() error {
+// BeforeSave database callback.
+func (i *LineItem) BeforeSave() error {
 	if len(i.MetaData) == 0 {
 		i.RawMetaData = ""
 		return nil

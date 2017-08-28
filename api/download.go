@@ -68,7 +68,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 
 	tx := a.db.Begin()
 	tx.Model(download).Updates(map[string]interface{}{"download_count": gorm.Expr("download_count + 1")})
-	models.LogEvent(tx, r.RemoteAddr, claims.ID, order.ID, models.EventUpdated, []string{"download"})
+	models.LogEvent(tx, r.RemoteAddr, claims.Subject, order.ID, models.EventUpdated, []string{"download"})
 	tx.Commit()
 
 	return sendJSON(w, http.StatusOK, download)
@@ -110,7 +110,7 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	if order != nil {
 		query = query.Where("orders.id = ?", order.ID)
 	} else {
-		query = query.Where("orders.user_id = ?", claims.ID)
+		query = query.Where("orders.user_id = ?", claims.Subject)
 	}
 
 	offset, limit, err := paginate(w, r, query.Model(&models.Download{}))

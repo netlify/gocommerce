@@ -87,26 +87,28 @@ func (a *API) withOrderID(w http.ResponseWriter, r *http.Request) (context.Conte
 func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	claims := gcontext.GetClaims(ctx)
 	if claims.Email == "" {
 		return badRequestError("Must provide an email in the token to claim orders")
 	}
 
-	if claims.ID == "" {
+	if claims.Subject == "" {
 		return badRequestError("Must provide a ID in the token to claim orders")
 	}
 
 	log = log.WithFields(logrus.Fields{
-		"user_id":    claims.ID,
+		"user_id":    claims.Subject,
 		"user_email": claims.Email,
 	})
 
 	// now find all the order associated with that email
 	query := orderQuery(a.db)
 	query = query.Where(&models.Order{
-		UserID: "",
-		Email:  claims.Email,
+		InstanceID: instanceID,
+		UserID:     "",
+		Email:      claims.Email,
 	})
 
 	orders := []models.Order{}
@@ -117,14 +119,21 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	tx := a.db.Begin()
 
 	// create the user
-	user := models.User{Email: claims.Email, ID: claims.ID}
+	user := models.User{
+		InstanceID: instanceID,
+		ID:         claims.Subject,
+		Email:      claims.Email,
+	}
 	if res := tx.FirstOrCreate(&user); res.Error != nil {
 		tx.Rollback()
-		return internalServerError("Failed to create user with ID %s", claims.ID).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
+		return internalServerError("Failed to create user with ID %s", claims.Subject).WithInternalError(res.Error).WithInternalMessage("Failed to create new user: %+v", user)
 	}
 
 	for _, o := range orders {
 		o.UserID = user.ID
+		o.BillingAddress.UserID = user.ID
+		o.ShippingAddress.UserID = user.ID
+
 		if res := tx.Save(&o); res.Error != nil {
 			tx.Rollback()
 			return internalServerError("Failed to update an order with user ID %s", user.ID).WithInternalError(res.Error).WithInternalMessage("Failed to update order ID %s", o.ID)
@@ -166,7 +175,7 @@ func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
 			if err != nil {
 				return internalServerError("Error creating receipt").WithInternalError(err)
 			}
-			w.WriteHeader(200)
+			w.WriteHeader(http.StatusOK)
 			w.Header().Add("Content-Type", "text/html")
 			w.Write([]byte(html))
 			return nil
@@ -224,7 +233,7 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 //  - sort asc or desc    &sort=[asc | desc] - default = desc
 // And you can filter on
 //  - fullfilment_state=pending   - only orders pending shipping
-//  - payment_state=pending       - only payd orders
+//  - payment_state=pending       - only paid orders
 //  - type=book  - filter on product type
 //  - email
 //  - items
@@ -234,6 +243,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	var err error
 	params := r.URL.Query()
@@ -242,10 +252,11 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
+	query = query.Where("instance_id = ?", instanceID)
 
 	userID := gcontext.GetUserID(ctx)
 	if userID == "" {
-		userID = claims.ID
+		userID = claims.Subject
 	}
 	if userID != "all" {
 		query = query.Where("user_id = ?", userID)
@@ -294,6 +305,7 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	config := gcontext.GetConfig(ctx)
+	instanceID := gcontext.GetInstanceID(ctx)
 
 	params := &orderRequestParams{Currency: "USD"}
 	jsonDecoder := json.NewDecoder(r.Body)
@@ -303,7 +315,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	claims := gcontext.GetClaims(ctx)
-	order := models.NewOrder(params.SessionID, params.Email, params.Currency)
+	order := models.NewOrder(instanceID, params.SessionID, params.Email, params.Currency)
 
 	if params.CouponCode != "" {
 		coupon, err := a.lookupCoupon(ctx, w, params.CouponCode)
@@ -328,7 +340,6 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	}).Debug("Created order, starting to process request")
 	tx := a.db.Begin()
 
-	order.Email = params.Email
 	order.IP = r.RemoteAddr
 	order.MetaData = params.MetaData
 	httpError := setOrderEmail(tx, order, claims, log)
@@ -550,10 +561,10 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Error saving order updates").WithInternalError(rsp.Error)
 	}
 
-	models.LogEvent(tx, r.RemoteAddr, claims.ID, existingOrder.ID, models.EventUpdated, changes)
+	models.LogEvent(tx, r.RemoteAddr, claims.Subject, existingOrder.ID, models.EventUpdated, changes)
 	if config.Webhooks.Update != "" {
-		// TODO should this be claims.ID or existingOrder.UserID ?
-		hook := models.NewHook("update", config.Webhooks.Update, claims.ID, config.Webhooks.Secret, existingOrder)
+		// TODO should this be claims.Subject or existingOrder.UserID ?
+		hook := models.NewHook("update", config.Webhooks.Update, claims.Subject, config.Webhooks.Secret, existingOrder)
 		tx.Save(hook)
 	}
 	if rsp := tx.Commit(); rsp.Error != nil {
@@ -575,18 +586,18 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	if claims == nil {
 		log.Debug("No claims provided, proceeding as an anon request")
 	} else {
-		if claims.ID == "" {
-			return badRequestError("Token had an invalid ID: %s", claims.ID)
+		if claims.Subject == "" {
+			return badRequestError("Token had an invalid ID: %s", claims.Subject)
 		}
 
-		log = log.WithField("user_id", claims.ID)
-		order.UserID = claims.ID
+		log = log.WithField("user_id", claims.Subject)
+		order.UserID = claims.Subject
 
 		user := new(models.User)
-		result := tx.First(user, "id = ?", claims.ID)
+		result := tx.First(user, "id = ?", claims.Subject)
 		if result.RecordNotFound() {
-			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.ID)
-			user.ID = claims.ID
+			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.Subject)
+			user.ID = claims.Subject
 			user.Email = claims.Email
 			tx.Create(user)
 		} else if result.Error != nil {
@@ -695,15 +706,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 		if order.UserID != loadedAddress.UserID {
 			return nil, badRequestError("Can't update the order to an %v that doesn't belong to the user", name)
 		}
-
-		if loadedAddress.UserID == "" {
-			loadedAddress.UserID = order.UserID
-			tx.Save(loadedAddress)
-		}
 		return loadedAddress, nil
 	}
 
-	// it is a new address we're  making
+	address.UserID = order.UserID
+	// it is a new address we're making
 	if err := address.Validate(); err != nil {
 		return nil, badRequestError("Failed to validate %v: %v", name, err.Error())
 	}

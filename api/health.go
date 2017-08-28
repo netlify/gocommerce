@@ -4,8 +4,8 @@ import (
 	"net/http"
 )
 
-// Index endpoint
-func (a *API) Index(w http.ResponseWriter, r *http.Request) error {
+// HealthCheck endpoint
+func (a *API) HealthCheck(w http.ResponseWriter, r *http.Request) error {
 	return sendJSON(w, http.StatusOK, map[string]string{
 		"version":     a.version,
 		"name":        "GoCommerce",

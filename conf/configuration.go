@@ -1,222 +1,150 @@
 package conf
 
 import (
-	"net/url"
 	"os"
-	"strconv"
-	"strings"
 
-	"bufio"
-
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
+	"github.com/joho/godotenv"
+	"github.com/kelseyhightower/envconfig"
+	"github.com/netlify/netlify-commons/nconf"
 )
+
+// DBConfiguration holds all the database related configuration.
+type DBConfiguration struct {
+	Dialect     string
+	Driver      string `required:"true"`
+	URL         string `envconfig:"DATABASE_URL" required:"true"`
+	Namespace   string
+	Automigrate bool
+}
+
+// JWTConfiguration holds all the JWT related configuration.
+type JWTConfiguration struct {
+	Secret         string `json:"secret"`
+	AdminGroupName string `json:"admin_group_name" split_words:"true"`
+}
 
 // GlobalConfiguration holds all the global configuration for gocommerce
 type GlobalConfiguration struct {
-	DB struct {
-		Driver      string `mapstructure:"driver" json:"driver"`
-		ConnURL     string `mapstructure:"url" json:"url"`
-		Namespace   string `mapstructure:"namespace" json:"namespace"`
-		Automigrate bool   `mapstructure:"automigrate" json:"automigrate"`
-	} `mapstructure:"db" json:"db"`
-
 	API struct {
-		Host string `mapstructure:"host" json:"host"`
-		Port int    `mapstructure:"port" json:"port"`
-	} `mapstructure:"api" json:"api"`
+		Host     string
+		Port     int `envconfig:"PORT" default:"8080"`
+		Endpoint string
+	}
+	DB                DBConfiguration
+	Logging           nconf.LoggingConfig `envconfig:"LOG"`
+	OperatorToken     string              `split_words:"true"`
+	MultiInstanceMode bool
+}
 
-	LogConf struct {
-		Level string `mapstructure:"level"`
-		File  string `mapstructure:"file"`
-	} `mapstructure:"log_conf"`
+// EmailContentConfiguration holds the configuration for emails, both subjects and template URLs.
+type EmailContentConfiguration struct {
+	OrderConfirmation string `json:"order_confirmation" split_words:"true"`
+	OrderReceived     string `json:"order_received" split_words:"true"`
 }
 
 // Configuration holds all the per-tenant configuration for gocommerce
 type Configuration struct {
-	SiteURL string `mapstructure:"site_url" json:"site_url"`
-
-	JWT struct {
-		Secret         string `mapstructure:"secret" json:"secret"`
-		AdminGroupName string `mapstructure:"admin_group_name" json:"admin_group_name"`
-	} `mapstructure:"jwt" json:"jwt"`
+	SiteURL string           `json:"site_url" split_words:"true"`
+	JWT     JWTConfiguration `json:"jwt"`
 
 	Mailer struct {
-		Host       string `mapstructure:"host" json:"host"`
-		Port       int    `mapstructure:"port" json:"port"`
-		User       string `mapstructure:"user" json:"user"`
-		Pass       string `mapstructure:"pass" json:"pass"`
-		AdminEmail string `mapstructure:"admin_email" json:"admin_email"`
-		Subjects   struct {
-			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
-			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
-		} `mapstructure:"subjects" json:"subjects"`
-		Templates struct {
-			OrderConfirmation string `mapstructure:"order_confirmation" json:"order_confirmation"`
-			OrderReceived     string `mapstructure:"order_received" json:"order_received"`
-		} `mapstructure:"templates" json:"templates"`
-	} `mapstructure:"mailer" json:"mailer"`
+		Host       string                    `json:"host"`
+		Port       int                       `json:"port"`
+		User       string                    `json:"user"`
+		Pass       string                    `json:"pass"`
+		AdminEmail string                    `json:"admin_email" split_words:"true"`
+		Subjects   EmailContentConfiguration `json:"subjects"`
+		Templates  EmailContentConfiguration `json:"templates"`
+	} `json:"mailer"`
 
 	Payment struct {
 		Stripe struct {
-			Enabled   bool   `mapstructure:"enabled" json:"enabled"`
-			SecretKey string `mapstructure:"secret_key" json:"secret_key"`
-		} `mapstructure:"stripe" json:"stripe"`
+			Enabled   bool   `json:"enabled"`
+			SecretKey string `json:"secret_key" split_words:"true"`
+		} `json:"stripe"`
 		PayPal struct {
-			Enabled  bool   `mapstructure:"enabled" json:"enabled"`
-			ClientID string `mapstructure:"client_id" json:"client_id"`
-			Secret   string `mapstructure:"secret" json:"secret"`
-			Env      string `mapstructure:"env" json:"env"`
-		} `mapstructure:"paypal" json:"paypal"`
-	} `mapstructure:"payment" json:"payment"`
+			Enabled  bool   `json:"enabled"`
+			ClientID string `json:"client_id" split_words:"true"`
+			Secret   string `json:"secret"`
+			Env      string `json:"env"`
+		} `json:"paypal"`
+	} `json:"payment"`
 
 	Downloads struct {
-		Provider     string `mapstructure:"provider" json:"provider"`
-		NetlifyToken string `mapstructure:"netlify_token" json:"netlify_token"`
-	} `mapstructure:"downloads" json:"downloads"`
+		Provider     string `json:"provider"`
+		NetlifyToken string `json:"netlify_token" split_words:"true"`
+	} `json:"downloads"`
 
 	Coupons struct {
-		URL      string `mapstructure:"url" json:"url"`
-		User     string `mapstructure:"user" json:"user"`
-		Password string `mapstructure:"password" json:"password"`
-	} `mapstructure:"coupons" json:"coupons"`
+		URL      string `json:"url"`
+		User     string `json:"user"`
+		Password string `json:"password"`
+	} `json:"coupons"`
 
 	Webhooks struct {
-		Order   string `mapstructure:"order" json:"order"`
-		Payment string `mapstructure:"payment" json:"payment"`
-		Update  string `mapstructure:"update" json:"update"`
-		Refund  string `mapstructure:"refund" json:"refund"`
+		Order   string `json:"order"`
+		Payment string `json:"payment"`
+		Update  string `json:"update"`
+		Refund  string `json:"refund"`
 
-		Secret string `mapstructure:"secret" json:"secret"`
-	} `mapstructure:"webhooks" json:"webhooks"`
+		Secret string `json:"secret"`
+	} `json:"webhooks"`
 }
 
-// LoadGlobal will construct the core config from the file `config.json`
-func LoadGlobal(configFile string) (*GlobalConfiguration, error) {
-	setupViper(configFile)
-
-	if err := viper.ReadInConfig(); err != nil {
-		_, ok := err.(viper.ConfigFileNotFoundError)
-		if !ok {
-			return nil, errors.Wrap(err, "reading configuration from files")
+func loadEnvironment(filename string) error {
+	var err error
+	if filename != "" {
+		err = godotenv.Load(filename)
+	} else {
+		err = godotenv.Load()
+		// handle if .env file does not exist, this is OK
+		if os.IsNotExist(err) {
+			return nil
 		}
+	}
+	return err
+}
+
+// LoadGlobal will construct the core config from the file
+func LoadGlobal(filename string) (*GlobalConfiguration, error) {
+	if err := loadEnvironment(filename); err != nil {
+		return nil, err
 	}
 
 	config := new(GlobalConfiguration)
-	if err := viper.Unmarshal(config); err != nil {
-		return nil, errors.Wrap(err, "unmarshaling configuration")
+	if err := envconfig.Process("gocommerce", config); err != nil {
+		return nil, err
 	}
-
-	config, err := populateGlobalConfig(config)
-	if err != nil {
-		return nil, errors.Wrap(err, "populate config")
+	if _, err := nconf.ConfigureLogging(&config.Logging); err != nil {
+		return nil, err
 	}
-
-	if err := configureLogging(config); err != nil {
-		return nil, errors.Wrap(err, "configure logging")
-	}
-
-	return validateConfig(config)
+	return config, nil
 }
 
-// Load loads the per-instance configuration from a file
-func Load(configFile string) (*Configuration, error) {
-	setupViper(configFile)
-
-	if err := viper.ReadInConfig(); err != nil {
-		_, ok := err.(viper.ConfigFileNotFoundError)
-		if !ok {
-			return nil, errors.Wrap(err, "reading configuration from files")
-		}
+// LoadConfig loads the per-instance configuration from a file
+func LoadConfig(filename string) (*Configuration, error) {
+	if err := loadEnvironment(filename); err != nil {
+		return nil, err
 	}
 
 	config := new(Configuration)
-	if err := viper.Unmarshal(config); err != nil {
-		return nil, errors.Wrap(err, "unmarshaling configuration")
+	if err := envconfig.Process("gocommerce", config); err != nil {
+		return nil, err
 	}
+	config.ApplyDefaults()
+	return config, nil
+}
 
-	config, err := populateConfig(config)
-	if err != nil {
-		return nil, errors.Wrap(err, "populate config")
-	}
-
+// ApplyDefaults sets defaults for a Configuration
+func (config *Configuration) ApplyDefaults() {
 	if config.JWT.AdminGroupName == "" {
 		config.JWT.AdminGroupName = "admin"
 	}
-	return config, nil
-}
 
-func setupViper(configFile string) {
-	viper.SetConfigType("json")
-
-	if configFile != "" {
-		viper.SetConfigFile(configFile)
-	} else {
-		viper.SetConfigName("config")
-		viper.AddConfigPath("./")                 // ./config.[json | toml]
-		viper.AddConfigPath("$HOME/.gocommerce/") // ~/.gocommerce/config.[json | toml] // Keep the configuration backwards compatible
+	if config.Mailer.Templates.OrderConfirmation == "" {
+		config.Mailer.Templates.OrderConfirmation = "/.netlify/gocommerce/templates/order_confirmation.html"
 	}
-
-	viper.SetEnvPrefix("GOCOMMERCE")
-	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	viper.AutomaticEnv()
-}
-
-func configureLogging(config *GlobalConfiguration) error {
-	// always use the full timestamp
-	logrus.SetFormatter(&logrus.TextFormatter{
-		FullTimestamp:    true,
-		DisableTimestamp: false,
-	})
-
-	// use a file if you want
-	if config.LogConf.File != "" {
-		f, errOpen := os.OpenFile(config.LogConf.File, os.O_RDWR|os.O_APPEND, 0660)
-		if errOpen != nil {
-			return errOpen
-		}
-		logrus.SetOutput(bufio.NewWriter(f))
-		logrus.Infof("Set output file to %s", config.LogConf.File)
+	if config.Mailer.Templates.OrderReceived == "" {
+		config.Mailer.Templates.OrderReceived = "/.netlify/gocommerce/templates/order_received.html"
 	}
-
-	if config.LogConf.Level != "" {
-		level, err := logrus.ParseLevel(config.LogConf.Level)
-		if err != nil {
-			return err
-		}
-		logrus.SetLevel(level)
-		logrus.Debug("Set log level to: " + logrus.GetLevel().String())
-	}
-
-	return nil
-}
-
-func validateConfig(config *GlobalConfiguration) (*GlobalConfiguration, error) {
-	if config.DB.ConnURL == "" && os.Getenv("DATABASE_URL") != "" {
-		config.DB.ConnURL = os.Getenv("DATABASE_URL")
-	}
-
-	if config.DB.Driver == "" && config.DB.ConnURL != "" {
-		u, err := url.Parse(config.DB.ConnURL)
-		if err != nil {
-			return nil, errors.Wrap(err, "parsing db connection url")
-		}
-		config.DB.Driver = u.Scheme
-	}
-
-	if config.API.Port == 0 && os.Getenv("PORT") != "" {
-		port, err := strconv.Atoi(os.Getenv("PORT"))
-		if err != nil {
-			return nil, errors.Wrap(err, "formatting PORT into int")
-		}
-
-		config.API.Port = port
-	}
-
-	if config.API.Port == 0 && config.API.Host == "" {
-		config.API.Port = 8080
-	}
-
-	return config, nil
 }

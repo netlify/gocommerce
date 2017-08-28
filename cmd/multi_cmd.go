@@ -14,25 +14,37 @@ import (
 var multiCmd = cobra.Command{
 	Use:  "multi",
 	Long: "Start multi-tenant API server",
-	Run: func(cmd *cobra.Command, args []string) {
-		execWithConfig(cmd, multi)
-	},
+	Run:  multi,
 }
 
-func multi(config *conf.GlobalConfiguration) {
-	db, err := models.Connect(config)
+func multi(cmd *cobra.Command, args []string) {
+	globalConfig, err := conf.LoadGlobal(configFile)
+	if err != nil {
+		logrus.Fatalf("Failed to load configuration: %+v", err)
+	}
+	if globalConfig.OperatorToken == "" {
+		logrus.Fatal("Operator token secret is required")
+	}
+	if globalConfig.DB.Namespace != "" {
+		models.Namespace = globalConfig.DB.Namespace
+	}
+
+	db, err := models.Connect(globalConfig)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
+	defer db.Close()
 
-	bgDB, err := models.Connect(config)
+	bgDB, err := models.Connect(globalConfig)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
+	defer bgDB.Close()
 
-	api := api.NewAPIWithVersion(context.Background(), config, db.Debug(), Version)
+	globalConfig.MultiInstanceMode = true
+	api := api.NewAPIWithVersion(context.Background(), globalConfig, db.Debug(), Version)
 
-	l := fmt.Sprintf("%v:%v", config.API.Host, config.API.Port)
+	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
 	logrus.Infof("GoCommerce API started on: %s", l)
 
 	models.RunHooks(bgDB, logrus.WithField("component", "hooks"))

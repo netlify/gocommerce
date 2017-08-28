@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
@@ -12,32 +11,42 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) {
-	ctx := r.Context()
-	log := getLogEntry(r)
-	config := gcontext.GetConfig(ctx)
+func extractBearerToken(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
-		log.Info("Making unauthenticated request")
-		return ctx, nil
+		return "", nil
 	}
 
 	matches := bearerRegexp.FindStringSubmatch(authHeader)
 	if len(matches) != 2 {
-		return nil, unauthorizedError("Bad authentication header").WithInternalMessage("Invalid auth header format: %s", authHeader)
+		return "", unauthorizedError("Bad authentication header").WithInternalMessage("Invalid auth header format: %s", authHeader)
 	}
 
-	token, err := jwt.ParseWithClaims(matches[1], &claims.JWTClaims{}, func(token *jwt.Token) (interface{}, error) {
-		if token.Method.Alg() != jwt.SigningMethodHS256.Name {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Method.Alg())
-		}
+	return matches[1], nil
+}
+
+func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+	ctx := r.Context()
+	log := getLogEntry(r)
+	config := gcontext.GetConfig(ctx)
+	bearerToken, err := extractBearerToken(r)
+	if err != nil {
+		return nil, err
+	}
+	if bearerToken == "" {
+		log.Info("Making unauthenticated request")
+		return ctx, nil
+	}
+
+	claims := claims.JWTClaims{}
+	p := jwt.Parser{ValidMethods: []string{jwt.SigningMethodHS256.Name}}
+	token, err := p.ParseWithClaims(bearerToken, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(config.JWT.Secret), nil
 	})
 	if err != nil {
 		return nil, unauthorizedError("Invalid token").WithInternalError(err)
 	}
 
-	claims := token.Claims.(*claims.JWTClaims)
 	isAdmin := false
 	roles, ok := claims.AppMetaData["roles"]
 	if ok {
@@ -52,7 +61,7 @@ func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 	}
 
 	log.WithFields(logrus.Fields{
-		"claims_id":    claims.ID,
+		"claims_sub":   claims.Subject,
 		"claims_email": claims.Email,
 		"roles":        roles,
 		"is_admin":     isAdmin,
@@ -82,7 +91,7 @@ func adminRequired(w http.ResponseWriter, r *http.Request) (context.Context, err
 		return nil, unauthorizedError("Admin permissions required")
 	}
 
-	logEntrySetField(r, "admin_id", claims.ID)
+	logEntrySetField(r, "admin_id", claims.Subject)
 	return ctx, nil
 }
 
@@ -92,12 +101,12 @@ func ensureUserAccess(w http.ResponseWriter, r *http.Request) (context.Context, 
 	// ensure userID matches authenticated user OR is admin
 	claims := gcontext.GetClaims(ctx)
 	if gcontext.IsAdmin(ctx) {
-		logEntrySetField(r, "admin_id", claims.ID)
+		logEntrySetField(r, "admin_id", claims.Subject)
 		return ctx, nil
 	}
 
 	userID := gcontext.GetUserID(ctx)
-	if claims.ID != userID {
+	if claims.Subject != userID {
 		return nil, unauthorizedError("Can't access a different user unless you're an admin")
 	}
 
@@ -113,5 +122,5 @@ func hasOrderAccess(ctx context.Context, order *models.Order) bool {
 	}
 
 	claims := gcontext.GetClaims(ctx)
-	return claims != nil && order.UserID == claims.ID
+	return claims != nil && order.UserID == claims.Subject
 }

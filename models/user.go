@@ -1,11 +1,16 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/jinzhu/gorm"
+)
 
 // User model
 type User struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
+	InstanceID string `json:"-"`
+	ID         string `json:"id"`
+	Email      string `json:"email"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -17,4 +22,15 @@ type User struct {
 // TableName returns the database table name for the User model.
 func (User) TableName() string {
 	return tableName("users")
+}
+
+func GetUser(db *gorm.DB, userID string) (*User, error) {
+	user := &User{ID: userID}
+	if result := db.Find(user); result.Error != nil {
+		if result.RecordNotFound() {
+			return nil, nil
+		}
+		return nil, result.Error
+	}
+	return user, nil
 }

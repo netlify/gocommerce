@@ -17,11 +17,18 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func (a *API) withUserID(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func (a *API) withUser(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	userID := chi.URLParam(r, "user_id")
 	logEntrySetField(r, "user_id", userID)
+	ctx := r.Context()
 
-	ctx := gcontext.WithUserID(r.Context(), userID)
+	if u, err := models.GetUser(a.db, userID); err != nil {
+		return nil, internalServerError("problem while querying for userID: %s", userID).WithInternalError(err)
+	} else if u != nil {
+		ctx = gcontext.WithUser(ctx, u)
+	}
+
+	ctx = gcontext.WithUserID(ctx, userID)
 	return ctx, nil
 }
 
@@ -39,7 +46,6 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
-
 	log.Debug("Parsed url params")
 
 	var users []models.User
@@ -49,6 +55,9 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = orders.user_id").
 		Select(userTable + ".id, " + userTable + ".email, " + userTable + ".created_at, " + userTable + ".updated_at, count(orders.id) as order_count").
 		Group(userTable + ".id")
+
+	instanceID := gcontext.GetInstanceID(r.Context())
+	query = query.Where(userTable+".instance_id = ?", instanceID)
 
 	offset, limit, err := paginate(w, r, query.Model(&models.User{}))
 	if err != nil {
@@ -86,20 +95,8 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := gcontext.GetUserID(ctx)
-
-	user := &models.User{
-		ID: userID,
-	}
-	rsp := a.db.First(user)
-	if rsp.RecordNotFound() {
-		return notFoundError("Couldn't find a record for " + userID)
-	}
-
-	if rsp.Error != nil {
-		return internalServerError("Problem searching for user %s", userID).WithInternalError(rsp.Error)
-	}
-
-	if user.DeletedAt != nil {
+	user := gcontext.GetUser(ctx)
+	if user == nil {
 		return notFoundError("Couldn't find a record for " + userID)
 	}
 
@@ -113,9 +110,9 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := gcontext.GetUserID(ctx)
-
-	if getUser(a.db, userID) == nil {
-		return notFoundError("couldn't find a record for user: " + userID)
+	user := gcontext.GetUser(ctx)
+	if user == nil {
+		return notFoundError("Couldn't find a record for " + userID)
 	}
 
 	addrs := []models.Address{}
@@ -132,9 +129,9 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	addrID := chi.URLParam(r, "addr_id")
 	userID := gcontext.GetUserID(ctx)
-
-	if getUser(a.db, userID) == nil {
-		return notFoundError("couldn't find a record for user: " + userID)
+	user := gcontext.GetUser(ctx)
+	if user == nil {
+		return notFoundError("Couldn't find a record for " + userID)
 	}
 
 	addr := &models.Address{
@@ -157,10 +154,10 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
 	log.Debugf("Starting to delete user %s", userID)
 
-	user := getUser(a.db, userID)
+	user := gcontext.GetUser(ctx)
 	if user == nil {
 		log.Info("attempted to delete non-existent user")
-		return nil // not an error ~ just an action
+		return nil
 	}
 
 	// do a cascading delete
@@ -217,10 +214,10 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	addrID := chi.URLParam(r, "addr_id")
-	userID := gcontext.GetUserID(ctx)
 	log := getLogEntry(r).WithField("addr_id", addrID)
 
-	if getUser(a.db, userID) == nil {
+	user := gcontext.GetUser(ctx)
+	if user == nil {
 		log.Warn("requested non-existent user - not an error b/c it is a delete")
 		return nil
 	}
@@ -241,9 +238,9 @@ func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	userID := gcontext.GetUserID(ctx)
-
-	if getUser(a.db, userID) == nil {
-		return notFoundError("Couldn't find user " + userID)
+	user := gcontext.GetUser(ctx)
+	if user == nil {
+		return notFoundError("Couldn't find a record for " + userID)
 	}
 
 	addrReq := new(models.AddressRequest)
@@ -272,16 +269,6 @@ func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 // -------------------------------------------------------------------------------------------------------------------
 // Helper methods
 // -------------------------------------------------------------------------------------------------------------------
-func getUser(db *gorm.DB, userID string) *models.User {
-	user := &models.User{ID: userID}
-	results := db.Find(user)
-	if results.RecordNotFound() {
-		return nil
-	}
-
-	return user
-}
-
 func tryDelete(tx *gorm.DB, w http.ResponseWriter, log logrus.FieldLogger, userID string, face interface{}) error {
 	typeName := reflect.TypeOf(face).String()
 
