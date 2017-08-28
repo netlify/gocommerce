@@ -16,5 +16,5 @@ func (m *noopMailer) OrderReceivedMail(transaction *models.Transaction) error {
 }
 
 func (m *noopMailer) OrderConfirmationMailBody(transaction *models.Transaction, templateURL string) (string, error) {
-	return "Order Received", nil
+	return "Order Confirmed", nil
 }
