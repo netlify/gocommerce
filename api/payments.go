@@ -151,6 +151,13 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		tx.Rollback()
 		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
+
+	invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
+	if err != nil {
+		tx.Rollback()
+		return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+	}
+
 	tr := models.NewTransaction(order)
 	processorID, err := charge(params.Amount, params.Currency)
 	tr.ProcessorID = processorID
@@ -169,6 +176,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	tx.Create(tr)
 	order.PaymentProcessor = provider.Name()
 	order.PaymentState = models.PaidState
+	order.InvoiceNumber = invoiceNumber
 	tx.Save(order)
 
 	if config.Webhooks.Payment != "" {
