@@ -99,6 +99,10 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		}
 	}
 
+	if invoiceNumber := params.Get("invoice_number"); invoiceNumber != "" {
+		query = query.Where("invoice_number = ?", invoiceNumber)
+	}
+
 	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
 	query = addAddressFilter(query, params, "countries", "country")
