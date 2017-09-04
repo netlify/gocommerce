@@ -25,7 +25,7 @@ func extractBearerToken(r *http.Request) (string, error) {
 	return matches[1], nil
 }
 
-func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) {
+func (a *API) withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) {
 	ctx := r.Context()
 	log := getLogEntry(r)
 	config := gcontext.GetConfig(ctx)
@@ -35,6 +35,11 @@ func withToken(w http.ResponseWriter, r *http.Request) (context.Context, error) 
 	}
 	if bearerToken == "" {
 		log.Info("Making unauthenticated request")
+		return ctx, nil
+	}
+
+	if bearerToken == a.config.OperatorToken {
+		log.Info("Making operator request")
 		return ctx, nil
 	}
 
