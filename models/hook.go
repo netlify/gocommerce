@@ -70,6 +70,7 @@ func (h *Hook) Trigger(client *http.Client, log *logrus.Entry) (*http.Response, 
 	h.Tries++
 	body := bytes.NewBufferString(h.Payload)
 	req, err := http.NewRequest("POST", h.URL, body)
+	req.Header.Set("Content-Type", "application/json")
 	if err != nil {
 		return nil, err
 	}
