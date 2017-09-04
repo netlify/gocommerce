@@ -70,7 +70,6 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
 	r.Use(recoverer)
 
-	r.Get("/", api.Index)
 	r.Get("/health", api.HealthCheck)
 
 	r.Route("/", func(r *router) {
