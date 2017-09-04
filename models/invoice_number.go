@@ -8,8 +8,8 @@ import (
 )
 
 type InvoiceNumber struct {
-	ID     string
-	Number int64
+	InstanceID string `gorm:"primary_key"`
+	Number     int64
 }
 
 // TableName returns the database table name for the LineItem model.
@@ -24,11 +24,12 @@ func NextInvoiceNumber(tx *gorm.DB, instanceID string) (int64, error) {
 		instanceID = "global-instance"
 	}
 
-	if result := tx.Where(InvoiceNumber{ID: instanceID}).Attrs(InvoiceNumber{Number: 0}).FirstOrCreate(&number); result.Error != nil {
+	if result := tx.Where(InvoiceNumber{InstanceID: instanceID}).Attrs(InvoiceNumber{Number: 0}).FirstOrCreate(&number); result.Error != nil {
 		return 0, result.Error
 	}
 
-	if result := tx.Raw("select number from \""+number.TableName()+"\" where id = ? for update", instanceID).Scan(&number); result.Error != nil {
+	numberTable := tx.NewScope(InvoiceNumber{}).QuotedTableName()
+	if result := tx.Raw("select number from "+numberTable+" where id = ? for update", instanceID).Scan(&number); result.Error != nil {
 		if strings.Contains(result.Error.Error(), "syntax error") {
 			log.Println("This DB driver doesn't support select for update, hoping for the best...")
 		} else {
