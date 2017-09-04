@@ -76,7 +76,7 @@ func (h *Hook) Trigger(client *http.Client, log *logrus.Entry) (*http.Response, 
 	if h.Secret != "" {
 		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 			"sub": h.UserID,
-			"exp": time.Now().Add(signatureExpiration),
+			"exp": time.Now().Add(signatureExpiration).Unix(),
 		})
 		tokenString, err := token.SignedString([]byte(h.Secret))
 		if err != nil {
