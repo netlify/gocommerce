@@ -29,8 +29,9 @@ const (
 
 // Order model
 type Order struct {
-	InstanceID string `json:"-"`
-	ID         string `json:"id"`
+	InstanceID    string `json:"-"`
+	ID            string `json:"id"`
+	InvoiceNumber int64  `json:"invoice_number,omitempty"`
 
 	IP string `json:"ip"`
 
