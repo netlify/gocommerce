@@ -10,7 +10,7 @@ Please make sure you understand its [implications and guarantees](https://writin
 
 ## Setting up
 
-See [the example configuration](config.example.json) for an example of how to configure
+See [the example configuration](example.env) for an example of how to configure
 GoCcommerce.
 
 The most important setting is the `site_url`. GoCommerce is always tied to a website,
