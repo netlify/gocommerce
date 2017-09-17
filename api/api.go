@@ -113,8 +113,11 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 		})
 
 		r.Route("/coupons", func(r *router) {
+			r.With(adminRequired).Get("/", api.CouponList)
 			r.Get("/{coupon_code}", api.CouponView)
 		})
+
+		r.With(adminRequired).Get("/settings", api.ViewSettings)
 
 		r.With(authRequired).Post("/claim", api.ClaimOrders)
 	})

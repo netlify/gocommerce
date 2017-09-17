@@ -43,3 +43,22 @@ func (a *API) CouponView(w http.ResponseWriter, r *http.Request) error {
 
 	return sendJSON(w, http.StatusOK, coupon)
 }
+
+// CouponList returns all the coupons for the site. Requires admin permissions
+func (a *API) CouponList(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	log := getLogEntry(r)
+
+	couponCache := gcontext.GetCoupons(ctx)
+	if couponCache == nil {
+		return notFoundError("No coupons available")
+	}
+
+	coupons, err := couponCache.List()
+	if err != nil {
+		log.WithError(err).Errorf("Error loading coupons: %v", err)
+		return internalServerError("Error fetching coupons: %v", err)
+	}
+
+	return sendJSON(w, http.StatusOK, coupons)
+}

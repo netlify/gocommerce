@@ -16,6 +16,7 @@ const cacheTime = 1 * time.Minute
 // Cache is an interface for how to lookup a coupon based upon the code.
 type Cache interface {
 	Lookup(string) (*models.Coupon, error)
+	List() (map[string]*models.Coupon, error)
 }
 
 // CouponNotFound is an error when a coupon could not be found.
@@ -54,17 +55,10 @@ func NewCouponCacheFromURL(config *conf.Configuration) Cache {
 	}
 }
 
-func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
-	if c.coupons != nil && time.Now().Before(c.lastFetch.Add(cacheTime)) {
-		coupon, ok := c.coupons[code]
-		if ok {
-			return coupon, nil
-		}
-		return nil, &CouponNotFound{}
-	}
+func (c *couponCacheFromURL) load() error {
 	req, err := http.NewRequest("GET", c.url, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if c.user != "" {
 		req.SetBasicAuth(c.user, c.password)
@@ -72,18 +66,18 @@ func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Coupon URL returned %v", resp.StatusCode)
+		return fmt.Errorf("Coupon URL returned %v", resp.StatusCode)
 	}
 
 	couponsResponse := &couponsResponse{}
 	decoder := json.NewDecoder(resp.Body)
 	if err := decoder.Decode(couponsResponse); err != nil {
-		return nil, err
+		return err
 	}
 	for key, coupon := range couponsResponse.Coupons {
 		coupon.Code = key
@@ -93,9 +87,34 @@ func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
 	c.coupons = couponsResponse.Coupons
 	c.mutex.Unlock()
 
+	return nil
+}
+
+func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
+	if c.coupons != nil && time.Now().Before(c.lastFetch.Add(cacheTime)) {
+		coupon, ok := c.coupons[code]
+		if ok {
+			return coupon, nil
+		}
+		return nil, &CouponNotFound{}
+	}
+	if err := c.load(); err != nil {
+		return nil, err
+	}
+
 	coupon, ok := c.coupons[code]
 	if ok {
 		return coupon, nil
 	}
 	return nil, &CouponNotFound{}
+}
+
+func (c *couponCacheFromURL) List() (map[string]*models.Coupon, error) {
+	if c.coupons == nil {
+		if err := c.load(); err != nil {
+			return nil, err
+		}
+	}
+
+	return c.coupons, nil
 }

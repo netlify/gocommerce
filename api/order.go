@@ -678,7 +678,7 @@ func (a *API) loadSettings(ctx context.Context) (*calculator.Settings, error) {
 	config := gcontext.GetConfig(ctx)
 
 	settings := &calculator.Settings{}
-	resp, err := a.httpClient.Get(config.SiteURL + "/gocommerce/settings.json")
+	resp, err := a.httpClient.Get(config.SettingsURL())
 	if err != nil {
 		return nil, fmt.Errorf("Error loading site settings: %v", err)
 	}
