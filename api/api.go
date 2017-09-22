@@ -73,10 +73,10 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 	r.Get("/health", api.HealthCheck)
 
 	r.Route("/", func(r *router) {
-		r.Use(api.withToken)
 		if globalConfig.MultiInstanceMode {
 			r.Use(api.loadInstanceConfig)
 		}
+		r.Use(api.withToken)
 
 		r.Route("/orders", api.orderRoutes)
 		r.Route("/users", api.userRoutes)
