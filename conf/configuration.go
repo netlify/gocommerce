@@ -2,6 +2,7 @@ package conf
 
 import (
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
@@ -23,6 +24,15 @@ type JWTConfiguration struct {
 	AdminGroupName string `json:"admin_group_name" split_words:"true"`
 }
 
+type SMTPConfiguration struct {
+	MaxFrequency time.Duration `json:"max_frequency" split_words:"true"`
+	Host         string        `json:"host"`
+	Port         int           `json:"port" default:"587"`
+	User         string        `json:"user"`
+	Pass         string        `json:"pass"`
+	AdminEmail   string        `json:"admin_email" split_words:"true"`
+}
+
 // GlobalConfiguration holds all the global configuration for gocommerce
 type GlobalConfiguration struct {
 	API struct {
@@ -34,6 +44,7 @@ type GlobalConfiguration struct {
 	Logging           nconf.LoggingConfig `envconfig:"LOG"`
 	OperatorToken     string              `split_words:"true"`
 	MultiInstanceMode bool
+	SMTP              SMTPConfiguration `json:"smtp"`
 }
 
 // EmailContentConfiguration holds the configuration for emails, both subjects and template URLs.
@@ -47,11 +58,9 @@ type Configuration struct {
 	SiteURL string           `json:"site_url" split_words:"true"`
 	JWT     JWTConfiguration `json:"jwt"`
 
+	SMTP SMTPConfiguration `json:"smtp"`
+
 	Mailer struct {
-		Host       string                    `json:"host"`
-		Port       int                       `json:"port"`
-		User       string                    `json:"user"`
-		Pass       string                    `json:"pass"`
 		AdminEmail string                    `json:"admin_email" split_words:"true"`
 		Subjects   EmailContentConfiguration `json:"subjects"`
 		Templates  EmailContentConfiguration `json:"templates"`

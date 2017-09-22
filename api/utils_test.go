@@ -348,7 +348,8 @@ func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, toke
 	if token != nil {
 		require.NoError(r.T, signHTTPRequest(req, token, r.Config.JWT.Secret))
 	}
-	ctx, err := WithInstanceConfig(context.Background(), r.Config, "")
+	globalConfig := new(conf.GlobalConfiguration)
+	ctx, err := WithInstanceConfig(context.Background(), globalConfig, r.Config, "")
 	require.NoError(r.T, err)
 	NewAPIWithVersion(ctx, r.GlobalConfig, r.DB, "").handler.ServeHTTP(recorder, req)
 

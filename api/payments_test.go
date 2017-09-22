@@ -19,6 +19,7 @@ import (
 
 	"strings"
 
+	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
@@ -231,8 +232,9 @@ func TestPaymentsRefund(t *testing.T) {
 		test.Config.Payment.Stripe.Enabled = true
 		test.Config.Payment.Stripe.SecretKey = "secret"
 
+		globalConfig := new(conf.GlobalConfiguration)
 		provider := &memProvider{name: payments.StripeProvider}
-		ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
+		ctx, err := WithInstanceConfig(context.Background(), globalConfig, test.Config, "")
 		require.NoError(t, err)
 		ctx = gcontext.WithPaymentProviders(ctx, map[string]payments.Provider{payments.StripeProvider: provider})
 
@@ -462,7 +464,8 @@ func TestPaymentPreauthorize(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, strings.NewReader(form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 
-			ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
+			globalConfig := new(conf.GlobalConfiguration)
+			ctx, err := WithInstanceConfig(context.Background(), globalConfig, test.Config, "")
 			require.NoError(t, err)
 			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
 
@@ -501,7 +504,9 @@ func TestPaymentPreauthorize(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			req := httptest.NewRequest(http.MethodPost, baseURL+testURL, bytes.NewBuffer(body))
 			req.Header.Set("Content-Type", "application/json")
-			ctx, err := WithInstanceConfig(context.Background(), test.Config, "")
+
+			globalConfig := new(conf.GlobalConfiguration)
+			ctx, err := WithInstanceConfig(context.Background(), globalConfig, test.Config, "")
 			require.NoError(t, err)
 			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
 

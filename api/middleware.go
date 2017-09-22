@@ -101,11 +101,14 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 	}
 	logEntrySetField(r, "site_url", config.SiteURL)
 
+	log := getLogEntry(r)
+	log.Info("API config: %v", api.config)
+	log.Info("Instance config: %v", config)
 	if err = mergo.MergeWithOverwrite(config, api.config); err != nil {
 		return nil, internalServerError("Failed to instantiate instance config").WithInternalError(err)
 	}
 
-	ctx, err = WithInstanceConfig(ctx, config, instanceID)
+	ctx, err = WithInstanceConfig(ctx, api.config, config, instanceID)
 	if err != nil {
 		return nil, internalServerError("Error loading instance config").WithInternalError(err)
 	}
@@ -113,12 +116,12 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 	return ctx, nil
 }
 
-func WithInstanceConfig(ctx context.Context, config *conf.Configuration, instanceID string) (context.Context, error) {
+func WithInstanceConfig(ctx context.Context, global *conf.GlobalConfiguration, config *conf.Configuration, instanceID string) (context.Context, error) {
 	ctx = gcontext.WithInstanceID(ctx, instanceID)
 	ctx = gcontext.WithConfig(ctx, config)
 	ctx = gcontext.WithCoupons(ctx, config)
 
-	mailer := mailer.NewMailer(config)
+	mailer := mailer.NewMailer(&global.SMTP, config)
 	ctx = gcontext.WithMailer(ctx, mailer)
 
 	store, err := assetstores.NewStore(config)
