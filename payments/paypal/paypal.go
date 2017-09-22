@@ -22,8 +22,8 @@ type paypalPaymentProvider struct {
 }
 
 type paypalBodyParams struct {
-	PaypalID     string `mapstructure:"paypal_payment_id"`
-	PaypalUserID string `mapstructure:"paypal_user_id"`
+	PaypalID     string `json:"paypal_payment_id"`
+	PaypalUserID string `json:"paypal_user_id"`
 }
 
 // Config contains PayPal-specific configuration for payment providers.

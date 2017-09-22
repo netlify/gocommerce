@@ -554,40 +554,40 @@ func validateAllTransactions(t *testing.T, testData *TestData, trans []models.Tr
 }
 
 type stripePaymentParams struct {
-	Amount      uint64
-	Currency    string
+	Amount      uint64 `json:"amount"`
+	Currency    string `json:"currency"`
 	StripeToken string `json:"stripe_token"`
-	Provider    string
+	Provider    string `json:"provider"`
 }
 
 type paypalPaymentParams struct {
-	Amount       uint64
-	Currency     string
-	PaypalID     string
-	PaypalUserID string
-	Provider     string
+	Amount       uint64 `json:"amount"`
+	Currency     string `json:"currency"`
+	PaypalID     string `json:"paypal_payment_id"`
+	PaypalUserID string `json:"paypal_user_id"`
+	Provider     string `json:"provider"`
 }
 
 type paypalPreauthorizeParams struct {
-	Amount      uint64
-	Currency    string
-	Description string
-	Provider    string
+	Amount      uint64 `json:"amount"`
+	Currency    string `json:"currency"`
+	Description string `json:"description"`
+	Provider    string `json:"provider"`
 }
 
 type paypalAmount struct {
-	Total    string
-	Currency string
+	Total    string `json:"total"`
+	Currency string `json:"currency"`
 }
 
 type paypalTransaction struct {
-	Amount      paypalAmount
-	Description string
+	Amount      paypalAmount `json:"amount"`
+	Description string       `json:"description"`
 }
 
 type paypalPaymentCreateParams struct {
-	Intent       string
-	Transactions []paypalTransaction
+	Intent       string              `json:"intent"`
+	Transactions []paypalTransaction `json:"transactions"`
 }
 
 type memProvider struct {
