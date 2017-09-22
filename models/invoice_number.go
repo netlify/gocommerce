@@ -29,7 +29,7 @@ func NextInvoiceNumber(tx *gorm.DB, instanceID string) (int64, error) {
 	}
 
 	numberTable := tx.NewScope(InvoiceNumber{}).QuotedTableName()
-	if result := tx.Raw("select number from "+numberTable+" where id = ? for update", instanceID).Scan(&number); result.Error != nil {
+	if result := tx.Raw("select number from "+numberTable+" where instance_id = ? for update", instanceID).Scan(&number); result.Error != nil {
 		if strings.Contains(result.Error.Error(), "syntax error") {
 			log.Println("This DB driver doesn't support select for update, hoping for the best...")
 		} else {

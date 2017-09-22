@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
@@ -153,9 +154,12 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 				log.WithError(rsp.Error).Error("Error querying for hooks")
 			}
 
+			var wg sync.WaitGroup
 			for _, hook := range hooks {
 				sem <- true
+				wg.Add(1)
 				go func(hook *Hook) {
+					defer wg.Done()
 					resp, err := hook.Trigger(client, log)
 					hook.LockedAt = nil
 					hook.LockedBy = nil
@@ -170,6 +174,7 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 				}(hook)
 			}
 
+			wg.Wait()
 			time.Sleep(5 * time.Second)
 		}
 	}()
