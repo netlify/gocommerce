@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/imdario/mergo"
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
@@ -100,13 +99,6 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 		config.SiteURL = claims.SiteURL
 	}
 	logEntrySetField(r, "site_url", config.SiteURL)
-
-	log := getLogEntry(r)
-	log.Info("API config: %v", api.config)
-	log.Info("Instance config: %v", config)
-	if err = mergo.MergeWithOverwrite(config, api.config); err != nil {
-		return nil, internalServerError("Failed to instantiate instance config").WithInternalError(err)
-	}
 
 	ctx, err = WithInstanceConfig(ctx, api.config, config, instanceID)
 	if err != nil {
