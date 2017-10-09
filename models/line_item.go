@@ -81,6 +81,11 @@ func (PriceItem) TableName() string {
 	return tableName("price_items")
 }
 
+// ProductSku returns the Sku of the line item to match the calculator.Item interface
+func (i *PriceItem) ProductSku() string {
+	return "" // PriceItems currently can't have a SKU
+}
+
 // PriceInLowestUnit implements part of the calculator.Item interface.
 func (i *PriceItem) PriceInLowestUnit() uint64 {
 	return i.Amount
@@ -161,6 +166,11 @@ type LineItemMetadata struct {
 	Addons    []AddonMetaItem `json:"addons"`
 
 	Webhook string `json:"webhook"`
+}
+
+// ProductSku returns the Sku of the line item to match the calculator.Item interface
+func (i *LineItem) ProductSku() string {
+	return i.Sku
 }
 
 // PriceInLowestUnit implements part of the calculator.Item interface.

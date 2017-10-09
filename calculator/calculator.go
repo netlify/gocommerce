@@ -59,6 +59,7 @@ type MemberDiscount struct {
 	Percentage   uint64                 `json:"percentage"`
 	FixedAmount  []*FixedMemberDiscount `json:"fixed"`
 	ProductTypes []string               `json:"product_types"`
+	Products     []string               `json:"products"`
 }
 
 // ValidForType returns whether a member discount is valid for a product type.
@@ -74,8 +75,22 @@ func (d *MemberDiscount) ValidForType(productType string) bool {
 	return false
 }
 
+// ValidForProduct returns whether a member discount is valid for a product sku
+func (d *MemberDiscount) ValidForProduct(productSku string) bool {
+	if d.Products == nil || len(d.Products) == 0 {
+		return true
+	}
+	for _, validSku := range d.Products {
+		if validSku == productSku {
+			return true
+		}
+	}
+	return false
+}
+
 // Item is the interface for a single line item needed to do price calculation.
 type Item interface {
+	ProductSku() string
 	PriceInLowestUnit() uint64
 	ProductType() string
 	FixedVAT() uint64
@@ -87,6 +102,7 @@ type Item interface {
 type Coupon interface {
 	ValidForType(string) bool
 	ValidForPrice(string, uint64) bool
+	ValidForProduct(string) bool
 	PercentageDiscount() uint64
 	FixedDiscount(string) uint64
 }
@@ -176,7 +192,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 				itemPrice.Taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
 			}
 		}
-		if coupon != nil && coupon.ValidForType(item.ProductType()) {
+		if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
 			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(currency), includeTaxes)
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
@@ -188,6 +204,9 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 		}
 
 		itemPrice.Total = itemPrice.Subtotal - itemPrice.Discount + itemPrice.Taxes
+		if itemPrice.Total < 0 {
+			itemPrice.Total = 0
+		}
 
 		price.Items = append(price.Items, itemPrice)
 

@@ -9,11 +9,16 @@ import (
 )
 
 type TestItem struct {
+	sku      string
 	price    uint64
 	itemType string
 	vat      uint64
 	items    []Item
 	quantity uint64
+}
+
+func (t *TestItem) ProductSku() string {
+	return t.sku
 }
 
 func (t *TestItem) PriceInLowestUnit() uint64 {
@@ -40,6 +45,7 @@ func (t *TestItem) GetQuantity() uint64 {
 }
 
 type TestCoupon struct {
+	itemSku    string
 	itemType   string
 	moreThan   uint64
 	percentage uint64
@@ -48,6 +54,10 @@ type TestCoupon struct {
 
 func (c *TestCoupon) ValidForType(productType string) bool {
 	return c.itemType == productType
+}
+
+func (c *TestCoupon) ValidForProduct(productSku string) bool {
+	return c.itemSku == productSku
 }
 
 func (c *TestCoupon) ValidForPrice(currency string, price uint64) bool {
@@ -186,6 +196,32 @@ func TestMemberDiscounts(t *testing.T) {
 	settings := &Settings{PricesIncludeTaxes: true, MemberDiscounts: []*MemberDiscount{&MemberDiscount{
 		Claims:     map[string]string{"app_metadata.plan": "member"},
 		Percentage: 10,
+	}}}
+	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+
+	assert.Equal(t, uint64(92), price.Subtotal)
+	assert.Equal(t, uint64(8), price.Taxes)
+	assert.Equal(t, uint64(0), price.Discount)
+	assert.Equal(t, uint64(100), price.Total)
+
+	claims := map[string]interface{}{}
+	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
+
+	price = CalculatePrice(settings, claims, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+
+	assert.Equal(t, uint64(92), price.Subtotal)
+	assert.Equal(t, uint64(8), price.Taxes)
+	assert.Equal(t, uint64(10), price.Discount)
+	assert.Equal(t, uint64(90), price.Total)
+}
+
+func TestFixedMemberDiscounts(t *testing.T) {
+	settings := &Settings{PricesIncludeTaxes: true, MemberDiscounts: []*MemberDiscount{&MemberDiscount{
+		Claims: map[string]string{"app_metadata.plan": "member"},
+		FixedAmount: []*FixedMemberDiscount{{
+			Amount:   "0.10",
+			Currency: "USD",
+		}},
 	}}}
 	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
 

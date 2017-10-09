@@ -23,6 +23,7 @@ type Coupon struct {
 	FixedAmount []*FixedAmount `json:"fixed,omitempty"`
 
 	ProductTypes []string               `json:"product_types,omitempty"`
+	Products     []string               `json:"products,omitempty"`
 	Claims       map[string]interface{} `json:"claims,omitempty"`
 }
 
@@ -35,6 +36,25 @@ func (c *Coupon) Valid() bool {
 		return false
 	}
 	return true
+}
+
+// ValidForProduct returns whether a coupon applies to a specific product.
+func (c *Coupon) ValidForProduct(productSku string) bool {
+	if c == nil {
+		return false
+	}
+
+	if c.Products == nil || len(c.Products) == 0 {
+		return true
+	}
+
+	for _, s := range c.Products {
+		if s == productSku {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ValidForType returns whether a coupon applies to a specific product type.
