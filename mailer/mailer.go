@@ -28,21 +28,41 @@ type MailSubjects struct {
 }
 
 // NewMailer returns a new authlify mailer
-func NewMailer(conf *conf.Configuration) Mailer {
-	mailConf := conf.Mailer
-	if mailConf.AdminEmail == "" || mailConf.Host == "" || mailConf.Port == 0 {
+func NewMailer(smtp conf.SMTPConfiguration, instanceConfig *conf.Configuration) Mailer {
+	if smtp.Host == "" && instanceConfig.SMTP.Host == "" {
 		return newNoopMailer()
 	}
 
+	smtpHost := instanceConfig.SMTP.Host
+	if smtpHost == "" {
+		smtpHost = smtp.Host
+	}
+	smtpPort := instanceConfig.SMTP.Port
+	if smtpPort == 0 {
+		smtpPort = smtp.Port
+	}
+	smtpUser := instanceConfig.SMTP.User
+	if smtpUser == "" {
+		smtpUser = smtp.User
+	}
+	smtpPass := instanceConfig.SMTP.Pass
+	if smtpPass == "" {
+		smtpPass = smtp.Pass
+	}
+	smtpAdminEmail := instanceConfig.SMTP.AdminEmail
+	if smtpAdminEmail == "" {
+		smtpAdminEmail = smtp.AdminEmail
+	}
+
 	return &mailer{
-		Config: conf,
+		Config: instanceConfig,
 		TemplateMailer: &mailme.Mailer{
-			BaseURL: conf.SiteURL,
-			From:    mailConf.AdminEmail,
-			Host:    mailConf.Host,
-			Port:    mailConf.Port,
-			User:    mailConf.User,
-			Pass:    mailConf.Pass,
+			Host:    smtpHost,
+			Port:    smtpPort,
+			User:    smtpUser,
+			Pass:    smtpPass,
+			From:    smtpAdminEmail,
+			BaseURL: instanceConfig.SiteURL,
 			FuncMap: map[string]interface{}{
 				"dateFormat":     dateFormat,
 				"price":          price,
@@ -116,7 +136,7 @@ const defaultReceivedTemplate = `<h2>Order Received From {{ .Order.Email }}</h2>
 // OrderReceivedMail sends a notification to the shop admin
 func (m *mailer) OrderReceivedMail(transaction *models.Transaction) error {
 	return m.TemplateMailer.Mail(
-		m.Config.Mailer.AdminEmail,
+		m.TemplateMailer.From,
 		withDefault(m.Config.Mailer.Subjects.OrderReceived, "Order Received From {{ .Order.Email }}"),
 		m.Config.Mailer.Templates.OrderReceived,
 		defaultReceivedTemplate,

@@ -8,16 +8,19 @@ import (
 )
 
 func TestNoopMailer(t *testing.T) {
+	smtp := conf.SMTPConfiguration{}
 	conf := &conf.Configuration{}
-	m := NewMailer(conf)
+	m := NewMailer(smtp, conf)
 	assert.IsType(t, &noopMailer{}, m)
 }
 
 func TestTemplateMailer(t *testing.T) {
+	smtp := conf.SMTPConfiguration{
+		Host: "localhost",
+		Port: 25,
+	}
 	conf := &conf.Configuration{}
-	conf.Mailer.AdminEmail = "test@example.com"
-	conf.Mailer.Host = "localhost"
-	conf.Mailer.Port = 25
-	m := NewMailer(conf)
+	conf.SMTP.AdminEmail = "test@example.com"
+	m := NewMailer(smtp, conf)
 	assert.IsType(t, &mailer{}, m)
 }

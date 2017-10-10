@@ -8,7 +8,6 @@ import (
 	"net/http"
 
 	jwt "github.com/dgrijalva/jwt-go"
-	"github.com/imdario/mergo"
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
@@ -101,11 +100,7 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 	}
 	logEntrySetField(r, "site_url", config.SiteURL)
 
-	if err = mergo.MergeWithOverwrite(config, api.config); err != nil {
-		return nil, internalServerError("Failed to instantiate instance config").WithInternalError(err)
-	}
-
-	ctx, err = WithInstanceConfig(ctx, config, instanceID)
+	ctx, err = WithInstanceConfig(ctx, api.config.SMTP, config, instanceID)
 	if err != nil {
 		return nil, internalServerError("Error loading instance config").WithInternalError(err)
 	}
@@ -113,12 +108,12 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 	return ctx, nil
 }
 
-func WithInstanceConfig(ctx context.Context, config *conf.Configuration, instanceID string) (context.Context, error) {
+func WithInstanceConfig(ctx context.Context, smtp conf.SMTPConfiguration, config *conf.Configuration, instanceID string) (context.Context, error) {
 	ctx = gcontext.WithInstanceID(ctx, instanceID)
 	ctx = gcontext.WithConfig(ctx, config)
 	ctx = gcontext.WithCoupons(ctx, config)
 
-	mailer := mailer.NewMailer(config)
+	mailer := mailer.NewMailer(smtp, config)
 	ctx = gcontext.WithMailer(ctx, mailer)
 
 	store, err := assetstores.NewStore(config)
