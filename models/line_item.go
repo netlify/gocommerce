@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/netlify/gocommerce/claims"
 	"github.com/pborman/uuid"
@@ -63,6 +64,20 @@ func (i *LineItem) BeforeSave() error {
 func (i *LineItem) AfterFind() error {
 	if i.RawMetaData != "" {
 		return json.Unmarshal([]byte(i.RawMetaData), &i.MetaData)
+	}
+	return nil
+}
+
+func (i *LineItem) BeforeDelete(tx *gorm.DB) error {
+	for _, p := range i.PriceItems {
+		if r := tx.Delete(p); r.Error != nil {
+			return r.Error
+		}
+	}
+	for _, a := range i.AddonItems {
+		if r := tx.Delete(a); r.Error != nil {
+			return r.Error
+		}
 	}
 	return nil
 }

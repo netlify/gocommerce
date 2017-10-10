@@ -2,10 +2,13 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 )
 
 // PendingState is the pending state of an Order
@@ -155,4 +158,27 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	o.Taxes = price.Taxes
 	o.Discount = price.Discount
 	o.Total = price.Total
+}
+
+func (o *Order) BeforeDelete(tx *gorm.DB) error {
+	cascadeModels := map[string]interface{}{
+		"line item": &[]LineItem{},
+	}
+	for name, cm := range cascadeModels {
+		if err := cascadeDelete(tx, "order_id = ?", o.ID, name, cm); err != nil {
+			return err
+		}
+	}
+
+	delModels := map[string]interface{}{
+		"event":       Event{},
+		"transaction": Transaction{},
+		"download":    Download{},
+	}
+	for name, dm := range delModels {
+		if result := tx.Delete(dm, "order_id = ?", o.ID); result.Error != nil {
+			return errors.Wrap(result.Error, fmt.Sprintf("Error deleting %s records", name))
+		}
+	}
+	return nil
 }

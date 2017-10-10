@@ -5,13 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"time"
 
 	"github.com/go-chi/chi"
-	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
-	"github.com/sirupsen/logrus"
 
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
@@ -160,51 +157,11 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	// do a cascading delete
-	tx := a.db.Begin()
-
-	results := tx.Delete(user)
-	if results.Error != nil {
-		tx.Rollback()
-		return internalServerError("Failed to delete user").WithInternalError(results.Error)
-	}
-	log.Debug("Deleted user")
-
-	orders := []models.Order{}
-	results = tx.Where("user_id = ?", userID).Find(&orders)
-	if results.Error != nil {
-		tx.Rollback()
-		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("failed to find associated orders")
+	rsp := a.db.Delete(user)
+	if rsp.Error != nil {
+		return internalServerError("error while deleting user").WithInternalError(rsp.Error)
 	}
 
-	log.Debugf("Starting to collect info about %d orders", len(orders))
-	orderIDs := []string{}
-	for _, o := range orders {
-		orderIDs = append(orderIDs, o.ID)
-	}
-
-	log.Debugf("Deleting line items")
-	results = tx.Where("order_id in (?)", orderIDs).Delete(&models.LineItem{})
-	if results.Error != nil {
-		tx.Rollback()
-		return internalServerError("Failed to delete user").WithInternalError(results.Error).WithInternalMessage("Failed to delete line items associated with orders: %v", orderIDs)
-	}
-	log.Debugf("Deleted %d items", results.RowsAffected)
-
-	if err := tryDelete(tx, w, log, userID, &models.Order{}); err != nil {
-		return err
-	}
-	if err := tryDelete(tx, w, log, userID, &models.Transaction{}); err != nil {
-		return err
-	}
-	if err := tryDelete(tx, w, log, userID, &models.OrderNote{}); err != nil {
-		return err
-	}
-	if err := tryDelete(tx, w, log, userID, &models.Address{}); err != nil {
-		return err
-	}
-
-	tx.Commit()
 	log.Infof("Deleted user")
 	return nil
 }
@@ -264,21 +221,4 @@ func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	return sendJSON(w, http.StatusOK, &struct{ ID string }{ID: addr.ID})
-}
-
-// -------------------------------------------------------------------------------------------------------------------
-// Helper methods
-// -------------------------------------------------------------------------------------------------------------------
-func tryDelete(tx *gorm.DB, w http.ResponseWriter, log logrus.FieldLogger, userID string, face interface{}) error {
-	typeName := reflect.TypeOf(face).String()
-
-	log.WithField("type", typeName).Debugf("Starting to delete %s", typeName)
-	results := tx.Where("user_id = ?", userID).Delete(face)
-	if results.Error != nil {
-		tx.Rollback()
-		return internalServerError("Failed to delete user").WithInternalError(results.Error)
-	}
-
-	log.WithField("affected_rows", results.RowsAffected).Debugf("Deleted %d rows", results.RowsAffected)
-	return results.Error
 }
