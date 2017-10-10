@@ -28,7 +28,7 @@ type MailSubjects struct {
 }
 
 // NewMailer returns a new authlify mailer
-func NewMailer(smtp *conf.SMTPConfiguration, instanceConfig *conf.Configuration) Mailer {
+func NewMailer(smtp conf.SMTPConfiguration, instanceConfig *conf.Configuration) Mailer {
 	if smtp.Host == "" && instanceConfig.SMTP.Host == "" {
 		return newNoopMailer()
 	}
@@ -52,10 +52,6 @@ func NewMailer(smtp *conf.SMTPConfiguration, instanceConfig *conf.Configuration)
 	smtpAdminEmail := instanceConfig.SMTP.AdminEmail
 	if smtpAdminEmail == "" {
 		smtpAdminEmail = smtp.AdminEmail
-	}
-	smtpMaxFrequency := instanceConfig.SMTP.MaxFrequency
-	if smtpMaxFrequency == 0 {
-		smtpMaxFrequency = smtp.MaxFrequency
 	}
 
 	return &mailer{
@@ -140,7 +136,7 @@ const defaultReceivedTemplate = `<h2>Order Received From {{ .Order.Email }}</h2>
 // OrderReceivedMail sends a notification to the shop admin
 func (m *mailer) OrderReceivedMail(transaction *models.Transaction) error {
 	return m.TemplateMailer.Mail(
-		m.Config.Mailer.AdminEmail,
+		m.TemplateMailer.From,
 		withDefault(m.Config.Mailer.Subjects.OrderReceived, "Order Received From {{ .Order.Email }}"),
 		m.Config.Mailer.Templates.OrderReceived,
 		defaultReceivedTemplate,

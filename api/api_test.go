@@ -20,7 +20,7 @@ func TestTraceWrapper(t *testing.T) {
 	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
 
-	ctx, err := WithInstanceConfig(context.Background(), globalConfig, config, "")
+	ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, config, "")
 	require.NoError(t, err)
 	api := NewAPIWithVersion(ctx, globalConfig, nil, "")
 
