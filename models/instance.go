@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -104,4 +105,28 @@ func UpdateInstance(db *gorm.DB, instance *Instance) error {
 
 func DeleteInstance(db *gorm.DB, instance *Instance) error {
 	return db.Delete(instance).Error
+}
+
+func (i *Instance) BeforeDelete(tx *gorm.DB) error {
+	cascadeModels := map[string]interface{}{
+		"order": &[]Order{},
+		"user":  &[]User{},
+	}
+	for name, cm := range cascadeModels {
+		if err := cascadeDelete(tx, "instance_id = ?", i.ID, name, cm); err != nil {
+			return err
+		}
+	}
+
+	delModels := map[string]interface{}{
+		"transaction":    Transaction{},
+		"invoice number": InvoiceNumber{},
+	}
+
+	for name, dm := range delModels {
+		if result := tx.Delete(dm, "instance_id = ?", i.ID); result.Error != nil {
+			return errors.Wrap(result.Error, fmt.Sprintf("Error deleting %s records", name))
+		}
+	}
+	return nil
 }

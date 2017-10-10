@@ -1,9 +1,11 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/jinzhu/gorm"
+	"github.com/pkg/errors"
 )
 
 // User model
@@ -33,4 +35,28 @@ func GetUser(db *gorm.DB, userID string) (*User, error) {
 		return nil, result.Error
 	}
 	return user, nil
+}
+
+func (u *User) BeforeDelete(tx *gorm.DB) error {
+	cascadeModels := map[string]interface{}{
+		"order": &[]Order{},
+	}
+	for name, cm := range cascadeModels {
+		if err := cascadeDelete(tx, "user_id = ?", u.ID, name, cm); err != nil {
+			return err
+		}
+	}
+
+	delModels := map[string]interface{}{
+		"address":     Address{},
+		"hook":        Hook{},
+		"transaction": Transaction{},
+		"order note":  OrderNote{},
+	}
+	for name, dm := range delModels {
+		if result := tx.Delete(dm, "user_id = ?", u.ID); result.Error != nil {
+			return errors.Wrap(result.Error, fmt.Sprintf("Error deleting %s records", name))
+		}
+	}
+	return nil
 }
