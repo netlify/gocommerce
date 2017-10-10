@@ -63,16 +63,17 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 	}
 
 	xffmw, _ := xff.Default()
+	logger := newStructuredLogger(logrus.StandardLogger())
 
 	r := newRouter()
 	r.UseBypass(xffmw.Handler)
 	r.Use(withRequestID)
-	r.UseBypass(newStructuredLogger(logrus.StandardLogger()))
 	r.Use(recoverer)
 
 	r.Get("/health", api.HealthCheck)
 
 	r.Route("/", func(r *router) {
+		r.UseBypass(logger)
 		if globalConfig.MultiInstanceMode {
 			r.Use(api.loadInstanceConfig)
 		}
@@ -120,8 +121,9 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 
 	if globalConfig.MultiInstanceMode {
 		// Operator microservice API
-		r.With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
+		r.WithBypass(logger).With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
 		r.Route("/instances", func(r *router) {
+			r.UseBypass(logger)
 			r.Use(api.verifyOperatorRequest)
 
 			r.Post("/", api.CreateInstance)

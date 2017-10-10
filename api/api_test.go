@@ -16,6 +16,9 @@ import (
 func TestTraceWrapper(t *testing.T) {
 	hook := test.NewGlobal()
 	globalConfig := new(conf.GlobalConfiguration)
+	globalConfig.MultiInstanceMode = true
+	globalConfig.OperatorToken = "token"
+
 	config := new(conf.Configuration)
 	config.Payment.Stripe.Enabled = true
 	config.Payment.Stripe.SecretKey = "secret"
@@ -28,7 +31,10 @@ func TestTraceWrapper(t *testing.T) {
 	defer server.Close()
 
 	client := http.Client{}
-	rsp, err := client.Get(server.URL + "/health")
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/", nil)
+	require.NoError(t, err)
+	req.Header.Add("Authorization", "Bearer token")
+	rsp, err := client.Do(req)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rsp.StatusCode)
 	assert.True(t, len(hook.Entries) > 0)
@@ -39,7 +45,7 @@ func TestTraceWrapper(t *testing.T) {
 		}
 		expected := map[string]string{
 			"method": "GET",
-			"path":   "/health",
+			"path":   "/",
 		}
 		for k, v := range expected {
 			if value, ok := entry.Data[k]; ok {
