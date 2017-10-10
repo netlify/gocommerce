@@ -258,7 +258,7 @@ Email subject to use for orders sent to the store admin. Defaults to `Order Rece
 
 `MAILER_TEMPLATES_ORDER_CONFIRMATION` - `string`
 
-URL path to an email template to use when sending an order confirmation. 
+URL path, relative to the `SITE_URL`, of an email template to use when sending an order confirmation. 
 `Order` and `Transaction` variables are available.
 
 Default Content (if template is unavailable):
@@ -276,7 +276,7 @@ Default Content (if template is unavailable):
 
 `MAILER_TEMPLATES_ORDER_RECEIVED` - `string`
 
-URL path to an email template to use when sending order details to the store admin. 
+URL path, relative to the `SITE_URL`, of an email template to use when sending order details to the store admin. 
 `Order` and `Transaction` variables are available.
 
 Default Content (if template is unavailable):
