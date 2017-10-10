@@ -53,7 +53,7 @@ type EmailContentConfiguration struct {
 
 // Configuration holds all the per-tenant configuration for gocommerce
 type Configuration struct {
-	SiteURL string           `json:"site_url" split_words:"true"`
+	SiteURL string           `json:"site_url" split_words:"true" required:"true"`
 	JWT     JWTConfiguration `json:"jwt"`
 
 	SMTP SMTPConfiguration `json:"smtp"`
