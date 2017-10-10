@@ -116,6 +116,9 @@ func (ts *InstanceTestSuite) TestUpdate() {
 	var buffer bytes.Buffer
 	require.NoError(ts.T(), json.NewEncoder(&buffer).Encode(map[string]interface{}{
 		"config": &conf.Configuration{
+			JWT: conf.JWTConfiguration{
+				Secret: "testsecret",
+			},
 			SiteURL: "https://test.mysite.com",
 		},
 	}))
