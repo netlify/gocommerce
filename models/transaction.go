@@ -29,7 +29,7 @@ type Transaction struct {
 	Currency string `json:"currency"`
 
 	FailureCode        string `json:"failure_code,omitempty"`
-	FailureDescription string `json:"failure_description,omitempty"`
+	FailureDescription string `json:"failure_description,omitempty" sql:"type:text"`
 
 	Status string `json:"status"`
 	Type   string `json:"type"`

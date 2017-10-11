@@ -21,7 +21,7 @@ type LineItem struct {
 	Title       string `json:"title"`
 	Sku         string `json:"sku"`
 	Type        string `json:"type"`
-	Description string `json:"description"`
+	Description string `json:"description" sql:"type:text"`
 
 	Path string `json:"path"`
 
@@ -35,7 +35,7 @@ type LineItem struct {
 	Quantity uint64 `json:"quantity"`
 
 	MetaData    map[string]interface{} `sql:"-" json:"meta"`
-	RawMetaData string                 `json:"-"`
+	RawMetaData string                 `json:"-" sql:"type:text"`
 
 	CreatedAt time.Time  `json:"-"`
 	DeletedAt *time.Time `json:"-"`

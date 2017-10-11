@@ -31,13 +31,13 @@ type Hook struct {
 	Failed bool
 
 	URL     string
-	Payload string
+	Payload string `sql:"type:text"`
 	Secret  string
 
 	ResponseStatus  string
-	ResponseHeaders string
-	ResponseBody    string
-	ErrorMessage    *string
+	ResponseHeaders string  `sql:"type:text"`
+	ResponseBody    string  `sql:"type:text"`
+	ErrorMessage    *string `sql:"type:text"`
 
 	Tries int
 

@@ -8,7 +8,7 @@ type OrderNote struct {
 
 	UserID string `json:"user_id"`
 
-	Text string `json:"text"`
+	Text string `json:"text" sql:"type:text"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
