@@ -74,12 +74,12 @@ type Order struct {
 	VATNumber string `json:"vatnumber"`
 
 	MetaData    map[string]interface{} `sql:"-" json:"meta"`
-	RawMetaData string                 `json:"-"`
+	RawMetaData string                 `json:"-" sql:"type:text"`
 
 	CouponCode string `json:"coupon_code,omitempty"`
 
 	Coupon    *Coupon `json:"coupon,omitempty" sql:"-"`
-	RawCoupon string  `json:"-"`
+	RawCoupon string  `json:"-" sql:"type:text"`
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`

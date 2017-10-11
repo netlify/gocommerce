@@ -17,7 +17,7 @@ type Instance struct {
 	// Netlify UUID
 	UUID string `json:"uuid,omitempty"`
 
-	RawBaseConfig string              `json:"-" gorm:"size:65535"`
+	RawBaseConfig string              `json:"-" sql:"type:text"`
 	BaseConfig    *conf.Configuration `json:"config"`
 
 	CreatedAt time.Time  `json:"created_at"`
