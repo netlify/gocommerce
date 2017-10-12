@@ -197,7 +197,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
-				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) {
+				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
 					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(currency), includeTaxes)
 				}
 			}
