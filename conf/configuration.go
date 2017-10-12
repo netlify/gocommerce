@@ -97,6 +97,10 @@ type Configuration struct {
 	} `json:"webhooks"`
 }
 
+func (c *Configuration) SettingsURL() string {
+	return c.SiteURL + "/gocommerce/settings.json"
+}
+
 func loadEnvironment(filename string) error {
 	var err error
 	if filename != "" {
