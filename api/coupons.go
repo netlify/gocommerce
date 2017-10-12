@@ -51,7 +51,7 @@ func (a *API) CouponList(w http.ResponseWriter, r *http.Request) error {
 
 	couponCache := gcontext.GetCoupons(ctx)
 	if couponCache == nil {
-		return notFoundError("No coupons available")
+		return sendJSON(w, http.StatusOK, []string{})
 	}
 
 	coupons, err := couponCache.List()
