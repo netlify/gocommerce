@@ -262,6 +262,7 @@ func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta
 			continue
 		}
 		download.ID = uuid.NewRandom().String()
+		download.OrderID = order.ID
 		download.Title = i.Title
 		download.Sku = i.Sku
 		order.Downloads = append(order.Downloads, download)
