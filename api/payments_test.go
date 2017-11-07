@@ -456,7 +456,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 
 			form := url.Values{}
 			form.Add("provider", payments.PayPalProvider)
-			form.Add("amount", "10")
+			form.Add("amount", "1000")
 			form.Add("currency", "USD")
 			form.Add("description", "test")
 
@@ -477,7 +477,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 
 			require.Len(t, createData.Transactions, 1)
 			assert.Equal(t, "sale", createData.Intent)
-			assert.Equal(t, "10", createData.Transactions[0].Amount.Total)
+			assert.Equal(t, "10.00", createData.Transactions[0].Amount.Total)
 			assert.Equal(t, "USD", createData.Transactions[0].Amount.Currency)
 			assert.Equal(t, "test", createData.Transactions[0].Description)
 		})
@@ -492,7 +492,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 			test.Config.Payment.PayPal.Env = server.URL
 
 			params := paypalPreauthorizeParams{
-				Amount:      10,
+				Amount:      1000,
 				Currency:    "USD",
 				Description: "test",
 				Provider:    payments.PayPalProvider,
@@ -518,7 +518,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 
 			require.Len(t, createData.Transactions, 1)
 			assert.Equal(t, "sale", createData.Intent)
-			assert.Equal(t, "10", createData.Transactions[0].Amount.Total)
+			assert.Equal(t, "10.00", createData.Transactions[0].Amount.Total)
 			assert.Equal(t, "USD", createData.Transactions[0].Amount.Currency)
 			assert.Equal(t, "test", createData.Transactions[0].Description)
 		})

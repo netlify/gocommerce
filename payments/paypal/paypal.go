@@ -123,7 +123,7 @@ func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 
 func (p *paypalPaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
 	amt := &paypalsdk.Amount{
-		Total:    strconv.FormatUint(amount, 10),
+		Total:    formatAmount(amount),
 		Currency: currency,
 	}
 	ref, err := p.client.RefundSale(transactionID, amt)
@@ -156,7 +156,7 @@ func (p *paypalPaymentProvider) preauthorize(config *conf.Configuration, amount 
 		ExperienceProfileID: profile.ID,
 		Transactions: []paypalsdk.Transaction{paypalsdk.Transaction{
 			Amount: &paypalsdk.Amount{
-				Total:    strconv.FormatUint(amount, 10),
+				Total:    formatAmount(amount),
 				Currency: currency,
 			},
 			Description: description,
@@ -208,4 +208,8 @@ func (p *paypalPaymentProvider) getExperience() (*paypalsdk.WebProfile, error) {
 
 	p.profile = profile
 	return profile, nil
+}
+
+func formatAmount(amount uint64) string {
+	return strconv.FormatFloat(float64(amount)/100, 'f', 2, 64)
 }
