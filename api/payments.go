@@ -180,7 +180,10 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	tx.Save(order)
 
 	if config.Webhooks.Payment != "" {
-		hook := models.NewHook("payment", config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
+		hook, err := models.NewHook("payment", config.SiteURL, config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
+		if err != nil {
+			log.WithError(err).Error("Failed to process webhook")
+		}
 		tx.Save(hook)
 	}
 
@@ -307,7 +310,10 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	log.Infof("Finished transaction with %s: %s", provID, m.ProcessorID)
 	tx.Save(m)
 	if config.Webhooks.Refund != "" {
-		hook := models.NewHook("refund", config.Webhooks.Refund, m.UserID, config.Webhooks.Secret, m)
+		hook, err := models.NewHook("refund", config.SiteURL, config.Webhooks.Refund, m.UserID, config.Webhooks.Secret, m)
+		if err != nil {
+			log.WithError(err).Error("Failed to process webhook")
+		}
 		tx.Save(hook)
 	}
 	tx.Commit()
