@@ -55,7 +55,13 @@ func GetConfig(ctx context.Context) *conf.Configuration {
 
 // WithCoupons adds the coupon cache to the context based on the site URL.
 func WithCoupons(ctx context.Context, config *conf.Configuration) context.Context {
-	return context.WithValue(ctx, couponsKey, coupons.NewCouponCacheFromURL(config))
+	cache, err := coupons.NewCouponCacheFromURL(config)
+	if err != nil {
+		// We don't have access to the logger here, but it's better to say something than nothing
+		fmt.Printf("Error getting coupon cache %v", err)
+		return ctx
+	}
+	return context.WithValue(ctx, couponsKey, cache)
 }
 
 // GetCoupons reads the coupon cache from the context.
