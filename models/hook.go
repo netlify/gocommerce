@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -54,15 +56,30 @@ func (Hook) TableName() string {
 }
 
 // NewHook creates a Hook model.
-func NewHook(hookType, url, userID, secret string, payload interface{}) *Hook {
+func NewHook(hookType, siteURL, hookURL, userID, secret string, payload interface{}) (*Hook, error) {
+	fullHookURL, err := url.Parse(hookURL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to parse Webhook URL")
+	}
+
+	if !fullHookURL.IsAbs() {
+		fullSiteURL, err := url.Parse(siteURL)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to parse Site URL")
+		}
+		fullHookURL.Scheme = fullSiteURL.Scheme
+		fullHookURL.Host = fullSiteURL.Host
+		fullHookURL.User = fullSiteURL.User
+	}
+
 	json, _ := json.Marshal(payload)
 	return &Hook{
 		Type:    hookType,
 		UserID:  userID,
-		URL:     url,
+		URL:     fullHookURL.String(),
 		Secret:  secret,
 		Payload: string(json),
-	}
+	}, nil
 }
 
 // Trigger creates and executes the HTTP request for a Hook.

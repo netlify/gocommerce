@@ -401,7 +401,10 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 	tx.Create(order)
 	models.LogEvent(tx, r.RemoteAddr, order.UserID, order.ID, models.EventCreated, nil)
 	if config.Webhooks.Order != "" {
-		hook := models.NewHook("order", config.Webhooks.Order, order.UserID, config.Webhooks.Secret, order)
+		hook, err := models.NewHook("order", config.SiteURL, config.Webhooks.Order, order.UserID, config.Webhooks.Secret, order)
+		if err != nil {
+			log.WithError(err).Error("Failed to process webhook")
+		}
 		tx.Save(hook)
 	}
 	tx.Commit()
@@ -565,7 +568,10 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	models.LogEvent(tx, r.RemoteAddr, claims.Subject, existingOrder.ID, models.EventUpdated, changes)
 	if config.Webhooks.Update != "" {
 		// TODO should this be claims.Subject or existingOrder.UserID ?
-		hook := models.NewHook("update", config.Webhooks.Update, claims.Subject, config.Webhooks.Secret, existingOrder)
+		hook, err := models.NewHook("update", config.SiteURL, config.Webhooks.Update, claims.Subject, config.Webhooks.Secret, existingOrder)
+		if err != nil {
+			log.WithError(err).Error("Failed to process web hook")
+		}
 		tx.Save(hook)
 	}
 	if rsp := tx.Commit(); rsp.Error != nil {
