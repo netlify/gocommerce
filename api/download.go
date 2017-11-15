@@ -68,7 +68,11 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 
 	tx := a.db.Begin()
 	tx.Model(download).Updates(map[string]interface{}{"download_count": gorm.Expr("download_count + 1")})
-	models.LogEvent(tx, r.RemoteAddr, claims.Subject, order.ID, models.EventUpdated, []string{"download"})
+	var subject string
+	if claims != nil {
+		subject = claims.Subject
+	}
+	models.LogEvent(tx, r.RemoteAddr, subject, order.ID, models.EventUpdated, []string{"download"})
 	tx.Commit()
 
 	return sendJSON(w, http.StatusOK, download)
