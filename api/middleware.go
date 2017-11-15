@@ -111,7 +111,10 @@ func (api *API) loadInstanceConfig(w http.ResponseWriter, r *http.Request) (cont
 func WithInstanceConfig(ctx context.Context, smtp conf.SMTPConfiguration, config *conf.Configuration, instanceID string) (context.Context, error) {
 	ctx = gcontext.WithInstanceID(ctx, instanceID)
 	ctx = gcontext.WithConfig(ctx, config)
-	ctx = gcontext.WithCoupons(ctx, config)
+	ctx, err := gcontext.WithCoupons(ctx, config)
+	if err != nil {
+		return nil, err
+	}
 
 	mailer := mailer.NewMailer(smtp, config)
 	ctx = gcontext.WithMailer(ctx, mailer)
