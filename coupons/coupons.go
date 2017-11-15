@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
+	"github.com/pkg/errors"
 )
 
 const cacheTime = 1 * time.Minute
@@ -41,18 +43,33 @@ type couponCacheFromURL struct {
 }
 
 // NewCouponCacheFromURL creates a coupon cache using the provided configuration.
-func NewCouponCacheFromURL(config *conf.Configuration) Cache {
+func NewCouponCacheFromURL(config *conf.Configuration) (Cache, error) {
 	if config.Coupons.URL == "" {
-		return nil
+		return nil, nil
+	}
+
+	url, err := url.Parse(config.Coupons.URL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to parse Coupons URL")
+	}
+
+	if !url.IsAbs() {
+		siteURL, err := url.Parse(config.SiteURL)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Failed to parse Site URL")
+		}
+		url.Scheme = siteURL.Scheme
+		url.Host = siteURL.Host
+		url.User = siteURL.User
 	}
 
 	return &couponCacheFromURL{
-		url:      config.Coupons.URL,
+		url:      url.String(),
 		user:     config.Coupons.User,
 		password: config.Coupons.Password,
 		coupons:  map[string]*models.Coupon{},
 		client:   &http.Client{},
-	}
+	}, nil
 }
 
 func (c *couponCacheFromURL) load() error {
