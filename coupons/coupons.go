@@ -64,59 +64,60 @@ func NewCouponCacheFromURL(config *conf.Configuration) (Cache, error) {
 	}
 
 	return &couponCacheFromURL{
-		url:      url.String(),
-		user:     config.Coupons.User,
-		password: config.Coupons.Password,
-		coupons:  map[string]*models.Coupon{},
-		client:   &http.Client{},
+		url:       url.String(),
+		user:      config.Coupons.User,
+		password:  config.Coupons.Password,
+		coupons:   map[string]*models.Coupon{},
+		client:    &http.Client{},
+		lastFetch: time.Unix(0, 0),
 	}, nil
 }
 
 func (c *couponCacheFromURL) load() error {
-	req, err := http.NewRequest("GET", c.url, nil)
+	req, err := http.NewRequest(http.MethodGet, c.url, nil)
 	if err != nil {
 		return err
 	}
 	if c.user != "" {
 		req.SetBasicAuth(c.user, c.password)
 	}
-
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("Coupon URL returned %v", resp.StatusCode)
 	}
 
 	couponsResponse := &couponsResponse{}
-	decoder := json.NewDecoder(resp.Body)
-	if err := decoder.Decode(couponsResponse); err != nil {
-		return err
-	}
-	for key, coupon := range couponsResponse.Coupons {
-		coupon.Code = key
+	if resp.Body != nil && resp.Body != http.NoBody {
+		defer resp.Body.Close()
+		decoder := json.NewDecoder(resp.Body)
+		if err := decoder.Decode(couponsResponse); err != nil {
+			return err
+		}
+
+		for key, coupon := range couponsResponse.Coupons {
+			if coupon.Code == "" {
+				coupon.Code = key
+			}
+		}
 	}
 
 	c.mutex.Lock()
 	c.coupons = couponsResponse.Coupons
+	c.lastFetch = time.Now()
 	c.mutex.Unlock()
 
 	return nil
 }
 
 func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
-	if c.coupons != nil && time.Now().Before(c.lastFetch.Add(cacheTime)) {
-		coupon, ok := c.coupons[code]
-		if ok {
-			return coupon, nil
+	if time.Now().After(c.lastFetch.Add(cacheTime)) {
+		if err := c.load(); err != nil {
+			return nil, err
 		}
-		return nil, &CouponNotFound{}
-	}
-	if err := c.load(); err != nil {
-		return nil, err
 	}
 
 	coupon, ok := c.coupons[code]
@@ -127,7 +128,7 @@ func (c *couponCacheFromURL) Lookup(code string) (*models.Coupon, error) {
 }
 
 func (c *couponCacheFromURL) List() (map[string]*models.Coupon, error) {
-	if c.coupons == nil {
+	if time.Now().After(c.lastFetch.Add(cacheTime)) {
 		if err := c.load(); err != nil {
 			return nil, err
 		}
