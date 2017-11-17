@@ -89,12 +89,7 @@ func TestExplicitLookup(t *testing.T) {
 		SiteURL: svr.URL,
 	}
 	c.Coupons.URL = "this/is/where/the/coupons/are"
-
-	cacheFace, err := NewCouponCacheFromURL(c)
-	require.NoError(t, err)
-	require.NotNil(t, cacheFace)
-	cache, ok := cacheFace.(*couponCacheFromURL)
-	require.True(t, ok)
+	cache := newCache(t, c)
 	assert.Equal(t, svr.URL+"/this/is/where/the/coupons/are", cache.url)
 
 	coupon, err := cache.Lookup("meow")
@@ -107,6 +102,7 @@ func TestExplicitLookup(t *testing.T) {
 	assert.Error(t, err)
 	assert.IsType(t, new(CouponNotFound), err)
 	assert.Nil(t, coupon)
+	assert.Equal(t, 1, callCount)
 }
 
 func TestCacheExpiration(t *testing.T) {
@@ -121,13 +117,9 @@ func TestCacheExpiration(t *testing.T) {
 	c := &conf.Configuration{
 		SiteURL: "this is garbage",
 	}
+	// note that this is an absolute path, it is what is used
 	c.Coupons.URL = svr.URL + "/this/is/where/the/coupons/are"
-
-	cacheFace, err := NewCouponCacheFromURL(c)
-	require.NoError(t, err)
-	require.NotNil(t, cacheFace)
-	cache, ok := cacheFace.(*couponCacheFromURL)
-	require.True(t, ok)
+	cache := newCache(t, c)
 	assert.Equal(t, svr.URL+"/this/is/where/the/coupons/are", cache.url)
 
 	coupon, err := cache.Lookup("meow")
@@ -144,4 +136,35 @@ func TestCacheExpiration(t *testing.T) {
 	assert.IsType(t, new(CouponNotFound), err, err.Error())
 	assert.Nil(t, coupon)
 	assert.Equal(t, 2, callCount)
+}
+
+func TestMalformedResponse(t *testing.T) {
+	var callCount int
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("this is not json"))
+	}))
+	defer svr.Close()
+
+	c := &conf.Configuration{
+		SiteURL: svr.URL,
+	}
+	c.Coupons.URL = "/this/is/where/the/coupons/are"
+	cache := newCache(t, c)
+	assert.Equal(t, svr.URL+"/this/is/where/the/coupons/are", cache.url)
+
+	coupon, err := cache.Lookup("meow")
+	assert.Error(t, err)
+	assert.Nil(t, coupon)
+	assert.Equal(t, 1, callCount)
+}
+
+func newCache(t *testing.T, c *conf.Configuration) *couponCacheFromURL {
+	cacheFace, err := NewCouponCacheFromURL(c)
+	require.NoError(t, err)
+	require.NotNil(t, cacheFace)
+	cache, ok := cacheFace.(*couponCacheFromURL)
+	require.True(t, ok)
+	return cache
 }

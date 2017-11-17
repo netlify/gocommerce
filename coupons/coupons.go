@@ -83,7 +83,7 @@ func (c *couponCacheFromURL) load() error {
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "Failed to make request for coupon information")
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -95,7 +95,7 @@ func (c *couponCacheFromURL) load() error {
 		defer resp.Body.Close()
 		decoder := json.NewDecoder(resp.Body)
 		if err := decoder.Decode(couponsResponse); err != nil {
-			return err
+			return errors.Wrap(err, "Failed to parse response.")
 		}
 
 		for key, coupon := range couponsResponse.Coupons {
