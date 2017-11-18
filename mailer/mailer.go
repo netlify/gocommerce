@@ -116,6 +116,7 @@ func (m *mailer) OrderConfirmationMail(transaction *models.Transaction) error {
 		m.Config.Mailer.Templates.OrderConfirmation,
 		defaultConfirmationTemplate,
 		map[string]interface{}{
+			"SiteURL":     m.Config.SiteURL,
 			"Order":       transaction.Order,
 			"Transaction": transaction,
 		},
@@ -141,6 +142,7 @@ func (m *mailer) OrderReceivedMail(transaction *models.Transaction) error {
 		m.Config.Mailer.Templates.OrderReceived,
 		defaultReceivedTemplate,
 		map[string]interface{}{
+			"SiteURL":     m.Config.SiteURL,
 			"Order":       transaction.Order,
 			"Transaction": transaction,
 		},
@@ -153,6 +155,7 @@ func (m *mailer) OrderConfirmationMailBody(transaction *models.Transaction, temp
 	}
 
 	return m.TemplateMailer.MailBody(templateURL, defaultReceivedTemplate, map[string]interface{}{
+		"SiteURL":     m.Config.SiteURL,
 		"Order":       transaction.Order,
 		"Transaction": transaction,
 	})
