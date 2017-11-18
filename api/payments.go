@@ -108,8 +108,11 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	orderID := gcontext.GetOrderID(ctx)
 	tx := a.db.Begin()
 	order := &models.Order{}
-
-	if result := tx.Preload("LineItems").Preload("BillingAddress").First(order, "id = ?", orderID); result.Error != nil {
+	loader := tx.
+		Preload("LineItems").
+		Preload("Downloads").
+		Preload("BillingAddress")
+	if result := loader.First(order, "id = ?", orderID); result.Error != nil {
 		tx.Rollback()
 		if result.RecordNotFound() {
 			return notFoundError("No order with this ID found")
