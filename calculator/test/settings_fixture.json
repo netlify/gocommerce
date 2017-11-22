@@ -1,0 +1,26 @@
+{
+  "prices_include_taxes": true,
+  "taxes": [],
+  "member_discounts": [
+    {
+      "claims": {"app_metadata.subscription.plan": "member"},
+      "fixed": [{"amount": "15.00", "currency": "USD"}, {"amount": "15.00", "currency": "EUR"}],
+      "product_types": ["Book"]
+    },
+    {
+      "claims": {"app_metadata.subscription.plan": "smashing"},
+      "fixed": [{"amount": "20.00", "currency": "USD"}, {"amount": "20.00", "currency": "EUR"}],
+      "product_types": ["Book"]
+    },
+    {
+      "claims": {"app_metadata.subscription.plan": "smashing"},
+      "percentage": 100,
+      "products": ["design-systems-by-alla-kholmatova", "the-smashing-library"]
+    },
+    {
+      "claims": {"app_metadata.subscription.plan": "member"},
+      "percentage": 100,
+      "products": ["design-systems-ebook"]
+    }
+  ]
+}

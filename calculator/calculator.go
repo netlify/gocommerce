@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/netlify/gocommerce/claims"
+	"github.com/sirupsen/logrus"
 )
 
 // Price represents the total price of all line items.
@@ -60,6 +61,14 @@ type MemberDiscount struct {
 	FixedAmount  []*FixedMemberDiscount `json:"fixed"`
 	ProductTypes []string               `json:"product_types"`
 	Products     []string               `json:"products"`
+}
+
+// PriceParameters represents the order information to calculate prices.
+type PriceParameters struct {
+	Country  string
+	Currency string
+	Coupon   Coupon
+	Items    []Item
 }
 
 // ValidForType returns whether a member discount is valid for a product type.
@@ -150,10 +159,22 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 
 // CalculatePrice will calculate the final total price. It takes into account
 // currency, country, coupons, and discounts.
-func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, country, currency string, coupon Coupon, items []Item) Price {
+func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params PriceParameters, log logrus.FieldLogger) Price {
 	price := Price{}
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
-	for _, item := range items {
+
+	priceLogger := log.WithField("action", "calculate_price")
+	if am, ok := jwtClaims["app_metadata"]; ok {
+		if a, ok := am.(map[string]interface{}); ok {
+			if s, ok := a["subscription"]; ok {
+				priceLogger = priceLogger.WithField("subscription_claim", s)
+			}
+		}
+	}
+
+	for _, item := range params.Items {
+		lineLogger := priceLogger.WithField("product_type", item.ProductType()).WithField("product_sku", item.ProductSku())
+
 		itemPrice := ItemPrice{Quantity: item.GetQuantity()}
 		itemPrice.Subtotal = item.PriceInLowestUnit()
 
@@ -164,7 +185,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 			for _, item := range item.TaxableItems() {
 				amount := taxAmount{price: item.PriceInLowestUnit()}
 				for _, t := range settings.Taxes {
-					if t.AppliesTo(country, item.ProductType()) {
+					if t.AppliesTo(params.Country, item.ProductType()) {
 						amount.percentage = t.Percentage
 						break
 					}
@@ -173,7 +194,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 			}
 		} else if settings != nil {
 			for _, t := range settings.Taxes {
-				if t.AppliesTo(country, item.ProductType()) {
+				if t.AppliesTo(params.Country, item.ProductType()) {
 					taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: t.Percentage})
 					break
 				}
@@ -192,13 +213,17 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 				itemPrice.Taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
 			}
 		}
+
+		coupon := params.Coupon
 		if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
-			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(currency), includeTaxes)
+			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency), includeTaxes)
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
+
 				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
-					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(currency), includeTaxes)
+					lineLogger = lineLogger.WithField("discount", discount.Claims)
+					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(params.Currency), includeTaxes)
 				}
 			}
 		}
@@ -207,6 +232,14 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 		if itemPrice.Total < 0 {
 			itemPrice.Total = 0
 		}
+
+		lineLogger.WithFields(
+			logrus.Fields{
+				"item_price":    itemPrice.Total,
+				"item_discount": itemPrice.Discount,
+				"item_quantity": itemPrice.Quantity,
+				"item_taxes":    itemPrice.Taxes,
+			}).Info("calculated item price")
 
 		price.Items = append(price.Items, itemPrice)
 
@@ -217,6 +250,12 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, countr
 	}
 
 	price.Total = price.Subtotal - price.Discount + price.Taxes
+	priceLogger.WithFields(
+		logrus.Fields{
+			"total_price":    price.Total,
+			"total_discount": price.Discount,
+			"total_taxes":    price.Taxes,
+		}).Info("calculated total price")
 
 	return price
 }
