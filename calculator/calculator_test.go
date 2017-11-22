@@ -79,7 +79,7 @@ func (c *TestCoupon) FixedDiscount(currency string) uint64 {
 func TestNoItems(t *testing.T) {
 	params := PriceParameters{"USA", "USD", nil, nil}
 	price := CalculatePrice(nil, nil, params, testLogger)
-	assert.Equal(t, uint64(0), price.Total)
+	assert.Equal(t, int64(0), price.Total)
 }
 
 func TestNoTaxes(t *testing.T) {
@@ -89,7 +89,7 @@ func TestNoTaxes(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(0), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 }
 
 func TestFixedVAT(t *testing.T) {
@@ -99,7 +99,7 @@ func TestFixedVAT(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(9), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(109), price.Total)
+	assert.Equal(t, int64(109), price.Total)
 }
 
 func TestFixedVATWhenPricesIncludeTaxes(t *testing.T) {
@@ -109,7 +109,7 @@ func TestFixedVATWhenPricesIncludeTaxes(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 }
 
 func TestCountryBasedVAT(t *testing.T) {
@@ -127,7 +127,7 @@ func TestCountryBasedVAT(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(21), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(121), price.Total)
+	assert.Equal(t, int64(121), price.Total)
 }
 
 func TestCouponWithNoTaxes(t *testing.T) {
@@ -138,7 +138,7 @@ func TestCouponWithNoTaxes(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(0), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestCouponWithVAT(t *testing.T) {
@@ -149,7 +149,7 @@ func TestCouponWithVAT(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(9), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(99), price.Total)
+	assert.Equal(t, int64(99), price.Total)
 }
 
 func TestCouponWithVATWhenPRiceIncludeTaxes(t *testing.T) {
@@ -161,7 +161,7 @@ func TestCouponWithVATWhenPRiceIncludeTaxes(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestCouponWithVATWhenPRiceIncludeTaxesWithQuantity(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCouponWithVATWhenPRiceIncludeTaxesWithQuantity(t *testing.T) {
 	assert.Equal(t, uint64(184), price.Subtotal)
 	assert.Equal(t, uint64(16), price.Taxes)
 	assert.Equal(t, uint64(20), price.Discount)
-	assert.Equal(t, uint64(180), price.Total)
+	assert.Equal(t, int64(180), price.Total)
 }
 
 func TestPricingItems(t *testing.T) {
@@ -203,7 +203,7 @@ func TestPricingItems(t *testing.T) {
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(10), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(110), price.Total)
+	assert.Equal(t, int64(110), price.Total)
 }
 
 func TestMemberDiscounts(t *testing.T) {
@@ -217,7 +217,7 @@ func TestMemberDiscounts(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 
 	claims := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
@@ -228,7 +228,7 @@ func TestMemberDiscounts(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestFixedMemberDiscounts(t *testing.T) {
@@ -246,7 +246,7 @@ func TestFixedMemberDiscounts(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 
 	claims := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
@@ -257,7 +257,7 @@ func TestFixedMemberDiscounts(t *testing.T) {
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestMixedDiscounts(t *testing.T) {
@@ -269,7 +269,7 @@ func TestMixedDiscounts(t *testing.T) {
 	assert.NoError(t, err)
 
 	item := &TestItem{
-		sku:      "inclusive-design-patterns",
+		sku:      "design-systems-ebook",
 		itemType: "Book",
 		quantity: 1,
 		price:    3490,
@@ -287,5 +287,5 @@ func TestMixedDiscounts(t *testing.T) {
 		},
 	}
 	price = CalculatePrice(&settings, claims, params, testLogger)
-	assert.Equal(t, 1990, int(price.Total))
+	assert.Equal(t, int64(0), price.Total)
 }

@@ -159,7 +159,10 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	o.SubTotal = price.Subtotal
 	o.Taxes = price.Taxes
 	o.Discount = price.Discount
-	o.Total = price.Total
+
+	if price.Total > 0 {
+		o.Total = uint64(price.Total)
+	}
 }
 
 func (o *Order) BeforeDelete(tx *gorm.DB) error {

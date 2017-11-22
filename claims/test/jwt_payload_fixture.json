@@ -1,0 +1,24 @@
+{
+  "exp": 1511383997,
+  "sub": "68904e78-96c0-4de1-aa37-fa71b1790756",
+  "email": "matt@netlify.com",
+  "app_metadata": {
+    "customer": {
+      "id": "c_id"
+    },
+    "provider": "email",
+    "roles": [
+      "cms",
+      "admin"
+    ],
+    "subscription": {
+      "id": "sub_id",
+      "plan": "smashing"
+    }
+  },
+  "user_metadata": {
+    "firstname": "Matt",
+    "full_name": "Matt Biilmann",
+    "lastname": "Biilmann"
+  }
+}

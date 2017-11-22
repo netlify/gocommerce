@@ -15,7 +15,7 @@ type Price struct {
 	Subtotal uint64
 	Discount uint64
 	Taxes    uint64
-	Total    uint64
+	Total    int64
 }
 
 // ItemPrice is the price of a single line item.
@@ -25,7 +25,7 @@ type ItemPrice struct {
 	Subtotal uint64
 	Discount uint64
 	Taxes    uint64
-	Total    uint64
+	Total    int64
 }
 
 // Settings represent the site-wide settings for price calculation.
@@ -173,7 +173,10 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 	}
 
 	for _, item := range params.Items {
-		lineLogger := priceLogger.WithField("product_type", item.ProductType()).WithField("product_sku", item.ProductSku())
+		lineLogger := priceLogger.WithFields(logrus.Fields{
+			"product_type": item.ProductType(),
+			"product_sku":  item.ProductSku(),
+		})
 
 		itemPrice := ItemPrice{Quantity: item.GetQuantity()}
 		itemPrice.Subtotal = item.PriceInLowestUnit()
@@ -228,7 +231,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 			}
 		}
 
-		itemPrice.Total = itemPrice.Subtotal - itemPrice.Discount + itemPrice.Taxes
+		itemPrice.Total = int64(itemPrice.Subtotal+itemPrice.Taxes) - int64(itemPrice.Discount)
 		if itemPrice.Total < 0 {
 			itemPrice.Total = 0
 		}
@@ -246,10 +249,13 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 		price.Subtotal += (itemPrice.Subtotal * itemPrice.Quantity)
 		price.Discount += (itemPrice.Discount * itemPrice.Quantity)
 		price.Taxes += (itemPrice.Taxes * itemPrice.Quantity)
-		price.Total += (itemPrice.Total * itemPrice.Quantity)
+		price.Total += (itemPrice.Total * int64(itemPrice.Quantity))
 	}
 
-	price.Total = price.Subtotal - price.Discount + price.Taxes
+	price.Total = int64(price.Subtotal+price.Taxes) - int64(price.Discount)
+	if price.Total < 0 {
+		price.Total = 0
+	}
 	priceLogger.WithFields(
 		logrus.Fields{
 			"total_price":    price.Total,
