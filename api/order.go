@@ -390,7 +390,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 		order.VATNumber = params.VATNumber
 	}
 
-	if httpError := a.createLineItems(ctx, tx, order, params.LineItems); httpError != nil {
+	if httpError := a.createLineItems(ctx, tx, order, params.LineItems, log); httpError != nil {
 		log.WithError(httpError).Error("Failed to create order line items")
 		tx.Rollback()
 		return httpError
@@ -622,7 +622,7 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 	return nil
 }
 
-func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem) *HTTPError {
+func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Order, items []*orderLineItem, log logrus.FieldLogger) *HTTPError {
 	sem := make(chan int, MaxConcurrentLookups)
 	var wg sync.WaitGroup
 	sharedErr := verificationError{}
@@ -676,7 +676,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 		return internalServerError(err.Error()).WithInternalError(err)
 	}
 
-	order.CalculateTotal(settings, gcontext.GetClaimsAsMap(ctx))
+	order.CalculateTotal(settings, gcontext.GetClaimsAsMap(ctx), log)
 	return nil
 }
 

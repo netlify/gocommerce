@@ -2,11 +2,15 @@ package calculator
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"testing"
 
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var testLogger = logrus.NewEntry(logrus.StandardLogger())
 
 type TestItem struct {
 	sku      string
@@ -73,35 +77,39 @@ func (c *TestCoupon) FixedDiscount(currency string) uint64 {
 }
 
 func TestNoItems(t *testing.T) {
-	price := CalculatePrice(nil, nil, "USA", "USD", nil, nil)
-	assert.Equal(t, uint64(0), price.Total)
+	params := PriceParameters{"USA", "USD", nil, nil}
+	price := CalculatePrice(nil, nil, params, testLogger)
+	assert.Equal(t, int64(0), price.Total)
 }
 
 func TestNoTaxes(t *testing.T) {
-	price := CalculatePrice(nil, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}})
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}}}
+	price := CalculatePrice(nil, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(0), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 }
 
 func TestFixedVAT(t *testing.T) {
-	price := CalculatePrice(nil, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(nil, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(9), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(109), price.Total)
+	assert.Equal(t, int64(109), price.Total)
 }
 
 func TestFixedVATWhenPricesIncludeTaxes(t *testing.T) {
-	price := CalculatePrice(&Settings{PricesIncludeTaxes: true}, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(&Settings{PricesIncludeTaxes: true}, nil, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 }
 
 func TestCountryBasedVAT(t *testing.T) {
@@ -113,54 +121,59 @@ func TestCountryBasedVAT(t *testing.T) {
 		}},
 	}
 
-	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}})
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(21), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(121), price.Total)
+	assert.Equal(t, int64(121), price.Total)
 }
 
 func TestCouponWithNoTaxes(t *testing.T) {
 	coupon := &TestCoupon{itemType: "test", percentage: 10}
-	price := CalculatePrice(nil, nil, "USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test"}})
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test"}}}
+	price := CalculatePrice(nil, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(0), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestCouponWithVAT(t *testing.T) {
 	coupon := &TestCoupon{itemType: "test", percentage: 10}
-	price := CalculatePrice(nil, nil, "USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(nil, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(9), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(99), price.Total)
+	assert.Equal(t, int64(99), price.Total)
 }
 
 func TestCouponWithVATWhenPRiceIncludeTaxes(t *testing.T) {
 	coupon := &TestCoupon{itemType: "test", percentage: 10}
 	settings := &Settings{PricesIncludeTaxes: true}
-	price := CalculatePrice(settings, nil, "USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestCouponWithVATWhenPRiceIncludeTaxesWithQuantity(t *testing.T) {
 	coupon := &TestCoupon{itemType: "test", percentage: 10}
 	settings := &Settings{PricesIncludeTaxes: true}
-	price := CalculatePrice(settings, nil, "USA", "USD", coupon, []Item{&TestItem{quantity: 2, price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{quantity: 2, price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(184), price.Subtotal)
 	assert.Equal(t, uint64(16), price.Taxes)
 	assert.Equal(t, uint64(20), price.Discount)
-	assert.Equal(t, uint64(180), price.Total)
+	assert.Equal(t, int64(180), price.Total)
 }
 
 func TestPricingItems(t *testing.T) {
@@ -184,12 +197,13 @@ func TestPricingItems(t *testing.T) {
 			itemType: "ebook",
 		}},
 	}
-	price := CalculatePrice(settings, nil, "DE", "USD", nil, []Item{item})
+	params := PriceParameters{"DE", "USD", nil, []Item{item}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(100), price.Subtotal)
 	assert.Equal(t, uint64(10), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(110), price.Total)
+	assert.Equal(t, int64(110), price.Total)
 }
 
 func TestMemberDiscounts(t *testing.T) {
@@ -197,22 +211,24 @@ func TestMemberDiscounts(t *testing.T) {
 		Claims:     map[string]string{"app_metadata.plan": "member"},
 		Percentage: 10,
 	}}}
-	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 
 	claims := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
 
-	price = CalculatePrice(settings, claims, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params = PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price = CalculatePrice(settings, claims, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
 }
 
 func TestFixedMemberDiscounts(t *testing.T) {
@@ -223,20 +239,53 @@ func TestFixedMemberDiscounts(t *testing.T) {
 			Currency: "USD",
 		}},
 	}}}
-	price := CalculatePrice(settings, nil, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price := CalculatePrice(settings, nil, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(0), price.Discount)
-	assert.Equal(t, uint64(100), price.Total)
+	assert.Equal(t, int64(100), price.Total)
 
 	claims := map[string]interface{}{}
 	require.NoError(t, json.Unmarshal([]byte(`{"app_metadata": {"plan": "member"}}`), &claims))
 
-	price = CalculatePrice(settings, claims, "USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}})
+	params = PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	price = CalculatePrice(settings, claims, params, testLogger)
 
 	assert.Equal(t, uint64(92), price.Subtotal)
 	assert.Equal(t, uint64(8), price.Taxes)
 	assert.Equal(t, uint64(10), price.Discount)
-	assert.Equal(t, uint64(90), price.Total)
+	assert.Equal(t, int64(90), price.Total)
+}
+
+func TestMixedDiscounts(t *testing.T) {
+	b, err := ioutil.ReadFile("test/settings_fixture.json")
+	assert.NoError(t, err)
+
+	var settings Settings
+	err = json.Unmarshal(b, &settings)
+	assert.NoError(t, err)
+
+	item := &TestItem{
+		sku:      "design-systems-ebook",
+		itemType: "Book",
+		quantity: 1,
+		price:    3490,
+	}
+
+	params := PriceParameters{"USA", "USD", nil, []Item{item}}
+	price := CalculatePrice(&settings, nil, params, testLogger)
+	assert.Equal(t, 3490, int(price.Total))
+
+	claims := map[string]interface{}{
+		"app_metadata": map[string]interface{}{
+			"subscription": map[string]interface{}{
+				"plan": "member",
+			},
+		},
+	}
+	price = CalculatePrice(&settings, claims, params, testLogger)
+	assert.Equal(t, int64(0), price.Total)
 }

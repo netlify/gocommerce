@@ -9,6 +9,7 @@ import (
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 // PendingState is the pending state of an Order
@@ -146,18 +147,22 @@ func NewOrder(instanceID, sessionID, email, currency string) *Order {
 }
 
 // CalculateTotal calculates the total price of an Order.
-func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]interface{}) {
+func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]interface{}, log logrus.FieldLogger) {
 	items := make([]calculator.Item, len(o.LineItems))
 	for i, item := range o.LineItems {
 		items[i] = item
 	}
 
-	price := calculator.CalculatePrice(settings, claims, o.ShippingAddress.Country, o.Currency, o.Coupon, items)
+	params := calculator.PriceParameters{o.ShippingAddress.Country, o.Currency, o.Coupon, items}
+	price := calculator.CalculatePrice(settings, claims, params, log)
 
 	o.SubTotal = price.Subtotal
 	o.Taxes = price.Taxes
 	o.Discount = price.Discount
-	o.Total = price.Total
+
+	if price.Total > 0 {
+		o.Total = uint64(price.Total)
+	}
 }
 
 func (o *Order) BeforeDelete(tx *gorm.DB) error {

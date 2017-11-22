@@ -178,7 +178,7 @@ func setupTestData() *TestData {
 	firstOrder.ID = "first-order"
 	firstOrder.LineItems = []*models.LineItem{firstLineItem}
 	firstOrder.Downloads = []models.Download{firstDownload}
-	firstOrder.CalculateTotal(&calculator.Settings{}, nil)
+	firstOrder.CalculateTotal(&calculator.Settings{}, nil, testLogger)
 	firstOrder.BillingAddress = testAddress
 	firstOrder.ShippingAddress = testAddress
 	firstOrder.User = testUser
@@ -216,7 +216,7 @@ func setupTestData() *TestData {
 
 	secondOrder.ID = "second-order"
 	secondOrder.LineItems = []*models.LineItem{secondLineItem1, secondLineItem2}
-	secondOrder.CalculateTotal(&calculator.Settings{}, nil)
+	secondOrder.CalculateTotal(&calculator.Settings{}, nil, testLogger)
 	secondOrder.BillingAddress = testAddress
 	secondOrder.ShippingAddress = testAddress
 	secondOrder.User = testUser
