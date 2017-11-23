@@ -289,3 +289,48 @@ func TestMixedDiscounts(t *testing.T) {
 	price = CalculatePrice(&settings, claims, params, testLogger)
 	assert.Equal(t, int64(0), price.Total)
 }
+
+func TestRealWorldTaxCalculations(t *testing.T) {
+	settings := &Settings{
+		PricesIncludeTaxes: true,
+		Taxes: []*Tax{&Tax{
+			Percentage:   7,
+			ProductTypes: []string{"Book"},
+			Countries:    []string{"USA"},
+		}, &Tax{
+			Percentage:   19,
+			ProductTypes: []string{"E-Book"},
+			Countries:    []string{"USA"},
+		}},
+	}
+
+	item1 := &TestItem{
+		price:    2900,
+		itemType: "Book",
+		items: []Item{&TestItem{
+			price:    1900,
+			itemType: "Book",
+		}, &TestItem{
+			price:    1000,
+			itemType: "E-Book",
+		}},
+	}
+	item2 := &TestItem{
+		price:    3490,
+		itemType: "Book",
+		items: []Item{&TestItem{
+			price:    2300,
+			itemType: "Book",
+		}, &TestItem{
+			price:    1190,
+			itemType: "E-Book",
+		}},
+	}
+	params := PriceParameters{"USA", "USD", nil, []Item{item1, item2}}
+	price := CalculatePrice(settings, nil, params, testLogger)
+
+	assert.Equal(t, uint64(5766), price.Subtotal)
+	assert.Equal(t, uint64(625), price.Taxes)
+	assert.Equal(t, uint64(0), price.Discount)
+	assert.Equal(t, int64(6391), price.Total)
+}
