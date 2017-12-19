@@ -198,7 +198,7 @@ A URL to send a webhook to when the corresponding action has been performed.
 
 `WEBHOOKS_SECRET` - `string`
 
-A secret used to sign a JWT included in the `X-Commerce-Signature` header. This can be used to verify the webhook can from GoCommerce. 
+A secret used to sign a JWT included in the `X-Commerce-Signature` header. This can be used to verify the webhook came from GoCommerce. 
 
 ### JSON Web Tokens (JWT)
 
