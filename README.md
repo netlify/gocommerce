@@ -68,6 +68,8 @@ The easiest way to use GoCommerce is with [commerce-js](https://github.com/netli
 You may configure GoCommerce using either a configuration file named `.env`,
 environment variables, or a combination of both. Environment variables are prefixed with `GOCOMMERCE_`, and will always have precedence over values provided via file.
 
+For local dev, the easiest way to get started is to copy the included `example.env` file to `.env`
+
 ### Top-Level
 
 ```
@@ -198,7 +200,7 @@ A URL to send a webhook to when the corresponding action has been performed.
 
 `WEBHOOKS_SECRET` - `string`
 
-A secret used to sign a JWT included in the `X-Commerce-Signature` header. This can be used to verify the webhook came from GoCommerce. 
+A secret used to sign a JWT included in the `X-Commerce-Signature` header. This can be used to verify the webhook came from GoCommerce.
 
 ### JSON Web Tokens (JWT)
 
@@ -258,7 +260,7 @@ Email subject to use for orders sent to the store admin. Defaults to `Order Rece
 
 `MAILER_TEMPLATES_ORDER_CONFIRMATION` - `string`
 
-URL path, relative to the `SITE_URL`, of an email template to use when sending an order confirmation. 
+URL path, relative to the `SITE_URL`, of an email template to use when sending an order confirmation.
 `Order` and `Transaction` variables are available.
 
 Default Content (if template is unavailable):
@@ -276,7 +278,7 @@ Default Content (if template is unavailable):
 
 `MAILER_TEMPLATES_ORDER_RECEIVED` - `string`
 
-URL path, relative to the `SITE_URL`, of an email template to use when sending order details to the store admin. 
+URL path, relative to the `SITE_URL`, of an email template to use when sending order details to the store admin.
 `Order` and `Transaction` variables are available.
 
 Default Content (if template is unavailable):
