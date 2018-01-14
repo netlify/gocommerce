@@ -117,7 +117,7 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 			r.Get("/{coupon_code}", api.CouponView)
 		})
 
-		r.With(adminRequired).Get("/settings", api.ViewSettings)
+		r.Get("/settings", api.ViewSettings)
 
 		r.With(authRequired).Post("/claim", api.ClaimOrders)
 	})
