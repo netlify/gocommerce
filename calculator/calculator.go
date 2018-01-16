@@ -28,11 +28,25 @@ type ItemPrice struct {
 	Total    int64
 }
 
+// PaymentMethods settings
+type PaymentMethods struct {
+	Stripe struct {
+		Enabled   bool   `json:"enabled"`
+		PublicKey string `json:"public_key,omitempty"`
+	} `json:"stripe"`
+	PayPal struct {
+		Enabled     bool   `json:"enabled"`
+		ClientID    string `json:"client_id,omitempty"`
+		Environment string `json:"environment,omitempty"`
+	} `json:"paypal"`
+}
+
 // Settings represent the site-wide settings for price calculation.
 type Settings struct {
 	PricesIncludeTaxes bool              `json:"prices_include_taxes"`
-	Taxes              []*Tax            `json:"taxes"`
-	MemberDiscounts    []*MemberDiscount `json:"member_discounts"`
+	Taxes              []*Tax            `json:"taxes,omitempty"`
+	MemberDiscounts    []*MemberDiscount `json:"member_discounts,omitempty"`
+	PaymentMethods     *PaymentMethods   `json:"payment_methods,omitempty"`
 }
 
 // Tax represents a tax, potentially specific to countries and product types.
