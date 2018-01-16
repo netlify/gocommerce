@@ -15,10 +15,11 @@ const RefundTransactionType = "refund"
 
 // Transaction is an transaction with a payment provider
 type Transaction struct {
-	InstanceID string `json:"-"`
-	ID         string `json:"id"`
-	Order      *Order `json:"-"`
-	OrderID    string `json:"order_id"`
+	InstanceID    string `json:"-"`
+	ID            string `json:"id"`
+	Order         *Order `json:"-"`
+	OrderID       string `json:"order_id"`
+	InvoiceNumber int64  `json:"invoice_number"`
 
 	ProcessorID string `json:"processor_id"`
 

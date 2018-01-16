@@ -164,6 +164,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	tr := models.NewTransaction(order)
 	processorID, err := charge(params.Amount, params.Currency)
 	tr.ProcessorID = processorID
+	tr.InvoiceNumber = invoiceNumber
 
 	if err != nil {
 		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
