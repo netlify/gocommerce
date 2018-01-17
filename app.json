@@ -10,7 +10,7 @@
       "value": "postgres"
     },
     "GOCOMMERCE_DB_AUTOMIGRATE": {
-      "value": true
+      "value": "true"
     },
     "GOCOMMERCE_SITE_URL": {
       "description": "The URL for your ecommerce site"
