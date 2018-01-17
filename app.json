@@ -13,7 +13,7 @@
       "value": true
     },
     "GOCOMMERCE_SITE_URL": {
-      "description": "The URL for your ecommerce site",
+      "description": "The URL for your ecommerce site"
     },
     "GOCOMMERCE_PAYMENT_STRIPE_ENABLED": {
       "required": false
