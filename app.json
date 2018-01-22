@@ -5,7 +5,6 @@
   "repository": "https://github.com/netlify/gocommerce",
   "addons": ["heroku-postgresql"],
   "env": {
-    "DATABASE_URL": {},
     "GOCOMMERCE_DB_DRIVER": {
       "value": "postgres"
     },
