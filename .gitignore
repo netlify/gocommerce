@@ -13,3 +13,5 @@ www/dist/
 www/.DS_Store
 www/node_modules
 npm-debug.log
+builds/
+releases/
