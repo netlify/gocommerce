@@ -63,6 +63,12 @@ tax has been included in that product.
 
 The easiest way to use GoCommerce is with [commerce-js](https://github.com/netlify/netlify-commerce-js).
 
+## Running the GoCommerce backend
+
+GoCommerce can be deployed to any server environment that runs Go. The button below provides a quick way to get started by running on Heroku:
+
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/netlify/gocommerce)
+
 ## Configuration
 
 You may configure GoCommerce using either a configuration file named `.env`,
