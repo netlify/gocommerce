@@ -12,7 +12,7 @@
       "value": "true"
     },
     "GOCOMMERCE_JWT_SECRET": {
-      "decscription": "A generated key you can use for making authenticated calls to the service",
+      "description": "A generated key you can use for making authenticated calls to the service",
       "generator": "secret"
     },
     "GOCOMMERCE_SITE_URL": {
@@ -24,31 +24,31 @@
     },
     "GOCOMMERCE_PAYMENT_STRIPE_PUBLIC_KEY": {
       "required": false,
-      "decscription": "Required if Stripe is enabled. Get this key from Stripe."
+      "description": "Required if Stripe is enabled. Get this key from Stripe."
     },
     "GOCOMMERCE_PAYMENT_STRIPE_SECRET_KEY": {
       "required": false,
-      "decscription": "Required if Stripe is enabled. Get this key from Stripe."
+      "description": "Required if Stripe is enabled. Get this key from Stripe."
     },
     "GOCOMMERCE_SMTP_HOST": {
       "required": false,
-      "decscription": "Required for sending customer emails. Get from your transactional email provider. example: smtp.sparkpost.com"
+      "description": "Required for sending customer emails. Get from your transactional email provider. example: smtp.sparkpost.com"
     },
     "GOCOMMERCE_SMTP_PORT": {
       "required": false,
-      "decscription": "Required for sending customer emails. Get this port number from your transactional email provider."
+      "description": "Required for sending customer emails. Get this port number from your transactional email provider."
     },
     "GOCOMMERCE_SMTP_USER": {
       "required": false,
-      "decscription": "Required for sending customer emails. Get this username from your transactional email provider."
+      "description": "Required for sending customer emails. Get this username from your transactional email provider."
     },
     "GOCOMMERCE_SMTP_PASS": {
       "required": false,
-      "decscription": "Required for sending customer emails. Get this password from your transactional email provider."
+      "description": "Required for sending customer emails. Get this password from your transactional email provider."
     },
     "GOCOMMERCE_SMTP_ADMIN_EMAIL": {
       "required": false,
-      "decscription": "Required for sending customer emails. This address will send customer emails and will receive order notifications."
+      "description": "Required for sending customer emails. This address will send customer emails and will receive order notifications."
     }
   }
 }
