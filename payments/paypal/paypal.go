@@ -8,10 +8,11 @@ import (
 	"strconv"
 	"sync"
 
-	paypalsdk "github.com/logpacker/PayPal-Go-SDK"
+	paypalsdk "github.com/netlify/PayPal-Go-SDK"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/payments"
+	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -183,20 +184,9 @@ func (p *paypalPaymentProvider) getExperience() (*paypalsdk.WebProfile, error) {
 		return p.profile, nil
 	}
 
-	experiences, err := p.client.GetWebProfiles()
-	if err != nil {
-		return nil, errors.Wrap(err, "failed getting web profiles")
-	}
-
-	for _, profile := range experiences {
-		if profile.Name == "gocommerce" {
-			p.profile = &profile
-			return p.profile, nil
-		}
-	}
-
 	profile, err := p.client.CreateWebProfile(paypalsdk.WebProfile{
-		Name: "gocommerce",
+		Name:      "gocommerce-" + uuid.NewRandom().String(),
+		Temporary: true,
 		InputFields: paypalsdk.InputFields{
 			NoShipping: 1,
 		},

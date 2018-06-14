@@ -1,5 +1,5 @@
-hash: 7eeb336872ec49085bacddd70568e5a949a5adc57a8fee77a6f5b91af1cc2fc9
-updated: 2017-08-24T11:15:36.759173716-04:00
+hash: 412c7bbcd6147beb7f635ab387e50d19f377d4e5bb19f2a279a80222685c74cc
+updated: 2018-06-14T11:41:55.777808-04:00
 imports:
 - name: cloud.google.com/go
   version: 98f5696b1026056a47f114c4451dbc4703d67191
@@ -59,8 +59,6 @@ imports:
   version: ca5bc43047f2138703da0f3d3ca89a59f3d597f1
   subpackages:
   - oid
-- name: github.com/logpacker/PayPal-Go-SDK
-  version: 6745ee0f8097cd1dd95a3abf9e978a3a4ed3fdb8
 - name: github.com/magiconair/properties
   version: be5ece7dd465ab0765a9682137865547526d1dfb
 - name: github.com/mattes/vat
@@ -87,6 +85,8 @@ imports:
   - metrics/transport
   - nconf
   - tls
+- name: github.com/netlify/PayPal-Go-SDK
+  version: 732c3d08bf8a673d3d0ae345bfe771a573006890
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-toml
