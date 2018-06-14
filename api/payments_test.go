@@ -431,7 +431,11 @@ func TestPaymentPreauthorize(t *testing.T) {
 				loginCount++
 			case "/v1/payment-experience/web-profiles":
 				w.Header().Add("Content-Type", "application/json")
-				fmt.Fprint(w, `[{"id":"expid","name":"gocommerce"}]`)
+				if r.Method == http.MethodGet {
+					fmt.Fprint(w, `[{"id":"expid","name":"gocommerce"}]`)
+				} else {
+					fmt.Fprint(w, `{"id":"expid","name":"gocommerce-asdf"}`)
+				}
 			case "/v1/payments/payment":
 				w.Header().Add("Content-Type", "application/json")
 				fmt.Fprint(w, `{"id":"`+paymentID+`"}`)

@@ -25,7 +25,7 @@ import:
 - package: github.com/mattes/vat
 - package: github.com/pkg/errors
   version: ^0.7.1
-- package: github.com/logpacker/PayPal-Go-SDK
+- package: github.com/netlify/PayPal-Go-SDK
 - package: github.com/go-chi/chi
   version: v3.1.0
 - package: github.com/sirupsen/logrus
