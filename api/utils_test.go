@@ -252,9 +252,6 @@ func loadTestData(t *testing.T, db *gorm.DB) *TestData {
 	require.NoError(t, db.Create(testData.firstLineItem).Error)
 	require.NoError(t, db.Create(testData.firstOrder).Error)
 	require.NoError(t, db.Create(testData.firstTransaction).Error)
-	for _, d := range testData.firstOrder.Downloads {
-		require.NoError(t, db.Create(d).Error)
-	}
 
 	require.NoError(t, db.Create(testData.secondLineItem1).Error)
 	require.NoError(t, db.Create(testData.secondLineItem2).Error)
