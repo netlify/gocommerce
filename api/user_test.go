@@ -67,6 +67,19 @@ func TestUsersList(t *testing.T) {
 		require.Len(t, users, 1)
 		assert.Equal(t, "villian", users[0].ID)
 	})
+	t.Run("WithPagination", func(t *testing.T) {
+		test, _, rollback := createSecondUser(t)
+		defer rollback()
+
+		token := testAdminToken("magical-unicorn", "")
+		reqUrl := "/users?per_page=1"
+		recorder := test.TestEndpoint(http.MethodGet, reqUrl, nil, token)
+
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 1)
+		validatePagination(t, recorder, reqUrl, 2, 1, 1, 2)
+	})
 }
 
 func TestUsersView(t *testing.T) {
