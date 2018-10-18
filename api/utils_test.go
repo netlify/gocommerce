@@ -364,3 +364,33 @@ func signHTTPRequest(req *http.Request, token *jwt.Token, jwtSecret string) erro
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenStr))
 	return nil
 }
+
+func signInstanceRequest(req *http.Request, instanceID string, jwtSecret string) error {
+	claims := &NetlifyMicroserviceClaims{
+		InstanceID: instanceID,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	jwt, err := token.SignedString([]byte(jwtSecret))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("x-nf-sign", jwt)
+	return nil
+}
+
+// ------------------------------------------------------------------------------------------------
+// TEST SITE
+// ------------------------------------------------------------------------------------------------
+func startTestSiteWithSettings(settings interface{}) *httptest.Server {
+	settingsStr, err := json.Marshal(settings)
+	if err != nil {
+		panic(fmt.Errorf("Encoding the settings failed: %+v", err))
+	}
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gocommerce/settings.json":
+			w.Write(settingsStr)
+		}
+	}))
+}

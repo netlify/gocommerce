@@ -130,7 +130,7 @@ func WithInstanceConfig(ctx context.Context, smtp conf.SMTPConfiguration, config
 		return nil, errors.Wrap(err, "error creating payment providers")
 	}
 	if len(provs) == 0 {
-		return nil, errors.Wrap(err, "No payment providers enabled")
+		return nil, errors.New("No payment providers enabled")
 	}
 	ctx = gcontext.WithPaymentProviders(ctx, provs)
 
