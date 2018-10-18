@@ -226,6 +226,17 @@ func TestOrdersList(t *testing.T) {
 			assert.Len(t, orders, 1)
 		})
 	})
+	t.Run("Pagination", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := test.Data.testUserToken
+		reqUrl := "/orders?per_page=1"
+		recorder := test.TestEndpoint(http.MethodGet, reqUrl, nil, token)
+
+		orders := []models.Order{}
+		extractPayload(t, http.StatusOK, recorder, &orders)
+		assert.Len(t, orders, 1)
+		validatePagination(t, recorder, reqUrl, 2, 1, 1, 2)
+	})
 }
 
 func TestUserOrdersList(t *testing.T) {

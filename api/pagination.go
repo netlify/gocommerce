@@ -21,7 +21,7 @@ func calculateTotalPages(perPage, total uint64) uint64 {
 
 func addPaginationHeaders(w http.ResponseWriter, r *http.Request, page, perPage, total uint64) {
 	totalPages := calculateTotalPages(perPage, total)
-	url, _ := url.ParseRequestURI(r.URL.String())
+	url, _ := url.ParseRequestURI(r.URL.RequestURI())
 	query := url.Query()
 	header := ""
 	if totalPages > page {

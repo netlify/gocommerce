@@ -1,5 +1,5 @@
-hash: 412c7bbcd6147beb7f635ab387e50d19f377d4e5bb19f2a279a80222685c74cc
-updated: 2018-06-14T11:41:55.777808-04:00
+hash: 5c323ab6120aa0196280c039ea80bc8f21a76f34c6880c47935603b6eff9cc8d
+updated: 2018-10-18T17:14:54.331248849+02:00
 imports:
 - name: cloud.google.com/go
   version: 98f5696b1026056a47f114c4451dbc4703d67191
@@ -46,7 +46,7 @@ imports:
 - name: github.com/inconshreveable/mousetrap
   version: 76626ae9c91c4f2a10f34cad8ce83ea42c93bb75
 - name: github.com/jinzhu/gorm
-  version: 5174cc5c242a728b435ea2be8a2f7f998e15429b
+  version: 6ed508ec6a4ecb3531899a69cbc746ccf65a4166
 - name: github.com/jinzhu/inflection
   version: 1c35d901db3da928c72a72d8458480cc9ade058f
 - name: github.com/joho/godotenv

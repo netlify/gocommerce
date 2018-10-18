@@ -8,7 +8,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"strconv"
 	"testing"
 	"time"
 
@@ -252,9 +254,6 @@ func loadTestData(t *testing.T, db *gorm.DB) *TestData {
 	require.NoError(t, db.Create(testData.firstLineItem).Error)
 	require.NoError(t, db.Create(testData.firstOrder).Error)
 	require.NoError(t, db.Create(testData.firstTransaction).Error)
-	for _, d := range testData.firstOrder.Downloads {
-		require.NoError(t, db.Create(d).Error)
-	}
 
 	require.NoError(t, db.Create(testData.secondLineItem1).Error)
 	require.NoError(t, db.Create(testData.secondLineItem2).Error)
@@ -316,6 +315,28 @@ func validateAddress(t *testing.T, expected models.Address, actual models.Addres
 	assert.Equal(expected.Country, actual.Country)
 	assert.Equal(expected.State, actual.State)
 	assert.Equal(expected.Zip, actual.Zip)
+}
+
+func validatePagination(t *testing.T, r *httptest.ResponseRecorder, reqUrl string, total int, page int, perPage int, totalPages int) {
+	assert := assert.New(t)
+
+	// build expected link header
+	linkHeader := ""
+	url, err := url.ParseRequestURI(reqUrl)
+	assert.NoError(err)
+	query := url.Query()
+	if totalPages > page {
+		query.Set("page", fmt.Sprintf("%v", page+1))
+		url.RawQuery = query.Encode()
+		linkHeader += "<" + url.String() + ">; rel=\"next\", "
+	}
+	query.Set("page", fmt.Sprintf("%v", totalPages))
+	url.RawQuery = query.Encode()
+	linkHeader += "<" + url.String() + ">; rel=\"last\""
+
+	headers := r.HeaderMap
+	assert.Equal(strconv.Itoa(total), headers["X-Total-Count"][0])
+	assert.Equal(linkHeader, headers["Link"][0])
 }
 
 // ------------------------------------------------------------------------------------------------
