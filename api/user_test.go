@@ -13,6 +13,20 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
+func createSecondUser(t *testing.T) (*RouteTest, models.User, func()) {
+	test := NewRouteTest(t)
+	toDie := models.User{
+		ID:    "villian",
+		Email: "twoface@dc.com",
+	}
+	rsp := test.DB.Create(&toDie)
+	require.NoError(t, rsp.Error, "DB Error")
+
+	return test, toDie, func() {
+		test.DB.Unscoped().Delete(&toDie)
+	}
+}
+
 func TestUsersList(t *testing.T) {
 	t.Run("AsStranger", func(t *testing.T) {
 		test := NewRouteTest(t)
@@ -21,14 +35,8 @@ func TestUsersList(t *testing.T) {
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 	t.Run("AsAdmin", func(t *testing.T) {
-		test := NewRouteTest(t)
-		toDie := models.User{
-			ID:    "villian",
-			Email: "twoface@dc.com",
-		}
-		rsp := test.DB.Create(&toDie)
-		require.NoError(t, rsp.Error, "DB Error")
-		defer test.DB.Unscoped().Delete(&toDie)
+		test, toDie, rollback := createSecondUser(t)
+		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
@@ -48,14 +56,8 @@ func TestUsersList(t *testing.T) {
 		}
 	})
 	t.Run("WithParams", func(t *testing.T) {
-		test := NewRouteTest(t)
-		toDie := models.User{
-			ID:    "villian",
-			Email: "twoface@dc.com",
-		}
-		rsp := test.DB.Create(&toDie)
-		require.NoError(t, rsp.Error, "DB Error")
-		defer test.DB.Unscoped().Delete(&toDie)
+		test, _, rollback := createSecondUser(t)
+		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, "/users?email=dc.com", nil, token)
