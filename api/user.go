@@ -61,7 +61,10 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
-	query = query.Select("count(" + orderTable + ".id) as order_count, " + userTable + ".*")
+	query = query.Select("" +
+		"COUNT(" + orderTable + ".id) AS order_count, " +
+		"MAX(" + orderTable + ".created_at) AS last_order_at, " +
+		userTable + ".*")
 
 	users := []models.User{}
 	if err := query.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
