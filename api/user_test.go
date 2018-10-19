@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -48,8 +50,11 @@ func TestUsersList(t *testing.T) {
 			switch u.ID {
 			case toDie.ID:
 				assert.Equal(t, "twoface@dc.com", u.Email)
+				assert.Nil(t, u.LastOrderAt)
 			case test.Data.testUser.ID:
 				assert.Equal(t, test.Data.testUser.Email, u.Email)
+				expectedTime := mysql.NullTime{test.Data.secondOrder.CreatedAt.In(time.UTC), true}
+				assert.EqualValues(t, expectedTime, *u.LastOrderAt)
 			default:
 				assert.Fail(t, "unexpected user %v\n", u)
 			}
