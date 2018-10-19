@@ -7,8 +7,10 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/jinzhu/gorm"
 	"github.com/pborman/uuid"
 
+	"github.com/netlify/gocommerce/claims"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 )
@@ -26,6 +28,48 @@ func (a *API) withUser(w http.ResponseWriter, r *http.Request) (context.Context,
 
 	ctx = gcontext.WithUserID(ctx, userID)
 	return ctx, nil
+}
+
+func findUserName(order *models.Order, claims *claims.JWTClaims) string {
+	if rawName, ok := claims.UserMetaData["full_name"]; ok {
+		if name, ok := rawName.(string); ok {
+			return name
+		}
+	}
+	if order.BillingAddress.Name != "" {
+		return order.BillingAddress.Name
+	}
+	if order.ShippingAddress.Name != "" {
+		return order.ShippingAddress.Name
+	}
+	return ""
+}
+
+// persistUserName will set a users name from a JWT or the order addresses
+func persistUserName(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims) *HTTPError {
+	if claims == nil {
+		return nil
+	}
+
+	if claims.Subject == "" {
+		return badRequestError("Token had an invalid ID: %s", claims.Subject)
+	}
+
+	user := models.User{}
+	if err := tx.Find(&user, "id = ?", claims.Subject).Error; err != nil {
+		return internalServerError("User has not been created yet. This is unexpected behavior").
+			WithInternalError(err)
+	}
+
+	name := findUserName(order, claims)
+	if name != "" {
+		user.Name = name
+		if err := tx.Save(&user).Error; err != nil {
+			return internalServerError("Unable to save user's name").WithInternalError(err)
+		}
+	}
+
+	return nil
 }
 
 // UserList will return all of the users. It requires admin access.
