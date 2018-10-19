@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/pborman/uuid"
@@ -45,12 +44,10 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 	}
 	log.Debug("Parsed url params")
 
-	var users []models.User
 	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
 	userTable := a.db.NewScope(models.User{}).QuotedTableName()
 	query = query.
-		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = orders.user_id").
-		Select(userTable + ".id, " + userTable + ".email, " + userTable + ".created_at, " + userTable + ".updated_at, count(orders.id) as order_count").
+		Joins("LEFT JOIN " + orderTable + " as orders ON " + userTable + ".id = " + orderTable + ".user_id").
 		Group(userTable + ".id")
 
 	instanceID := gcontext.GetInstanceID(r.Context())
@@ -64,22 +61,11 @@ func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 		return badRequestError("Bad Pagination Parameters: %v", err)
 	}
 
-	rows, err := query.Offset(offset).Limit(limit).Find(&users).Rows()
-	if err != nil {
+	query = query.Select("count(" + orderTable + ".id) as order_count, " + userTable + ".*")
+
+	users := []models.User{}
+	if err := query.Offset(offset).Limit(limit).Find(&users).Error; err != nil {
 		return internalServerError("Failed to execute request").WithInternalError(err)
-	}
-	defer rows.Close()
-	i := 0
-	for rows.Next() {
-		var id, email string
-		var createdAt, updatedAt time.Time
-		var orderCount int64
-		err := rows.Scan(&id, &email, &createdAt, &updatedAt, &orderCount)
-		if err != nil {
-			return internalServerError("Failed to execute request").WithInternalError(err)
-		}
-		users[i].OrderCount = orderCount
-		i++
 	}
 
 	numUsers := len(users)
