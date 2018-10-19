@@ -18,7 +18,7 @@ type User struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"-"`
 
-	OrderCount int64 `json:"order_count,ommitempty" gorm:"-"`
+	OrderCount int64 `json:"order_count" gorm:"-"`
 }
 
 // TableName returns the database table name for the User model.
