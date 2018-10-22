@@ -136,14 +136,14 @@ If enabled, creates missing tables and columns upon startup.
 ### Logging
 
 ```
-LOG_LEVEL=debug
+GOCOMMERCE_LOG_LEVEL=debug
 ```
 
-`LOG_LEVEL` - `string`
+`GOCOMMERCE_LOG_LEVEL` - `string`
 
 Controls what log levels are output. Choose from `panic`, `fatal`, `error`, `warn`, `info`, or `debug`. Defaults to `info`.
 
-`LOG_FILE` - `string`
+`GOCOMMERCE_LOG_FILE` - `string`
 
 If you wish logs to be written to a file, set `log_file` to a valid file path.
 
@@ -151,26 +151,26 @@ If you wish logs to be written to a file, set `log_file` to a valid file path.
 
 #### Stripe
 
-`PAYMENT_STRIPE_ENABLED` - `bool`
+`GOCOMMERCE_PAYMENT_STRIPE_ENABLED` - `bool`
 
 Whether Stripe is enabled as a payment provider or not.
 
-`PAYMENT_STRIPE_SECRET_KEY` - `string`
+`GOCOMMERCE_PAYMENT_STRIPE_SECRET_KEY` - `string`
 
 The Stripe [secret key](https://stripe.com/docs/api#authentication) used when authenticating with the Stripe API.
 
 #### PayPal
 
-`PAYMENT_PAYPAL_ENABLED` - `bool`
+`GOCOMMERCE_PAYMENT_PAYPAL_ENABLED` - `bool`
 
 Whether PayPal is enabled as a payment provider or not.
 
-`PAYMENT_PAYPAL_CLIENT_ID` - `string`
-`PAYMENT_PAYPAL_SECRET` - `string`
+`GOCOMMERCE_PAYMENT_PAYPAL_CLIENT_ID` - `string`
+`GOCOMMERCE_PAYMENT_PAYPAL_SECRET` - `string`
 
 The OAuth credentials PayPal issued to you. GoCommerce will use them to [obtain an access token](https://developer.paypal.com/docs/api/overview/#authentication-and-authorization).
 
-`PAYMENT_PAYPAL_ENV` - `string`
+`GOCOMMERCE_PAYMENT_PAYPAL_ENV` - `string`
 
 The PayPal environment to use. Choose from `production` or `sandbox`.
 
