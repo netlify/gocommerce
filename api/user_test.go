@@ -15,17 +15,16 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func createSecondUser(t *testing.T) (*RouteTest, models.User, func()) {
-	test := NewRouteTest(t)
+func createUser(test *RouteTest, ID string, Email string, Name string) func() {
 	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-		Name:  "Harvey Dent",
+		ID:    ID,
+		Email: Email,
+		Name:  Name,
 	}
 	rsp := test.DB.Create(&toDie)
-	require.NoError(t, rsp.Error, "DB Error")
+	require.NoError(test.T, rsp.Error, "DB Error")
 
-	return test, toDie, func() {
+	return func() {
 		test.DB.Unscoped().Delete(&toDie)
 	}
 }
@@ -38,7 +37,8 @@ func TestUsersList(t *testing.T) {
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 	t.Run("AsAdmin", func(t *testing.T) {
-		test, toDie, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
@@ -49,7 +49,7 @@ func TestUsersList(t *testing.T) {
 		require.Len(t, users, 2)
 		for _, u := range users {
 			switch u.ID {
-			case toDie.ID:
+			case "villian":
 				assert.Equal(t, "twoface@dc.com", u.Email)
 				assert.Equal(t, "Harvey Dent", u.Name)
 				assert.Nil(t, u.LastOrderAt)
@@ -64,7 +64,8 @@ func TestUsersList(t *testing.T) {
 		}
 	})
 	t.Run("WithParams", func(t *testing.T) {
-		test, _, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
@@ -76,7 +77,8 @@ func TestUsersList(t *testing.T) {
 		assert.Equal(t, "villian", users[0].ID)
 	})
 	t.Run("WithPagination", func(t *testing.T) {
-		test, _, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
