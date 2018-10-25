@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -77,12 +78,23 @@ func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
 	return globalConfig, config
 }
 
-func testToken(id, email string) *jwt.Token {
+func testToken(args ...string) *jwt.Token {
+	if len(args) < 2 {
+		panic(errors.New("Missing parameter to testToken()"))
+	}
+	id := args[0]
+	email := args[1]
 	claims := &claims.JWTClaims{
 		StandardClaims: jwt.StandardClaims{
 			Subject: id,
 		},
 		Email: email,
+	}
+
+	if len(args) > 2 {
+		claims.UserMetaData = map[string]interface{}{
+			"full_name": args[2],
+		}
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 }
@@ -137,6 +149,7 @@ func setupTestData() *TestData {
 	testUser := &models.User{
 		ID:    "i-am-batman",
 		Email: "bruce@wayneindustries.com",
+		Name:  "Bruce Wayne",
 	}
 
 	testAddress := models.Address{

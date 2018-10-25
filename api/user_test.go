@@ -20,6 +20,7 @@ func createSecondUser(t *testing.T) (*RouteTest, models.User, func()) {
 	toDie := models.User{
 		ID:    "villian",
 		Email: "twoface@dc.com",
+		Name:  "Harvey Dent",
 	}
 	rsp := test.DB.Create(&toDie)
 	require.NoError(t, rsp.Error, "DB Error")
@@ -50,9 +51,11 @@ func TestUsersList(t *testing.T) {
 			switch u.ID {
 			case toDie.ID:
 				assert.Equal(t, "twoface@dc.com", u.Email)
+				assert.Equal(t, "Harvey Dent", u.Name)
 				assert.Nil(t, u.LastOrderAt)
 			case test.Data.testUser.ID:
 				assert.Equal(t, test.Data.testUser.Email, u.Email)
+				assert.Equal(t, "Bruce Wayne", u.Name)
 				expectedTime := mysql.NullTime{test.Data.secondOrder.CreatedAt.In(time.UTC), true}
 				assert.EqualValues(t, expectedTime, *u.LastOrderAt)
 			default:

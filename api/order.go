@@ -377,6 +377,11 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 		order.BillingAddressID = shipping.ID
 	}
 
+	if httpError := persistUserName(tx, order, claims); httpError != nil {
+		tx.Rollback()
+		return httpError
+	}
+
 	if params.VATNumber != "" {
 		valid, err := vat.IsValidVAT(params.VATNumber)
 		if err != nil {

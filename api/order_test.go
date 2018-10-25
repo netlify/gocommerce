@@ -23,6 +23,16 @@ import (
 // CREATE
 // ------------------------------------------------------------------------------------------------
 
+const defaultPayload = `{
+	"email": "info@example.com",
+	"shipping_address": {
+		"name": "Test User",
+		"address1": "610 22nd Street",
+		"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+	},
+	"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
+}`
+
 func TestOrderCreate(t *testing.T) {
 	server := startTestSite()
 	defer server.Close()
@@ -30,15 +40,7 @@ func TestOrderCreate(t *testing.T) {
 	t.Run("Simple", func(t *testing.T) {
 		test := NewRouteTest(t)
 		test.Config.SiteURL = server.URL
-		body := strings.NewReader(`{
-			"email": "info@example.com",
-			"shipping_address": {
-				"name": "Test User",
-				"address1": "610 22nd Street",
-				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
-			},
-			"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
-		}`)
+		body := strings.NewReader(defaultPayload)
 		token := test.Data.testUserToken
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
@@ -128,6 +130,85 @@ func TestOrderCreate(t *testing.T) {
 		assert.Equal(t, "Germany", order.BillingAddress.Country)
 		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1105, was %v", order.Total))
 		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Total))
+	})
+}
+
+func TestOrderCreateNewUser(t *testing.T) {
+	server := startTestSite()
+	defer server.Close()
+
+	firstTimeUser := models.User{
+		ID:    "harley-quinn",
+		Email: "harley@joker.org",
+		Name:  "Harleen Frances Quinzel",
+	}
+
+	t.Run("Simple", func(t *testing.T) {
+		test := NewRouteTest(t)
+		test.Config.SiteURL = server.URL
+		body := strings.NewReader(defaultPayload)
+
+		token := testToken(firstTimeUser.ID, firstTimeUser.Email)
+		defer test.DB.Delete(firstTimeUser)
+
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		createdUser := models.User{}
+		assert.NoError(t, test.DB.Find(&createdUser, "id = ?", firstTimeUser.ID).Error)
+		assert.Equal(t, firstTimeUser.Email, createdUser.Email)
+		assert.Equal(t, "Test User", createdUser.Name)
+	})
+
+	t.Run("WithNameFromJWT", func(t *testing.T) {
+		test := NewRouteTest(t)
+		test.Config.SiteURL = server.URL
+		body := strings.NewReader(defaultPayload)
+
+		token := testToken(firstTimeUser.ID, firstTimeUser.Email, firstTimeUser.Name)
+		defer test.DB.Delete(firstTimeUser)
+
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		createdUser := models.User{}
+		assert.NoError(t, test.DB.Find(&createdUser, "id = ?", firstTimeUser.ID).Error)
+		assert.Equal(t, firstTimeUser.Email, createdUser.Email)
+		assert.Equal(t, firstTimeUser.Name, createdUser.Name)
+	})
+
+	t.Run("WithNameFromBillingAddress", func(t *testing.T) {
+		payloadWithBilling := `{
+			"email": "info@example.com",
+			"shipping_address": {
+				"name": "Test User",
+				"address1": "610 22nd Street",
+				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+			},
+			"billing_address": {
+				"name": "Accounting User",
+				"address1": "Branengebranen",
+				"city": "Berlin", "country": "Germany", "zip": "94107"
+			},
+			"line_items": [{"path": "/simple-product", "quantity": 1, "meta": {"attendees": [{"name": "Matt", "email": "matt@example.com"}]}}]
+		}`
+		test := NewRouteTest(t)
+		test.Config.SiteURL = server.URL
+		body := strings.NewReader(payloadWithBilling)
+
+		token := testToken(firstTimeUser.ID, firstTimeUser.Email)
+		defer test.DB.Delete(firstTimeUser)
+
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		createdUser := models.User{}
+		assert.NoError(t, test.DB.Find(&createdUser, "id = ?", firstTimeUser.ID).Error)
+		assert.Equal(t, firstTimeUser.Email, createdUser.Email)
+		assert.Equal(t, "Accounting User", createdUser.Name)
 	})
 }
 
