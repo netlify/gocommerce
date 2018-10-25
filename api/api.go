@@ -174,6 +174,7 @@ func (a *API) orderRoutes(r *router) {
 func (a *API) userRoutes(r *router) {
 	r.Use(authRequired)
 	r.With(adminRequired).Get("/", a.UserList)
+	r.With(adminRequired).Delete("/", a.UserBulkDelete)
 
 	r.Route("/{user_id}", func(r *router) {
 		r.Use(a.withUser)

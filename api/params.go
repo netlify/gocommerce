@@ -9,6 +9,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/models"
+	"github.com/pkg/errors"
 )
 
 type sortDirection string
@@ -49,6 +50,18 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 		return nil, err
 	}
 	return parseTimeQueryParams(query, params)
+}
+
+func parseUserBulkDeleteParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	if _, ok := params["id"]; !ok {
+		return nil, errors.New("User ID field is required")
+	}
+
+	userTable := query.NewScope(models.User{}).QuotedTableName()
+	query = addFilters(query, userTable, params, []string{
+		"id",
+	})
+	return query, nil
 }
 
 func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {

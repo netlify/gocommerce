@@ -199,6 +199,40 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (a *API) UserBulkDelete(w http.ResponseWriter, r *http.Request) error {
+	log := getLogEntry(r)
+
+	query, err := parseUserBulkDeleteParams(a.db, r.URL.Query())
+	if err != nil {
+		return badRequestError("Bad parameters in query: %v", err)
+	}
+
+	users := []models.User{}
+	if result := query.Find(&users); result.Error != nil {
+		return internalServerError("error while deleting user").WithInternalError(result.Error)
+	}
+
+	tx := a.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	for _, user := range users {
+		if result := tx.Delete(&user); result.Error != nil {
+			if result.RecordNotFound() {
+				continue
+			}
+			tx.Rollback()
+			return internalServerError("error while deleting user").WithInternalError(result.Error)
+		}
+	}
+
+	log.Infof("Deleted users")
+	return tx.Commit().Error
+}
+
 // AddressDelete will soft delete the address associated with that user. It requires admin access
 // return errors or 200 and no body
 func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {

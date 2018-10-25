@@ -304,6 +304,105 @@ func TestUserDelete(t *testing.T) {
 	})
 }
 
+func TestUserBulkDelete(t *testing.T) {
+	t.Run("SingleUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
+		dyingAddr := getTestAddress()
+		dyingAddr.UserID = dyingUser.ID
+		dyingOrder := models.NewOrder("", "session2", dyingUser.Email, "USD")
+		dyingOrder.UserID = dyingUser.ID
+		dyingTransaction := models.NewTransaction(dyingOrder)
+		dyingTransaction.UserID = dyingUser.ID
+		dyingLineItem := models.LineItem{
+			ID:          123,
+			OrderID:     dyingOrder.ID,
+			Title:       "coffin",
+			Sku:         "123-cough-cough-123",
+			Type:        "home",
+			Description: "nappytimeplace",
+			Price:       100,
+			Quantity:    1,
+			Path:        "/right/to/the/grave",
+		}
+		items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
+		for _, i := range items {
+			test.DB.Create(i)
+		}
+		defer func() {
+			for _, i := range items {
+				test.DB.Unscoped().Delete(i)
+			}
+		}()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users?id="+dyingUser.ID, nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		// now load it back and it should be soft deleted
+		//found := &models.User{ID: dyingUser.ID}
+		assert.False(t, test.DB.Unscoped().First(&dyingUser).RecordNotFound())
+		assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingAddr).RecordNotFound())
+		assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(dyingOrder).RecordNotFound())
+		assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingTransaction).RecordNotFound())
+		assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingLineItem).RecordNotFound())
+		assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+	})
+	t.Run("MultipleUsers", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback1()
+		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
+		defer rollback2()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "cop"), nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		user1 := models.User{}
+		test.DB.Unscoped().Find(&user1, "id = ?", "villan")
+		assert.NotNil(t, user1.DeletedAt, "villan wasn't deleted")
+		user2 := models.User{}
+		test.DB.Unscoped().Find(&user2, "id = ?", "cop")
+		assert.NotNil(t, user2.DeletedAt, "cop wasn't deleted")
+	})
+	t.Run("WithNonExistent", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "superman"), nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		user := models.User{}
+		test.DB.Unscoped().Find(&user, "id = ?", "villan")
+		assert.NotNil(t, user.DeletedAt, "villan wasn't deleted")
+	})
+	t.Run("MissingParameters", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users", nil, token)
+		validateError(t, http.StatusBadRequest, recorder)
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
+	})
+}
+
 func TestUserAddressDelete(t *testing.T) {
 	test := NewRouteTest(t)
 	addr := getTestAddress()
