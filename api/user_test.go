@@ -90,6 +90,32 @@ func TestUsersList(t *testing.T) {
 		require.Len(t, users, 1)
 		validatePagination(t, recorder, reqUrl, 2, 1, 1, 2)
 	})
+	t.Run("MultipleIDs", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback1()
+		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
+		defer rollback2()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, fmt.Sprintf("/users?id=%s&id=%s", test.Data.testUser.ID, "cop"), nil, token)
+
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 2)
+		for _, u := range users {
+			switch u.ID {
+			case "cop":
+				assert.Equal(t, "james.gordon@dc.com", u.Email)
+				assert.Equal(t, "James Gordon", u.Name)
+			case test.Data.testUser.ID:
+				assert.Equal(t, test.Data.testUser.Email, u.Email)
+				assert.Equal(t, test.Data.testUser.Name, u.Name)
+			default:
+				assert.Fail(t, "unexpected user %v\n", u)
+			}
+		}
+	})
 }
 
 func TestUsersView(t *testing.T) {

@@ -207,7 +207,7 @@ func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 func addFilters(query *gorm.DB, table string, params url.Values, availableFilters []string) *gorm.DB {
 	for _, filter := range availableFilters {
 		if values, exists := params[filter]; exists {
-			query = query.Where(table+"."+filter+" = ?", values[0])
+			query = query.Where(table+"."+filter+" IN (?)", values)
 		}
 	}
 	return query
