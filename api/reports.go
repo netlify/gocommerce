@@ -12,6 +12,7 @@ type salesRow struct {
 	SubTotal uint64 `json:"subtotal"`
 	Taxes    uint64 `json:"taxes"`
 	Currency string `json:"currency"`
+	Orders   uint64 `json:"orders"`
 }
 
 type productsRow struct {
@@ -27,7 +28,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 
 	query := a.db.
 		Model(&models.Order{}).
-		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency").
+		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency, count(*) as orders").
 		Where("payment_state = 'paid' AND instance_id = ?", instanceID).
 		Group("currency")
 
@@ -44,7 +45,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 	result := []*salesRow{}
 	for rows.Next() {
 		row := &salesRow{}
-		err = rows.Scan(&row.Total, &row.SubTotal, &row.Taxes, &row.Currency)
+		err = rows.Scan(&row.Total, &row.SubTotal, &row.Taxes, &row.Currency, &row.Orders)
 		if err != nil {
 			return internalServerError("Database error").WithInternalError(err)
 		}
