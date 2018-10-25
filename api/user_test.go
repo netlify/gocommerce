@@ -15,17 +15,16 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func createSecondUser(t *testing.T) (*RouteTest, models.User, func()) {
-	test := NewRouteTest(t)
+func createUser(test *RouteTest, ID string, Email string, Name string) func() {
 	toDie := models.User{
-		ID:    "villian",
-		Email: "twoface@dc.com",
-		Name:  "Harvey Dent",
+		ID:    ID,
+		Email: Email,
+		Name:  Name,
 	}
 	rsp := test.DB.Create(&toDie)
-	require.NoError(t, rsp.Error, "DB Error")
+	require.NoError(test.T, rsp.Error, "DB Error")
 
-	return test, toDie, func() {
+	return func() {
 		test.DB.Unscoped().Delete(&toDie)
 	}
 }
@@ -38,7 +37,8 @@ func TestUsersList(t *testing.T) {
 		validateError(t, http.StatusUnauthorized, recorder)
 	})
 	t.Run("AsAdmin", func(t *testing.T) {
-		test, toDie, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
@@ -49,7 +49,7 @@ func TestUsersList(t *testing.T) {
 		require.Len(t, users, 2)
 		for _, u := range users {
 			switch u.ID {
-			case toDie.ID:
+			case "villian":
 				assert.Equal(t, "twoface@dc.com", u.Email)
 				assert.Equal(t, "Harvey Dent", u.Name)
 				assert.Nil(t, u.LastOrderAt)
@@ -64,7 +64,8 @@ func TestUsersList(t *testing.T) {
 		}
 	})
 	t.Run("WithParams", func(t *testing.T) {
-		test, _, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
@@ -76,7 +77,8 @@ func TestUsersList(t *testing.T) {
 		assert.Equal(t, "villian", users[0].ID)
 	})
 	t.Run("WithPagination", func(t *testing.T) {
-		test, _, rollback := createSecondUser(t)
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 		defer rollback()
 
 		token := testAdminToken("magical-unicorn", "")
@@ -87,6 +89,32 @@ func TestUsersList(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, &users)
 		require.Len(t, users, 1)
 		validatePagination(t, recorder, reqUrl, 2, 1, 1, 2)
+	})
+	t.Run("MultipleIDs", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback1()
+		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
+		defer rollback2()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodGet, fmt.Sprintf("/users?id=%s&id=%s", test.Data.testUser.ID, "cop"), nil, token)
+
+		users := []models.User{}
+		extractPayload(t, http.StatusOK, recorder, &users)
+		require.Len(t, users, 2)
+		for _, u := range users {
+			switch u.ID {
+			case "cop":
+				assert.Equal(t, "james.gordon@dc.com", u.Email)
+				assert.Equal(t, "James Gordon", u.Name)
+			case test.Data.testUser.ID:
+				assert.Equal(t, test.Data.testUser.Email, u.Email)
+				assert.Equal(t, test.Data.testUser.Name, u.Name)
+			default:
+				assert.Fail(t, "unexpected user %v\n", u)
+			}
+		}
 	})
 }
 
@@ -273,6 +301,105 @@ func TestUserDelete(t *testing.T) {
 		assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
 		assert.False(t, test.DB.Unscoped().First(&dyingLineItem).RecordNotFound())
 		assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+	})
+}
+
+func TestUserBulkDelete(t *testing.T) {
+	t.Run("SingleUser", func(t *testing.T) {
+		test := NewRouteTest(t)
+		dyingUser := models.User{ID: "going-to-die", Email: "nobody@nowhere.com"}
+		dyingAddr := getTestAddress()
+		dyingAddr.UserID = dyingUser.ID
+		dyingOrder := models.NewOrder("", "session2", dyingUser.Email, "USD")
+		dyingOrder.UserID = dyingUser.ID
+		dyingTransaction := models.NewTransaction(dyingOrder)
+		dyingTransaction.UserID = dyingUser.ID
+		dyingLineItem := models.LineItem{
+			ID:          123,
+			OrderID:     dyingOrder.ID,
+			Title:       "coffin",
+			Sku:         "123-cough-cough-123",
+			Type:        "home",
+			Description: "nappytimeplace",
+			Price:       100,
+			Quantity:    1,
+			Path:        "/right/to/the/grave",
+		}
+		items := []interface{}{&dyingUser, &dyingAddr, dyingOrder, &dyingLineItem, &dyingTransaction}
+		for _, i := range items {
+			test.DB.Create(i)
+		}
+		defer func() {
+			for _, i := range items {
+				test.DB.Unscoped().Delete(i)
+			}
+		}()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users?id="+dyingUser.ID, nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		// now load it back and it should be soft deleted
+		//found := &models.User{ID: dyingUser.ID}
+		assert.False(t, test.DB.Unscoped().First(&dyingUser).RecordNotFound())
+		assert.NotNil(t, dyingUser.DeletedAt, "user wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingAddr).RecordNotFound())
+		assert.NotNil(t, dyingAddr.DeletedAt, "addr wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(dyingOrder).RecordNotFound())
+		assert.NotNil(t, dyingOrder.DeletedAt, "order wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingTransaction).RecordNotFound())
+		assert.NotNil(t, dyingTransaction.DeletedAt, "transaction wasn't deleted")
+		assert.False(t, test.DB.Unscoped().First(&dyingLineItem).RecordNotFound())
+		assert.NotNil(t, dyingLineItem.DeletedAt, "line item wasn't deleted")
+	})
+	t.Run("MultipleUsers", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback1()
+		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
+		defer rollback2()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "cop"), nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		user1 := models.User{}
+		test.DB.Unscoped().Find(&user1, "id = ?", "villan")
+		assert.NotNil(t, user1.DeletedAt, "villan wasn't deleted")
+		user2 := models.User{}
+		test.DB.Unscoped().Find(&user2, "id = ?", "cop")
+		assert.NotNil(t, user2.DeletedAt, "cop wasn't deleted")
+	})
+	t.Run("WithNonExistent", func(t *testing.T) {
+		test := NewRouteTest(t)
+		rollback := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		defer rollback()
+
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "superman"), nil, token)
+
+		assert.Equal(t, http.StatusOK, recorder.Code)
+		assert.Equal(t, "", recorder.Body.String())
+
+		user := models.User{}
+		test.DB.Unscoped().Find(&user, "id = ?", "villan")
+		assert.NotNil(t, user.DeletedAt, "villan wasn't deleted")
+	})
+	t.Run("MissingParameters", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testAdminToken("magical-unicorn", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users", nil, token)
+		validateError(t, http.StatusBadRequest, recorder)
+	})
+	t.Run("AsStranger", func(t *testing.T) {
+		test := NewRouteTest(t)
+		token := testToken("stranger-danger", "")
+		recorder := test.TestEndpoint(http.MethodDelete, "/users", nil, token)
+		validateError(t, http.StatusUnauthorized, recorder)
 	})
 }
 
