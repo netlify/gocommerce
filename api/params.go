@@ -112,12 +112,6 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		}
 	}
 
-	if invoiceNumber := params.Get("invoice_number"); invoiceNumber != "" {
-		query = query.Where("invoice_number = ?", invoiceNumber)
-	}
-
-	orderTable := query.NewScope(models.Order{}).QuotedTableName()
-
 	query = addAddressFilter(query, params, "countries", "country")
 	query = addAddressFilter(query, params, "name", "name")
 
@@ -145,9 +139,7 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Order("created_at desc")
 	}
 
-	if email := params.Get("email"); email != "" {
-		query = query.Where(orderTable+".email LIKE ?", "%"+email+"%")
-	}
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
 	if items := params.Get("items"); items != "" {
 		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
@@ -163,9 +155,14 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Joins(statement, "%"+itemType+"%")
 	}
 
-	if code := params.Get("coupon_code"); code != "" {
-		query = query.Where(orderTable+".coupon_code LIKE ?", "%"+code+"%")
-	}
+	query = addFilters(query, orderTable, params, []string{
+		"invoice_number",
+	})
+
+	query = addLikeFilters(query, orderTable, params, []string{
+		"email",
+		"coupon_code",
+	})
 
 	return parseTimeQueryParams(query, params)
 }
