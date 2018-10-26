@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -21,6 +22,27 @@ import (
 
 func createOrder(test *RouteTest, email, currency string) *models.Order {
 	order := models.NewOrder("", "session1", email, currency)
+	order.ShippingAddress = models.Address{
+		AddressRequest: models.AddressRequest{
+			Name:     "Test User",
+			Address1: "Hohe Str. 10",
+			City:     "Cologne",
+			State:    "NRW",
+			Zip:      "50667",
+			Country:  "Germany",
+		},
+	}
+	order.BillingAddress = models.Address{
+		AddressRequest: models.AddressRequest{
+			Name:     "Big Corp",
+			Address1: "Hohe Str. 10",
+			City:     "Cologne",
+			State:    "NRW",
+			Zip:      "50667",
+			Country:  "Germany",
+		},
+	}
+
 	result := test.DB.Create(order)
 	assert.NoError(test.T, result.Error, fmt.Sprintf("inserting the test order failed: %+v", result.Error))
 
@@ -421,6 +443,71 @@ func TestUserOrdersList(t *testing.T) {
 			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?fulfillment_state=sunken", nil, token)
 			validateError(t, http.StatusBadRequest, recorder)
+		})
+		var createExampleCountryOrders = func(test *RouteTest) {
+			orderDe := createOrder(test, "heinrich@zemo.org", "EUR")
+			orderDe.ShippingAddress.Country = "Germany"
+			orderDe.BillingAddress.Country = "Germany"
+			assert.NoError(t, test.DB.Save(orderDe).Error)
+			orderDk := createOrder(test, "antboy@hasselbalch.dk", "DKR")
+			orderDk.ShippingAddress.Country = "Denmark"
+			orderDk.BillingAddress.Country = "Denmark"
+			assert.NoError(t, test.DB.Save(orderDk).Error)
+		}
+		var euCountries = []string{
+			"Austria", "Italy", "Belgium", "Latvia", "Bulgaria", "Lithuania", "Croatia", "Luxembourg", "Cyprus",
+			"Malta", "Czechia", "Netherlands", "Denmark", "Poland", "Estonia", "Portugal", "Finland", "Romania",
+			"France", "Slovakia", "Germany", "Slovenia", "Greece", "Spain", "Hungary", "Sweden", "Ireland", "United Kingdom",
+		}
+		t.Run("ShippingCountrySingle", func(t *testing.T) {
+			test := NewRouteTest(t)
+			createExampleCountryOrders(test)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?shipping_countries=Denmark", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 1)
+			singleOrder := orders[0]
+			assert.Equal(t, singleOrder.Email, "antboy@hasselbalch.dk")
+		})
+		t.Run("ShippingCountryEU", func(t *testing.T) {
+			test := NewRouteTest(t)
+			createExampleCountryOrders(test)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			url := "/users/all/orders?shipping_countries=" + url.QueryEscape(strings.Join(euCountries, ","))
+			recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 2)
+			for _, o := range orders {
+				switch o.Email {
+				case "heinrich@zemo.org":
+					assert.Equal(t, "EUR", o.Currency)
+					assert.Equal(t, "Germany", o.ShippingAddress.Country)
+				case "antboy@hasselbalch.dk":
+					assert.Equal(t, "DKR", o.Currency)
+					assert.Equal(t, "Denmark", o.ShippingAddress.Country)
+				default:
+					assert.Fail(t, "Invalid order: $+v", o)
+				}
+			}
+		})
+		t.Run("ShippingCountryNonEU", func(t *testing.T) {
+			test := NewRouteTest(t)
+			createExampleCountryOrders(test)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			url := "/users/all/orders?shipping_countries!=" + url.QueryEscape(strings.Join(euCountries, ","))
+			recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 2)
+			validateAllOrders(t, orders, test.Data)
 		})
 	})
 	t.Run("NotWithAdminRights", func(t *testing.T) {
