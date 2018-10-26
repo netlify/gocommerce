@@ -112,12 +112,6 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		}
 	}
 
-	if invoiceNumber := params.Get("invoice_number"); invoiceNumber != "" {
-		query = query.Where("invoice_number = ?", invoiceNumber)
-	}
-
-	orderTable := query.NewScope(models.Order{}).QuotedTableName()
-
 	query = addAddressFilter(query, params, "countries", "country")
 	query = addAddressFilter(query, params, "name", "name")
 
@@ -145,9 +139,7 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Order("created_at desc")
 	}
 
-	if email := params.Get("email"); email != "" {
-		query = query.Where(orderTable+".email LIKE ?", "%"+email+"%")
-	}
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
 	if items := params.Get("items"); items != "" {
 		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
@@ -163,9 +155,23 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Joins(statement, "%"+itemType+"%")
 	}
 
-	if code := params.Get("coupon_code"); code != "" {
-		query = query.Where(orderTable+".coupon_code LIKE ?", "%"+code+"%")
+	query, err := addFilterChoices(query, orderTable, params, "payment_state", models.PaymentStates)
+	if err != nil {
+		return nil, err
 	}
+	query, err = addFilterChoices(query, orderTable, params, "fulfillment_state", models.FulfillmentStates)
+	if err != nil {
+		return nil, err
+	}
+
+	query = addFilters(query, orderTable, params, []string{
+		"invoice_number",
+	})
+
+	query = addLikeFilters(query, orderTable, params, []string{
+		"email",
+		"coupon_code",
+	})
 
 	return parseTimeQueryParams(query, params)
 }
@@ -233,4 +239,28 @@ func addLikeFilters(query *gorm.DB, table string, params url.Values, availableFi
 		}
 	}
 	return query
+}
+
+func addFilterChoices(query *gorm.DB, table string, params url.Values, filterField string, choices []string) (*gorm.DB, error) {
+	values, exists := params[filterField]
+	if !exists {
+		return query, nil
+	}
+
+	filterValues := []string{}
+	for _, q := range values {
+		filterValue := ""
+		for _, v := range choices {
+			if q == v {
+				filterValue = v
+				break
+			}
+		}
+		if filterValue == "" {
+			return query, fmt.Errorf("Value for %s is not supported: %s", filterField, q)
+		}
+		filterValues = append(filterValues, filterValue)
+	}
+
+	return query.Where(fmt.Sprintf("%s.%s IN (?)", table, filterField), filterValues), nil
 }

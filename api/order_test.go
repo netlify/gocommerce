@@ -19,6 +19,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func createOrder(test *RouteTest, email, currency string) *models.Order {
+	order := models.NewOrder("", "session1", email, currency)
+	result := test.DB.Create(order)
+	assert.NoError(test.T, result.Error, fmt.Sprintf("inserting the test order failed: %+v", result.Error))
+
+	return order
+}
+
 // ------------------------------------------------------------------------------------------------
 // CREATE
 // ------------------------------------------------------------------------------------------------
@@ -327,6 +335,93 @@ func TestUserOrdersList(t *testing.T) {
 		extractPayload(t, http.StatusOK, recorder, &orders)
 		assert.Len(t, orders, 2)
 		validateAllOrders(t, orders, test.Data)
+	})
+	t.Run("AllOrdersFilter", func(t *testing.T) {
+		t.Run("PaymentStatePending", func(t *testing.T) {
+			test := NewRouteTest(t)
+
+			pendingOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
+			pendingOrder.PaymentState = models.PendingState
+			test.DB.Save(&pendingOrder)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?payment_state=pending", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 1)
+			singleOrder := orders[0]
+			assert.Equal(t, pendingOrder.ID, singleOrder.ID)
+			assert.Equal(t, "fanboy@wayneindustries.com", singleOrder.Email)
+		})
+		t.Run("PaymentStatePaid", func(t *testing.T) {
+			test := NewRouteTest(t)
+
+			pendingOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
+			pendingOrder.PaymentState = models.PendingState
+			test.DB.Save(&pendingOrder)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?payment_state=paid", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 2)
+			validateAllOrders(t, orders, test.Data)
+		})
+		t.Run("PaymentStateFailed", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?payment_state=failed", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 0)
+		})
+		t.Run("PaymentStateInvalid", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?payment_state=stolen", nil, token)
+			validateError(t, http.StatusBadRequest, recorder)
+		})
+		t.Run("FulfillmentStatePending", func(t *testing.T) {
+			test := NewRouteTest(t)
+
+			shippedOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
+			shippedOrder.FulfillmentState = models.ShippedState
+			test.DB.Save(&shippedOrder)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?fulfillment_state=pending", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 2)
+			validateAllOrders(t, orders, test.Data)
+		})
+		t.Run("FulfillmentStateShipped", func(t *testing.T) {
+			test := NewRouteTest(t)
+
+			shippedOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
+			shippedOrder.FulfillmentState = models.ShippedState
+			test.DB.Save(&shippedOrder)
+
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?fulfillment_state=shipped", nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 1)
+			singleOrder := orders[0]
+			assert.Equal(t, shippedOrder.ID, singleOrder.ID)
+			assert.Equal(t, "fanboy@wayneindustries.com", singleOrder.Email)
+		})
+		t.Run("FulfillmentStateInvalid", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+			recorder := test.TestEndpoint(http.MethodGet, "/users/all/orders?fulfillment_state=sunken", nil, token)
+			validateError(t, http.StatusBadRequest, recorder)
+		})
 	})
 	t.Run("NotWithAdminRights", func(t *testing.T) {
 		test := NewRouteTest(t)
