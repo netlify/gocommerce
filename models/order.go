@@ -24,6 +24,20 @@ const ShippedState = "shipped"
 // FailedState is the failed state of an Order
 const FailedState = "failed"
 
+// PaymentState are the possible values for the PaymentState field
+var PaymentStates = []string{
+	PendingState,
+	PaidState,
+	FailedState,
+}
+
+// FulfillmentStates are the possible values for the FulfillmentState field
+var FulfillmentStates = []string{
+	PendingState,
+	ShippedState,
+	FailedState,
+}
+
 // NumberType | StringType | BoolType are the different types supported in custom data for orders
 const (
 	NumberType = iota

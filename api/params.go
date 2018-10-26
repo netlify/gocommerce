@@ -155,6 +155,15 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		query = query.Joins(statement, "%"+itemType+"%")
 	}
 
+	query, err := addFilterChoices(query, orderTable, params, "payment_state", models.PaymentStates)
+	if err != nil {
+		return nil, err
+	}
+	query, err = addFilterChoices(query, orderTable, params, "fulfillment_state", models.FulfillmentStates)
+	if err != nil {
+		return nil, err
+	}
+
 	query = addFilters(query, orderTable, params, []string{
 		"invoice_number",
 	})
@@ -230,4 +239,28 @@ func addLikeFilters(query *gorm.DB, table string, params url.Values, availableFi
 		}
 	}
 	return query
+}
+
+func addFilterChoices(query *gorm.DB, table string, params url.Values, filterField string, choices []string) (*gorm.DB, error) {
+	values, exists := params[filterField]
+	if !exists {
+		return query, nil
+	}
+
+	filterValues := []string{}
+	for _, q := range values {
+		filterValue := ""
+		for _, v := range choices {
+			if q == v {
+				filterValue = v
+				break
+			}
+		}
+		if filterValue == "" {
+			return query, fmt.Errorf("Value for %s is not supported: %s", filterField, q)
+		}
+		filterValues = append(filterValues, filterValue)
+	}
+
+	return query.Where(fmt.Sprintf("%s.%s IN (?)", table, filterField), filterValues), nil
 }
