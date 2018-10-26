@@ -19,16 +19,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createOrder(test *RouteTest, email, currency string) (*models.Order, func()) {
-	t := test.T
-
+func createOrder(test *RouteTest, email, currency string) *models.Order {
 	order := models.NewOrder("", "session1", email, currency)
 	result := test.DB.Create(order)
-	assert.NoError(t, result.Error, fmt.Sprintf("inserting the test order failed: %+v", result.Error))
+	assert.NoError(test.T, result.Error, fmt.Sprintf("inserting the test order failed: %+v", result.Error))
 
-	return order, func() {
-		test.DB.Unscoped().Delete(&order)
-	}
+	return order
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -344,8 +340,7 @@ func TestUserOrdersList(t *testing.T) {
 		t.Run("PaymentStatePending", func(t *testing.T) {
 			test := NewRouteTest(t)
 
-			pendingOrder, rollback := createOrder(test, "fanboy@wayneindustries.com", "USD")
-			defer rollback()
+			pendingOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
 			pendingOrder.PaymentState = models.PendingState
 			test.DB.Save(&pendingOrder)
 
@@ -362,8 +357,7 @@ func TestUserOrdersList(t *testing.T) {
 		t.Run("PaymentStatePaid", func(t *testing.T) {
 			test := NewRouteTest(t)
 
-			pendingOrder, rollback := createOrder(test, "fanboy@wayneindustries.com", "USD")
-			defer rollback()
+			pendingOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
 			pendingOrder.PaymentState = models.PendingState
 			test.DB.Save(&pendingOrder)
 
@@ -393,8 +387,7 @@ func TestUserOrdersList(t *testing.T) {
 		t.Run("FulfillmentStatePending", func(t *testing.T) {
 			test := NewRouteTest(t)
 
-			shippedOrder, rollback := createOrder(test, "fanboy@wayneindustries.com", "USD")
-			defer rollback()
+			shippedOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
 			shippedOrder.FulfillmentState = models.ShippedState
 			test.DB.Save(&shippedOrder)
 
@@ -409,8 +402,7 @@ func TestUserOrdersList(t *testing.T) {
 		t.Run("FulfillmentStateShipped", func(t *testing.T) {
 			test := NewRouteTest(t)
 
-			shippedOrder, rollback := createOrder(test, "fanboy@wayneindustries.com", "USD")
-			defer rollback()
+			shippedOrder := createOrder(test, "fanboy@wayneindustries.com", "USD")
 			shippedOrder.FulfillmentState = models.ShippedState
 			test.DB.Save(&shippedOrder)
 
