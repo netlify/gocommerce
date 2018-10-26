@@ -47,7 +47,6 @@ func TestOrderPaymentsList(t *testing.T) {
 		test := NewRouteTest(t)
 		anotherTransaction := models.NewTransaction(test.Data.firstOrder)
 		test.DB.Create(anotherTransaction)
-		defer test.DB.Unscoped().Delete(anotherTransaction)
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, test.Data.urlForFirstOrder+"/payments", nil, token)

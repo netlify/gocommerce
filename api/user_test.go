@@ -15,18 +15,16 @@ import (
 	"github.com/netlify/gocommerce/models"
 )
 
-func createUser(test *RouteTest, ID string, Email string, Name string) func() {
-	toDie := models.User{
+func createUser(test *RouteTest, ID string, Email string, Name string) *models.User {
+	user := models.User{
 		ID:    ID,
 		Email: Email,
 		Name:  Name,
 	}
-	rsp := test.DB.Create(&toDie)
+	rsp := test.DB.Create(&user)
 	require.NoError(test.T, rsp.Error, "DB Error")
 
-	return func() {
-		test.DB.Unscoped().Delete(&toDie)
-	}
+	return &user
 }
 
 func TestUsersList(t *testing.T) {
@@ -38,8 +36,7 @@ func TestUsersList(t *testing.T) {
 	})
 	t.Run("AsAdmin", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
-		defer rollback()
+		createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, "/users", nil, token)
@@ -65,8 +62,7 @@ func TestUsersList(t *testing.T) {
 	})
 	t.Run("WithParams", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
-		defer rollback()
+		createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, "/users?email=dc.com", nil, token)
@@ -78,8 +74,7 @@ func TestUsersList(t *testing.T) {
 	})
 	t.Run("WithPagination", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback := createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
-		defer rollback()
+		createUser(test, "villian", "twoface@dc.com", "Harvey Dent")
 
 		token := testAdminToken("magical-unicorn", "")
 		reqUrl := "/users?per_page=1"
@@ -92,10 +87,8 @@ func TestUsersList(t *testing.T) {
 	})
 	t.Run("MultipleIDs", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
-		defer rollback1()
-		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
-		defer rollback2()
+		createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, fmt.Sprintf("/users?id=%s&id=%s", test.Data.testUser.ID, "cop"), nil, token)
@@ -154,7 +147,6 @@ func TestUsersView(t *testing.T) {
 		}
 		test.DB.Create(&toDie)
 		test.DB.Delete(&toDie) // soft delete
-		defer test.DB.Unscoped().Delete(&toDie)
 
 		token := testToken(toDie.ID, toDie.Email)
 		recorder := test.TestEndpoint(http.MethodGet, "/users/"+toDie.ID, nil, token)
@@ -170,7 +162,6 @@ func TestUserAddressesList(t *testing.T) {
 		second.UserID = test.Data.testUser.ID
 		assert.Nil(t, second.Validate())
 		test.DB.Create(&second)
-		defer test.DB.Unscoped().Delete(&second)
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
@@ -215,7 +206,6 @@ func TestUserAddressesList(t *testing.T) {
 			Email: "junk@junk.com",
 		}
 		test.DB.Create(u)
-		defer test.DB.Unscoped().Delete(u)
 
 		token := testToken(u.ID, "")
 		recorder := test.TestEndpoint(http.MethodGet, "/users/"+u.ID+"/addresses", nil, token)
@@ -277,11 +267,6 @@ func TestUserDelete(t *testing.T) {
 		for _, i := range items {
 			test.DB.Create(i)
 		}
-		defer func() {
-			for _, i := range items {
-				test.DB.Unscoped().Delete(i)
-			}
-		}()
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodDelete, "/users/"+dyingUser.ID, nil, token)
@@ -329,11 +314,6 @@ func TestUserBulkDelete(t *testing.T) {
 		for _, i := range items {
 			test.DB.Create(i)
 		}
-		defer func() {
-			for _, i := range items {
-				test.DB.Unscoped().Delete(i)
-			}
-		}()
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodDelete, "/users?id="+dyingUser.ID, nil, token)
@@ -356,10 +336,8 @@ func TestUserBulkDelete(t *testing.T) {
 	})
 	t.Run("MultipleUsers", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback1 := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
-		defer rollback1()
-		rollback2 := createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
-		defer rollback2()
+		createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
+		createUser(test, "cop", "james.gordon@dc.com", "James Gordon")
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "cop"), nil, token)
@@ -376,8 +354,7 @@ func TestUserBulkDelete(t *testing.T) {
 	})
 	t.Run("WithNonExistent", func(t *testing.T) {
 		test := NewRouteTest(t)
-		rollback := createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
-		defer rollback()
+		createUser(test, "villan", "twoface@dc.com", "Harvey Dent")
 
 		token := testAdminToken("magical-unicorn", "")
 		recorder := test.TestEndpoint(http.MethodDelete, fmt.Sprintf("/users?id=%s&id=%s", "villan", "superman"), nil, token)

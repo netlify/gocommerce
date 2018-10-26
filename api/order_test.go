@@ -149,7 +149,6 @@ func TestOrderCreateNewUser(t *testing.T) {
 		body := strings.NewReader(defaultPayload)
 
 		token := testToken(firstTimeUser.ID, firstTimeUser.Email)
-		defer test.DB.Delete(firstTimeUser)
 
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
@@ -167,7 +166,6 @@ func TestOrderCreateNewUser(t *testing.T) {
 		body := strings.NewReader(defaultPayload)
 
 		token := testToken(firstTimeUser.ID, firstTimeUser.Email, firstTimeUser.Name)
-		defer test.DB.Delete(firstTimeUser)
 
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
@@ -199,7 +197,6 @@ func TestOrderCreateNewUser(t *testing.T) {
 		body := strings.NewReader(payloadWithBilling)
 
 		token := testToken(firstTimeUser.ID, firstTimeUser.Email)
-		defer test.DB.Delete(firstTimeUser)
 
 		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
 
@@ -508,7 +505,6 @@ func TestOrderUpdate(t *testing.T) {
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
-		defer test.DB.Save(test.Data.firstOrder)
 
 		assert := assert.New(t)
 		rspOrder := new(models.Order)
@@ -538,14 +534,12 @@ func TestOrderUpdate(t *testing.T) {
 		newAddr.ID = "new-addr"
 		newAddr.UserID = test.Data.firstOrder.UserID
 		test.DB.Create(newAddr)
-		defer test.DB.Unscoped().Delete(newAddr)
 
 		op := &orderRequestParams{
 			BillingAddressID: newAddr.ID,
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
-		defer test.DB.Save(test.Data.firstOrder)
 
 		rspOrder := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
@@ -560,7 +554,6 @@ func TestOrderUpdate(t *testing.T) {
 		savedAddr := &models.Address{ID: saved.BillingAddressID}
 		rsp = test.DB.First(savedAddr)
 		require.False(t, rsp.RecordNotFound())
-		defer test.DB.Unscoped().Delete(savedAddr)
 
 		validateAddress(t, *newAddr, *savedAddr)
 	})
@@ -574,7 +567,6 @@ func TestOrderUpdate(t *testing.T) {
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
-		defer test.DB.Save(test.Data.firstOrder)
 
 		rspOrder := new(models.Order)
 		extractPayload(t, http.StatusOK, recorder, rspOrder)
@@ -589,7 +581,6 @@ func TestOrderUpdate(t *testing.T) {
 		savedAddr := &models.Address{ID: saved.ShippingAddressID}
 		rsp = test.DB.First(savedAddr)
 		require.False(t, rsp.RecordNotFound())
-		defer test.DB.Unscoped().Delete(savedAddr)
 
 		validateAddress(t, *paramsAddress, *savedAddr)
 	})
@@ -627,7 +618,6 @@ func TestOrderUpdate(t *testing.T) {
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
-		defer test.DB.Save(test.Data.firstOrder)
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusOK, recorder, order)
