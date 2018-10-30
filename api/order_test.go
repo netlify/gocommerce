@@ -159,7 +159,7 @@ func TestOrderCreate(t *testing.T) {
 		assert.Equal(t, "Germany", order.ShippingAddress.Country)
 		assert.Equal(t, "Germany", order.BillingAddress.Country)
 		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1105, was %v", order.Total))
-		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Total))
+		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Taxes))
 	})
 }
 
