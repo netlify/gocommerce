@@ -103,6 +103,25 @@ func addAddressFilter(query *gorm.DB, params url.Values, queryField string, dbFi
 	return query
 }
 
+// addNegativeAddressFilter allows filtering with a negative query arg like "?shipping_countries!=Germany"
+func addNegativeAddressFilter(query *gorm.DB, params url.Values, queryField string, dbField string) *gorm.DB {
+	addressTable := query.NewScope(models.Address{}).QuotedTableName()
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
+
+	if billingField := params.Get("billing_" + queryField + "!"); billingField != "" {
+		statement := "JOIN " + addressTable + " as billing_address on billing_address.id = " +
+			orderTable + ".billing_address_id AND " + "billing_address." + dbField + " not in (?)"
+		query = query.Joins(statement, strings.Split(billingField, ","))
+	}
+
+	if shippingField := params.Get("shipping_" + queryField + "!"); shippingField != "" {
+		statement := "JOIN " + addressTable + " as shipping_address on shipping_address.id = " +
+			orderTable + ".shipping_address_id AND " + "shipping_address." + dbField + " not in (?)"
+		query = query.Joins(statement, strings.Split(shippingField, ","))
+	}
+	return query
+}
+
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	if tax := params.Get("tax"); tax != "" {
 		if tax == "yes" || tax == "true" {
@@ -113,6 +132,7 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	}
 
 	query = addAddressFilter(query, params, "countries", "country")
+	query = addNegativeAddressFilter(query, params, "countries", "country")
 	query = addAddressFilter(query, params, "name", "name")
 
 	if values, exists := params["sort"]; exists {
