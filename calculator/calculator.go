@@ -173,6 +173,38 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 	return applies
 }
 
+func calculateAmountsForSingleItem(settings *Settings, lineLogger logrus.FieldLogger, jwtClaims map[string]interface{}, params PriceParameters, item Item, multiplier uint64) ItemPrice {
+	itemPrice := ItemPrice{Quantity: item.GetQuantity()}
+
+	singlePrice := item.PriceInLowestUnit() * multiplier
+	_, itemPrice.Subtotal = calculateTaxes(singlePrice, item, params, settings)
+
+	// apply discount to original price
+	coupon := params.Coupon
+	if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
+		itemPrice.Discount = calculateDiscount(singlePrice, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency)*multiplier)
+	}
+	if settings != nil && settings.MemberDiscounts != nil {
+		for _, discount := range settings.MemberDiscounts {
+
+			if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
+				lineLogger = lineLogger.WithField("discount", discount.Claims)
+				itemPrice.Discount += calculateDiscount(singlePrice, discount.Percentage, discount.FixedDiscount(params.Currency)*multiplier)
+			}
+		}
+	}
+
+	discountedPrice := uint64(0)
+	if itemPrice.Discount < singlePrice {
+		discountedPrice = singlePrice - itemPrice.Discount
+	}
+
+	itemPrice.Taxes, itemPrice.NetTotal = calculateTaxes(discountedPrice, item, params, settings)
+	itemPrice.Total = int64(itemPrice.NetTotal + itemPrice.Taxes)
+
+	return itemPrice
+}
+
 // CalculatePrice will calculate the final total price. It takes into account
 // currency, country, coupons, and discounts.
 func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params PriceParameters, log logrus.FieldLogger) Price {
@@ -193,34 +225,7 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 			"product_sku":  item.ProductSku(),
 		})
 
-		itemPrice := ItemPrice{Quantity: item.GetQuantity()}
-
-		singlePrice := item.PriceInLowestUnit()
-		_, itemPrice.Subtotal = calculateTaxes(singlePrice, item, params, settings)
-
-		// apply discount to original price
-		coupon := params.Coupon
-		if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
-			itemPrice.Discount = calculateDiscount(singlePrice, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency))
-		}
-		if settings != nil && settings.MemberDiscounts != nil {
-			for _, discount := range settings.MemberDiscounts {
-
-				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
-					lineLogger = lineLogger.WithField("discount", discount.Claims)
-					itemPrice.Discount += calculateDiscount(singlePrice, discount.Percentage, discount.FixedDiscount(params.Currency))
-				}
-			}
-		}
-
-		discountedPrice := uint64(0)
-		if itemPrice.Discount < singlePrice {
-			discountedPrice = singlePrice - itemPrice.Discount
-		}
-
-		itemPrice.Taxes, itemPrice.NetTotal = calculateTaxes(discountedPrice, item, params, settings)
-
-		itemPrice.Total = int64(itemPrice.NetTotal + itemPrice.Taxes)
+		itemPrice := calculateAmountsForSingleItem(settings, lineLogger, jwtClaims, params, item, 1)
 
 		lineLogger.WithFields(
 			logrus.Fields{
@@ -233,11 +238,13 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 
 		price.Items = append(price.Items, itemPrice)
 
-		price.Subtotal += (itemPrice.Subtotal * itemPrice.Quantity)
-		price.Discount += (itemPrice.Discount * itemPrice.Quantity)
-		price.NetTotal += (itemPrice.NetTotal * itemPrice.Quantity)
-		price.Taxes += (itemPrice.Taxes * itemPrice.Quantity)
-		price.Total += (itemPrice.Total * int64(itemPrice.Quantity))
+		// avoid issues with rounding when multiplying by quantity before taxation
+		itemPriceMultiple := calculateAmountsForSingleItem(settings, lineLogger, jwtClaims, params, item, item.GetQuantity())
+		price.Subtotal += itemPriceMultiple.Subtotal
+		price.Discount += itemPriceMultiple.Discount
+		price.NetTotal += itemPriceMultiple.NetTotal
+		price.Taxes += itemPriceMultiple.Taxes
+		price.Total += itemPriceMultiple.Total
 	}
 
 	price.Total = int64(price.NetTotal + price.Taxes)

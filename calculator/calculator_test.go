@@ -208,15 +208,11 @@ func TestCouponWithVATWhenPRiceIncludeTaxesWithQuantity(t *testing.T) {
 	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{quantity: 2, price: 100, itemType: "test", vat: 9}}}
 	price := CalculatePrice(settings, nil, params, testLogger)
 
-	// todo: This result is wrong because a rounding inaccuracy is quantified
-	// Therefore the tax amount is not 9% of the net total
-	// Correct net total: 165
-	// Correct tax amount: 15
 	validatePrice(t, price, Price{
-		Subtotal: 184,
+		Subtotal: 183,
 		Discount: 20,
-		NetTotal: 166,
-		Taxes:    14,
+		NetTotal: 165,
+		Taxes:    15,
 		Total:    180,
 	})
 }
