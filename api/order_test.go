@@ -682,8 +682,9 @@ func TestOrderUpdate(t *testing.T) {
 		require.NoError(t, rsp.Error, "Failed to update email")
 
 		op := &orderRequestParams{
-			Email:    "mrfreeze@dc.com",
-			Currency: "monopoly-dollars",
+			Email:            "mrfreeze@dc.com",
+			Currency:         "monopoly-dollars",
+			FulfillmentState: "shipping",
 		}
 		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
 		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
@@ -698,15 +699,18 @@ func TestOrderUpdate(t *testing.T) {
 
 		assert.Equal("mrfreeze@dc.com", rspOrder.Email)
 		assert.Equal("monopoly-dollars", rspOrder.Currency)
+		assert.Equal("shipping", rspOrder.FulfillmentState)
 
 		// did it get persisted to the db
 		assert.Equal("mrfreeze@dc.com", saved.Email)
 		assert.Equal("monopoly-dollars", saved.Currency)
+		assert.Equal("shipping", saved.FulfillmentState)
 		validateOrder(t, saved, rspOrder)
 
 		// should be the only field that has changed ~ check it
 		saved.Email = test.Data.firstOrder.Email
 		saved.Currency = test.Data.firstOrder.Currency
+		saved.FulfillmentState = test.Data.firstOrder.FulfillmentState
 		validateOrder(t, test.Data.firstOrder, saved)
 	})
 
@@ -804,6 +808,16 @@ func TestOrderUpdate(t *testing.T) {
 		order := &models.Order{}
 		extractPayload(t, http.StatusOK, recorder, order)
 		assert.Equal(t, op.MetaData, order.MetaData, "Order metadata should have been updated")
+	})
+
+	t.Run("InvalidFulfilmentState", func(t *testing.T) {
+		test := NewRouteTest(t)
+		op := &orderRequestParams{
+			FulfillmentState: "cancelled",
+		}
+		token := testAdminToken("admin-yo", "admin@wayneindustries.com")
+		recorder := runOrderUpdate(test, test.Data.firstOrder, op, token)
+		validateError(t, http.StatusBadRequest, recorder)
 	})
 }
 
