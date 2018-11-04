@@ -111,7 +111,8 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	loader := tx.
 		Preload("LineItems").
 		Preload("Downloads").
-		Preload("BillingAddress")
+		Preload("BillingAddress").
+		Preload("ShippingAddress")
 	if result := loader.First(order, "id = ?", orderID); result.Error != nil {
 		tx.Rollback()
 		if result.RecordNotFound() {
@@ -162,7 +163,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	tr := models.NewTransaction(order)
-	processorID, err := charge(params.Amount, params.Currency)
+	processorID, err := charge(params.Amount, params.Currency, order, invoiceNumber)
 	tr.ProcessorID = processorID
 	tr.InvoiceNumber = invoiceNumber
 

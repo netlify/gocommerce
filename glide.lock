@@ -1,5 +1,5 @@
-hash: f58e7d7de016287b05b21a07ea82c3f4c50ea7128fe3ff714247a4d9299f7f72
-updated: 2018-11-04T03:17:57.948793496+01:00
+hash: 553e340d93bbe27e6d1fd002ec1044fb5b15fd8c749a6638062dee7a4f0eee0f
+updated: 2018-11-04T03:21:50.787173992+01:00
 imports:
 - name: cloud.google.com/go
   version: 98f5696b1026056a47f114c4451dbc4703d67191
@@ -87,6 +87,8 @@ imports:
   - tls
 - name: github.com/netlify/PayPal-Go-SDK
   version: 732c3d08bf8a673d3d0ae345bfe771a573006890
+- name: github.com/pariz/gountries
+  version: adb00f6513a307f9f7a4ee57eca79a703b8a7272
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-toml

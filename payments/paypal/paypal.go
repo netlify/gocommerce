@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
+
+	"github.com/netlify/gocommerce/models"
+	"github.com/pariz/gountries"
 
 	paypalsdk "github.com/netlify/PayPal-Go-SDK"
 	"github.com/netlify/gocommerce/conf"
@@ -86,12 +90,79 @@ func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 		return nil, errors.New("Payments requires a paypal_payment_id and paypal_user_id pair")
 	}
 
-	return func(amount uint64, currency string) (string, error) {
-		return p.charge(bp.PaypalID, bp.PaypalUserID, amount, currency)
+	return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+		return p.charge(bp.PaypalID, bp.PaypalUserID, amount, currency, order, invoiceNumber)
 	}, nil
 }
 
-func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount uint64, currency string) (string, error) {
+func prepareItemsFromOrder(order *models.Order) []paypalsdk.Item {
+	items := []paypalsdk.Item{}
+	for _, lineItem := range order.LineItems {
+		item := paypalsdk.Item{
+			Quantity:    int(lineItem.GetQuantity()),
+			Name:        lineItem.Title,
+			Price:       formatAmount(lineItem.PriceInLowestUnit()),
+			Currency:    order.Currency,
+			SKU:         lineItem.ProductSku(),
+			Description: lineItem.Description,
+		}
+		if lineItem.FixedVAT() > 0 {
+			item.Tax = fmt.Sprintf("%d%%", lineItem.FixedVAT())
+		}
+		items = append(items, item)
+	}
+	return items
+}
+
+func prepareShippingAddress(addr models.Address) *paypalsdk.ShippingAddress {
+	countryQuery := gountries.New()
+
+	country, err := countryQuery.FindCountryByName(strings.ToLower(addr.Country))
+	if err != nil {
+		return nil
+	}
+
+	return &paypalsdk.ShippingAddress{
+		RecipientName: addr.Name,
+		Line1:         addr.Address1,
+		Line2:         addr.Address2,
+		City:          addr.City,
+		CountryCode:   country.Codes.Alpha2,
+		PostalCode:    addr.Zip,
+		State:         addr.State,
+	}
+}
+
+func (p *paypalPaymentProvider) updatePaymentWithOrder(paymentID string, order *models.Order, invoiceNumber int64) error {
+	invoiceNumPatch := paypalsdk.PaymentPatch{
+		Operation: "add",
+		Path:      "/transactions/0/invoice_number",
+		Value:     fmt.Sprintf("%d", invoiceNumber),
+	}
+
+	itemList := paypalsdk.ItemList{
+		Items: prepareItemsFromOrder(order),
+	}
+	if a := prepareShippingAddress(order.ShippingAddress); a != nil {
+		itemList.ShippingAddress = a
+	}
+	itemListPatch := paypalsdk.PaymentPatch{
+		Operation: "add",
+		Path:      "/transactions/0/item_list",
+		Value:     &itemList,
+	}
+
+	_, err := p.client.PatchPayment(paymentID, []paypalsdk.PaymentPatch{invoiceNumPatch, itemListPatch})
+	if err != nil {
+		switch e := err.(type) {
+		case *paypalsdk.ErrorResponse:
+			fmt.Println(e.Details)
+		}
+	}
+	return err
+}
+
+func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	payment, err := p.client.GetPayment(paymentID)
 	if err != nil {
 		return "", err
@@ -108,6 +179,10 @@ func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount u
 
 	if transactionValue != payment.Transactions[0].Amount.Total || payment.Transactions[0].Amount.Currency != currency {
 		return "", fmt.Errorf("The Amount in the transaction doesn't match the amount for the order: %v", payment.Transactions[0].Amount)
+	}
+
+	if err := p.updatePaymentWithOrder(paymentID, order, invoiceNumber); err != nil {
+		return "", errors.Wrap(err, "Updating the PayPal payment with order details failed")
 	}
 
 	executeResult, err := p.client.ExecuteApprovedPayment(paymentID, userID)

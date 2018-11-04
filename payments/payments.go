@@ -3,6 +3,8 @@ package payments
 import (
 	"context"
 	"net/http"
+
+	"github.com/netlify/gocommerce/models"
 )
 
 const (
@@ -22,7 +24,7 @@ type Provider interface {
 }
 
 // Charger wraps the Charge method which creates new payments with the provider.
-type Charger func(amount uint64, currency string) (string, error)
+type Charger func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error)
 
 // Refunder wraps the Refund method which refunds payments with the provider.
 type Refunder func(transactionID string, amount uint64, currency string) (string, error)
