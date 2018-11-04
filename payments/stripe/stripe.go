@@ -62,10 +62,12 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 }
 
 func (s *stripePaymentProvider) charge(token string, amount uint64, currency string) (string, error) {
+	stripeAmount := int64(amount)
+	stripeDescription := fmt.Sprintf("Invoice No. %d", invoiceNumber)
 	ch, err := s.client.Charges.New(&stripe.ChargeParams{
-		Amount:   amount,
-		Source:   &stripe.SourceParams{Token: token},
-		Currency: stripe.Currency(currency),
+		Amount:      &stripeAmount,
+		Source:      &stripe.SourceParams{Token: &token},
+		Currency:    &currency,
 	})
 
 	if err != nil {
@@ -80,9 +82,10 @@ func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 }
 
 func (s *stripePaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+	stripeAmount := int64(amount)
 	ref, err := s.client.Refunds.New(&stripe.RefundParams{
-		Charge: transactionID,
-		Amount: amount,
+		Charge: &transactionID,
+		Amount: &stripeAmount,
 	})
 	if err != nil {
 		return "", err

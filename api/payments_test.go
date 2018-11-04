@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,6 +23,7 @@ import (
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
 	stripe "github.com/stripe/stripe-go"
+	"github.com/stripe/stripe-go/form"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -382,7 +382,7 @@ func TestPaymentCreate(t *testing.T) {
 	})
 	t.Run("Stripe", func(t *testing.T) {
 		callCount := 0
-		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, body *stripe.RequestValues, params *stripe.Params) {
+		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
 			switch path {
 			case "/charges":
 				callCount++
@@ -643,7 +643,7 @@ func (mp *memProvider) preauthorize(amount uint64, currency string, description 
 	return nil, nil
 }
 
-type stripeCallFunc func(method, path, key string, body *stripe.RequestValues, params *stripe.Params)
+type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{})
 
 func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
 	return &trackingStripeBackend{fn}
@@ -653,11 +653,17 @@ type trackingStripeBackend struct {
 	trackingFunc stripeCallFunc
 }
 
-func (t trackingStripeBackend) Call(method, path, key string, body *stripe.RequestValues, params *stripe.Params, v interface{}) error {
-	t.trackingFunc(method, path, key, body, params)
+func (t trackingStripeBackend) Call(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+	t.trackingFunc(method, path, key, params, v)
 	return nil
 }
 
-func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body io.Reader, params *stripe.Params, v interface{}) error {
+func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body *bytes.Buffer, params *stripe.Params, v interface{}) error {
 	return nil
 }
+
+func (t trackingStripeBackend) CallRaw(method, path, key string, body *form.Values, params *stripe.Params, v interface{}) error {
+	return nil
+}
+
+func (t trackingStripeBackend) SetMaxNetworkRetries(maxNetworkRetries int) {}
