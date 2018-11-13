@@ -22,7 +22,7 @@ require (
 	github.com/lib/pq v0.0.0-20170306183709-ca5bc43047f2
 	github.com/magiconair/properties v1.7.3
 	github.com/mattes/vat v0.0.0-20160607175015-805d21ad0739
-	github.com/mattn/go-sqlite3 v1.1.0
+	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/mitchellh/mapstructure v0.0.0-20170523030023-d0303fe80992
 	github.com/nats-io/nats v1.2.2
 	github.com/nats-io/nuid v0.0.0-20170303150224-3cf34f9fca4e
