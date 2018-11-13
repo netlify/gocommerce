@@ -65,7 +65,9 @@ The easiest way to use GoCommerce is with [commerce-js](https://github.com/netli
 
 ## Running the GoCommerce backend
 
-GoCommerce can be deployed to any server environment that runs Go. The button below provides a quick way to get started by running on Heroku:
+GoCommerce can be deployed to any server environment that runs Go. Minimum requirement for Go is version 1.11 since GoCommerce is using Go modules.
+
+The button below provides a quick way to get started by running on Heroku:
 
 [![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/netlify/gocommerce)
 
