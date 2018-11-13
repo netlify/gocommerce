@@ -391,3 +391,97 @@ func TestRealWorldTaxCalculations(t *testing.T) {
 		Total:    6391,
 	})
 }
+
+func TestRealWorldRelativeDiscountWithTaxes(t *testing.T) {
+	settings := &Settings{
+		PricesIncludeTaxes: true,
+		Taxes: []*Tax{&Tax{
+			Percentage:   7,
+			ProductTypes: []string{"book"},
+			Countries:    []string{"Germany"},
+		}, &Tax{
+			Percentage:   19,
+			ProductTypes: []string{"ebook"},
+			Countries:    []string{"Germany"},
+		}},
+	}
+
+	item := &TestItem{
+		price:    3900,
+		itemType: "book",
+		items: []Item{&TestItem{
+			price:    2900,
+			itemType: "book",
+		}, &TestItem{
+			price:    1000,
+			itemType: "ebook",
+		}},
+	}
+
+	coupon := &TestCoupon{itemType: "book", percentage: 25}
+	params := PriceParameters{"Germany", "EUR", coupon, []Item{item}}
+	price := CalculatePrice(settings, nil, params, testLogger)
+
+	validatePrice(t, price, Price{
+		Subtotal: 3550,
+		Discount: 975,
+		NetTotal: 2663,
+		Taxes:    262,
+		Total:    2925,
+	})
+}
+
+func TestRealWorldFixedDiscountWithTaxes(t *testing.T) {
+	settings := &Settings{
+		PricesIncludeTaxes: true,
+		Taxes: []*Tax{&Tax{
+			Percentage:   7,
+			ProductTypes: []string{"book"},
+			Countries:    []string{"Germany"},
+		}, &Tax{
+			Percentage:   19,
+			ProductTypes: []string{"ebook"},
+			Countries:    []string{"Germany"},
+		}},
+		MemberDiscounts: []*MemberDiscount{&MemberDiscount{
+			Claims: map[string]string{
+				"app_metadata.subscription.plan": "member",
+			},
+			FixedAmount: []*FixedMemberDiscount{&FixedMemberDiscount{
+				Amount:   "10.00",
+				Currency: "EUR",
+			}},
+			ProductTypes: []string{"book"},
+		}},
+	}
+
+	item := &TestItem{
+		price:    3900,
+		itemType: "book",
+		items: []Item{&TestItem{
+			price:    2900,
+			itemType: "book",
+		}, &TestItem{
+			price:    1000,
+			itemType: "ebook",
+		}},
+	}
+
+	claims := map[string]interface{}{
+		"app_metadata": map[string]interface{}{
+			"subscription": map[string]interface{}{
+				"plan": "member",
+			},
+		},
+	}
+	params := PriceParameters{"Germany", "EUR", nil, []Item{item}}
+	price := CalculatePrice(settings, claims, params, testLogger)
+
+	validatePrice(t, price, Price{
+		Subtotal: 3550,
+		Discount: 1000,
+		NetTotal: 2640,
+		Taxes:    260,
+		Total:    2900,
+	})
+}
