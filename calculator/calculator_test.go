@@ -80,6 +80,7 @@ func (c *TestCoupon) FixedDiscount(currency string) uint64 {
 func validatePrice(t *testing.T, actual Price, expected Price) {
 	assert.Equal(t, expected.Subtotal, actual.Subtotal, fmt.Sprintf("Expected subtotal to be %d, got %d", expected.Subtotal, actual.Subtotal))
 	assert.Equal(t, expected.Taxes, actual.Taxes, fmt.Sprintf("Expected taxes to be %d, got %d", expected.Taxes, actual.Taxes))
+	assert.Equal(t, expected.NetTotal, actual.NetTotal, fmt.Sprintf("Expected net total to be %d, got %d", expected.NetTotal, actual.NetTotal))
 	assert.Equal(t, expected.Discount, actual.Discount, fmt.Sprintf("Expected discount to be %d, got %d", expected.Discount, actual.Discount))
 	assert.Equal(t, expected.Total, actual.Total, fmt.Sprintf("Expected total to be %d, got %d", expected.Total, actual.Total))
 }
@@ -90,6 +91,7 @@ func TestNoItems(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 0,
 		Discount: 0,
+		NetTotal: 0,
 		Taxes:    0,
 		Total:    0,
 	})
@@ -102,6 +104,7 @@ func TestNoTaxes(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 0,
+		NetTotal: 100,
 		Taxes:    0,
 		Total:    100,
 	})
@@ -114,6 +117,7 @@ func TestFixedVAT(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 0,
+		NetTotal: 100,
 		Taxes:    9,
 		Total:    109,
 	})
@@ -126,6 +130,7 @@ func TestFixedVATWhenPricesIncludeTaxes(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 0,
+		NetTotal: 92,
 		Taxes:    8,
 		Total:    100,
 	})
@@ -146,6 +151,7 @@ func TestCountryBasedVAT(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 0,
+		NetTotal: 100,
 		Taxes:    21,
 		Total:    121,
 	})
@@ -159,6 +165,7 @@ func TestCouponWithNoTaxes(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 10,
+		NetTotal: 90,
 		Taxes:    0,
 		Total:    90,
 	})
@@ -166,12 +173,13 @@ func TestCouponWithNoTaxes(t *testing.T) {
 
 func TestCouponWithVAT(t *testing.T) {
 	coupon := &TestCoupon{itemType: "test", percentage: 10}
-	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test", vat: 10}}}
 	price := CalculatePrice(nil, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 10,
+		NetTotal: 90,
 		Taxes:    9,
 		Total:    99,
 	})
@@ -186,7 +194,8 @@ func TestCouponWithVATWhenPRiceIncludeTaxes(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 10,
-		Taxes:    8,
+		NetTotal: 83,
+		Taxes:    7,
 		Total:    90,
 	})
 }
@@ -200,7 +209,8 @@ func TestCouponWithVATWhenPRiceIncludeTaxesWithQuantity(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 184,
 		Discount: 20,
-		Taxes:    16,
+		NetTotal: 166,
+		Taxes:    14,
 		Total:    180,
 	})
 }
@@ -232,6 +242,7 @@ func TestPricingItems(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 100,
 		Discount: 0,
+		NetTotal: 100,
 		Taxes:    10,
 		Total:    110,
 	})
@@ -248,6 +259,7 @@ func TestMemberDiscounts(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 0,
+		NetTotal: 92,
 		Taxes:    8,
 		Total:    100,
 	})
@@ -261,7 +273,8 @@ func TestMemberDiscounts(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 10,
-		Taxes:    8,
+		NetTotal: 83,
+		Taxes:    7,
 		Total:    90,
 	})
 }
@@ -281,6 +294,7 @@ func TestFixedMemberDiscounts(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 0,
+		NetTotal: 92,
 		Taxes:    8,
 		Total:    100,
 	})
@@ -294,7 +308,8 @@ func TestFixedMemberDiscounts(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 92,
 		Discount: 10,
-		Taxes:    8,
+		NetTotal: 83,
+		Taxes:    7,
 		Total:    90,
 	})
 }
@@ -371,6 +386,7 @@ func TestRealWorldTaxCalculations(t *testing.T) {
 	validatePrice(t, price, Price{
 		Subtotal: 5766,
 		Discount: 0,
+		NetTotal: 5766,
 		Taxes:    625,
 		Total:    6391,
 	})

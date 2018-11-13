@@ -893,6 +893,7 @@ func validateOrder(t *testing.T, expected, actual *models.Order) {
 	assert.Equal(expected.Taxes, actual.Taxes)
 	assert.Equal(expected.Shipping, actual.Shipping)
 	assert.Equal(expected.SubTotal, actual.SubTotal)
+	assert.Equal(expected.NetTotal, actual.NetTotal)
 	assert.Equal(expected.Total, actual.Total)
 	assert.Equal(expected.PaymentState, actual.PaymentState)
 	assert.Equal(expected.FulfillmentState, actual.FulfillmentState)

@@ -68,6 +68,7 @@ type Order struct {
 	Shipping uint64 `json:"shipping"`
 	SubTotal uint64 `json:"subtotal"`
 	Discount uint64 `json:"discount"`
+	NetTotal uint64 `json:"net_total"`
 
 	Total uint64 `json:"total"`
 
@@ -173,6 +174,7 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	o.SubTotal = price.Subtotal
 	o.Taxes = price.Taxes
 	o.Discount = price.Discount
+	o.NetTotal = price.NetTotal
 
 	if price.Total > 0 {
 		o.Total = uint64(price.Total)

@@ -14,6 +14,7 @@ type Price struct {
 
 	Subtotal uint64
 	Discount uint64
+	NetTotal uint64
 	Taxes    uint64
 	Total    int64
 }
@@ -24,6 +25,7 @@ type ItemPrice struct {
 
 	Subtotal uint64
 	Discount uint64
+	NetTotal uint64
 	Taxes    uint64
 	Total    int64
 }
@@ -175,7 +177,6 @@ func (t *Tax) AppliesTo(country, productType string) bool {
 // currency, country, coupons, and discounts.
 func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params PriceParameters, log logrus.FieldLogger) Price {
 	price := Price{}
-	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 
 	priceLogger := log.WithField("action", "calculate_price")
 	if am, ok := jwtClaims["app_metadata"]; ok {
@@ -193,67 +194,39 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 		})
 
 		itemPrice := ItemPrice{Quantity: item.GetQuantity()}
-		itemPrice.Subtotal = item.PriceInLowestUnit()
 
-		taxAmounts := []taxAmount{}
-		if item.FixedVAT() != 0 {
-			taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: item.FixedVAT()})
-		} else if settings != nil && item.TaxableItems() != nil && len(item.TaxableItems()) > 0 {
-			for _, item := range item.TaxableItems() {
-				amount := taxAmount{price: item.PriceInLowestUnit()}
-				for _, t := range settings.Taxes {
-					if t.AppliesTo(params.Country, item.ProductType()) {
-						amount.percentage = t.Percentage
-						break
-					}
-				}
-				taxAmounts = append(taxAmounts, amount)
-			}
-		} else if settings != nil {
-			for _, t := range settings.Taxes {
-				if t.AppliesTo(params.Country, item.ProductType()) {
-					taxAmounts = append(taxAmounts, taxAmount{price: itemPrice.Subtotal, percentage: t.Percentage})
-					break
-				}
-			}
-		}
+		singlePrice := item.PriceInLowestUnit()
+		_, itemPrice.Subtotal = calculateTaxes(singlePrice, item, params, settings)
 
-		if len(taxAmounts) != 0 {
-			if includeTaxes {
-				itemPrice.Subtotal = 0
-			}
-			for _, tax := range taxAmounts {
-				if includeTaxes {
-					tax.price = rint(float64(tax.price) / (100 + float64(tax.percentage)) * 100)
-					itemPrice.Subtotal += tax.price
-				}
-				itemPrice.Taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
-			}
-		}
-
+		// apply discount to original price
 		coupon := params.Coupon
 		if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
-			itemPrice.Discount = calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency), includeTaxes)
+			itemPrice.Discount = calculateDiscount(singlePrice, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency))
 		}
 		if settings != nil && settings.MemberDiscounts != nil {
 			for _, discount := range settings.MemberDiscounts {
 
 				if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
 					lineLogger = lineLogger.WithField("discount", discount.Claims)
-					itemPrice.Discount += calculateDiscount(itemPrice.Subtotal, itemPrice.Taxes, discount.Percentage, discount.FixedDiscount(params.Currency), includeTaxes)
+					itemPrice.Discount += calculateDiscount(singlePrice, discount.Percentage, discount.FixedDiscount(params.Currency))
 				}
 			}
 		}
 
-		itemPrice.Total = int64(itemPrice.Subtotal+itemPrice.Taxes) - int64(itemPrice.Discount)
-		if itemPrice.Total < 0 {
-			itemPrice.Total = 0
+		discountedPrice := uint64(0)
+		if itemPrice.Discount < singlePrice {
+			discountedPrice = singlePrice - itemPrice.Discount
 		}
+
+		itemPrice.Taxes, itemPrice.NetTotal = calculateTaxes(discountedPrice, item, params, settings)
+
+		itemPrice.Total = int64(itemPrice.NetTotal + itemPrice.Taxes)
 
 		lineLogger.WithFields(
 			logrus.Fields{
 				"item_price":    itemPrice.Total,
 				"item_discount": itemPrice.Discount,
+				"item_nettotal": itemPrice.NetTotal,
 				"item_quantity": itemPrice.Quantity,
 				"item_taxes":    itemPrice.Taxes,
 			}).Info("calculated item price")
@@ -262,28 +235,24 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 
 		price.Subtotal += (itemPrice.Subtotal * itemPrice.Quantity)
 		price.Discount += (itemPrice.Discount * itemPrice.Quantity)
+		price.NetTotal += (itemPrice.NetTotal * itemPrice.Quantity)
 		price.Taxes += (itemPrice.Taxes * itemPrice.Quantity)
 		price.Total += (itemPrice.Total * int64(itemPrice.Quantity))
 	}
 
-	price.Total = int64(price.Subtotal+price.Taxes) - int64(price.Discount)
-	if price.Total < 0 {
-		price.Total = 0
-	}
+	price.Total = int64(price.NetTotal + price.Taxes)
 	priceLogger.WithFields(
 		logrus.Fields{
 			"total_price":    price.Total,
 			"total_discount": price.Discount,
+			"total_net":      price.NetTotal,
 			"total_taxes":    price.Taxes,
 		}).Info("calculated total price")
 
 	return price
 }
 
-func calculateDiscount(amountToDiscount, taxes, percentage, fixed uint64, includeTaxes bool) uint64 {
-	if includeTaxes {
-		amountToDiscount += taxes
-	}
+func calculateDiscount(amountToDiscount, percentage, fixed uint64) uint64 {
 	var discount uint64
 	if percentage > 0 {
 		discount = rint(float64(amountToDiscount) * float64(percentage) / 100)
@@ -294,6 +263,54 @@ func calculateDiscount(amountToDiscount, taxes, percentage, fixed uint64, includ
 		return amountToDiscount
 	}
 	return discount
+}
+
+func calculateTaxes(amountToTax uint64, item Item, params PriceParameters, settings *Settings) (taxes uint64, subtotal uint64) {
+	includeTaxes := settings != nil && settings.PricesIncludeTaxes
+	originalPrice := item.PriceInLowestUnit()
+
+	taxAmounts := []taxAmount{}
+	if item.FixedVAT() != 0 {
+		taxAmounts = append(taxAmounts, taxAmount{price: amountToTax, percentage: item.FixedVAT()})
+	} else if settings != nil && item.TaxableItems() != nil && len(item.TaxableItems()) > 0 {
+		for _, item := range item.TaxableItems() {
+			// because a discount may have been applied we need to determine the real price of this sub-item
+			priceShare := float64(item.PriceInLowestUnit()) / float64(originalPrice)
+			itemPrice := rint(float64(amountToTax) * priceShare)
+			amount := taxAmount{price: itemPrice}
+			for _, t := range settings.Taxes {
+				if t.AppliesTo(params.Country, item.ProductType()) {
+					amount.percentage = t.Percentage
+					break
+				}
+			}
+			taxAmounts = append(taxAmounts, amount)
+		}
+	} else if settings != nil {
+		for _, t := range settings.Taxes {
+			if t.AppliesTo(params.Country, item.ProductType()) {
+				taxAmounts = append(taxAmounts, taxAmount{price: amountToTax, percentage: t.Percentage})
+				break
+			}
+		}
+	}
+
+	taxes = 0
+	if len(taxAmounts) == 0 {
+		subtotal = amountToTax
+		return
+	}
+
+	subtotal = 0
+	for _, tax := range taxAmounts {
+		if includeTaxes {
+			tax.price = rint(float64(tax.price) / (100 + float64(tax.percentage)) * 100)
+		}
+		subtotal += tax.price
+		taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
+	}
+
+	return
 }
 
 // Nopes - no `round` method in go
