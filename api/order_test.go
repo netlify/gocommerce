@@ -584,7 +584,7 @@ func TestOrderView(t *testing.T) {
 func TestOrderSetUserIDLogic(t *testing.T) {
 	t.Run("AnonymousUser", func(t *testing.T) {
 		simpleOrder := models.NewOrder("", "session", "params@email.com", "USD")
-		require.NoError(t, setOrderEmail(nil, simpleOrder, nil, testLogger))
+		require.Nil(t, setOrderEmail(nil, simpleOrder, nil, testLogger))
 		assert.Equal(t, "params@email.com", simpleOrder.Email)
 	})
 	t.Run("AnonymousUserNoEmail", func(t *testing.T) {
@@ -625,7 +625,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		simpleOrder := models.NewOrder("", "session", "", "USD")
 		claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 		err := setOrderEmail(db, simpleOrder, claims, testLogger)
-		require.Error(t, err)
+		require.NotNil(t, err)
 		assert.Equal(t, http.StatusBadRequest, err.Code)
 	})
 	t.Run("KnownUserClaimsOnRequest", func(t *testing.T) {
@@ -963,7 +963,7 @@ func validateNewUserEmail(t *testing.T, order *models.Order, claims *claims.JWTC
 	require.True(t, result.RecordNotFound(), "Unclean test env -- user exists with ID "+claims.Subject)
 
 	err := setOrderEmail(db, order, claims, testLogger)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	user := new(models.User)
 	result = db.First(user, "id = ?", claims.Subject)
@@ -979,7 +979,7 @@ func validateNewUserEmail(t *testing.T, order *models.Order, claims *claims.JWTC
 }
 
 func validateExistingUserEmail(t *testing.T, db *gorm.DB, order *models.Order, claims *claims.JWTClaims, expectedOrderEmail string) {
-	require.NoError(t, setOrderEmail(db, order, claims, testLogger))
+	require.Nil(t, setOrderEmail(db, order, claims, testLogger))
 	assert.Equal(t, claims.Subject, order.UserID)
 	assert.Equal(t, expectedOrderEmail, order.Email)
 }
