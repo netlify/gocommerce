@@ -83,6 +83,8 @@ func validatePrice(t *testing.T, actual Price, expected Price) {
 	assert.Equal(t, expected.NetTotal, actual.NetTotal, fmt.Sprintf("Expected net total to be %d, got %d", expected.NetTotal, actual.NetTotal))
 	assert.Equal(t, expected.Discount, actual.Discount, fmt.Sprintf("Expected discount to be %d, got %d", expected.Discount, actual.Discount))
 	assert.Equal(t, expected.Total, actual.Total, fmt.Sprintf("Expected total to be %d, got %d", expected.Total, actual.Total))
+	assert.Equal(t, int64(expected.NetTotal+expected.Taxes), expected.Total, "Your expected nettotal and taxes should add up to the expected total. Check your test!")
+	assert.Equal(t, int64(actual.NetTotal+actual.Taxes), actual.Total, "Expected nettotal and taxes to add up to total")
 }
 
 func TestNoItems(t *testing.T) {
