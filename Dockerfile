@@ -1,8 +1,9 @@
-FROM netlify/go-glide:v0.12.3
+FROM golang:1.11
 
-ADD . /go/src/github.com/netlify/gocommerce
+RUN useradd -m netlify
 
-RUN useradd -m netlify && cd /go/src/github.com/netlify/gocommerce && make deps build_linux && mv gocommerce /usr/local/bin/
+ADD . /src
+RUN cd /src && make deps build_linux && mv gocommerce /usr/local/bin/
 
 USER netlify
 CMD ["gocommerce"]

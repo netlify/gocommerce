@@ -38,7 +38,7 @@ release: ## Upload release to GitHub releases.
 
 deps: ## Install dependencies.
 	@go get -u golang.org/x/lint/golint
-	@go get -u github.com/Masterminds/glide && glide install
+	@go mod download
 
 image: ## Build the Docker image.
 	docker build .

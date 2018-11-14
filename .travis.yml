@@ -2,7 +2,11 @@
 language: go
 
 go:
-  - "1.9"
+  - "1.11"
+
+env:
+  global:
+    - GO111MODULE=on
 
 install: make deps
 script: make all
