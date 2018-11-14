@@ -1,5 +1,5 @@
-hash: 5c323ab6120aa0196280c039ea80bc8f21a76f34c6880c47935603b6eff9cc8d
-updated: 2018-10-18T17:14:54.331248849+02:00
+hash: 553e340d93bbe27e6d1fd002ec1044fb5b15fd8c749a6638062dee7a4f0eee0f
+updated: 2018-11-04T03:21:50.787173992+01:00
 imports:
 - name: cloud.google.com/go
   version: 98f5696b1026056a47f114c4451dbc4703d67191
@@ -87,6 +87,8 @@ imports:
   - tls
 - name: github.com/netlify/PayPal-Go-SDK
   version: 732c3d08bf8a673d3d0ae345bfe771a573006890
+- name: github.com/pariz/gountries
+  version: adb00f6513a307f9f7a4ee57eca79a703b8a7272
 - name: github.com/pborman/uuid
   version: a97ce2ca70fa5a848076093f05e639a89ca34d06
 - name: github.com/pelletier/go-toml
@@ -136,9 +138,10 @@ imports:
 - name: github.com/streadway/amqp
   version: 2cbfe40c9341ad63ba23e53013b3ddc7989d801c
 - name: github.com/stripe/stripe-go
-  version: 250fb5fdb3e4001e3388f6410f648ea178b3262e
+  version: e2f967acf5f1f5b75ce29b3e633c082074359029
   subpackages:
   - account
+  - applepaydomain
   - balance
   - bankaccount
   - bitcoinreceiver
@@ -153,28 +156,47 @@ imports:
   - dispute
   - ephemeralkey
   - event
+  - exchangerate
   - fee
   - feerefund
-  - fileupload
+  - file
+  - filelink
+  - form
   - invoice
   - invoiceitem
+  - issuerfraudrecord
+  - issuing/authorization
+  - issuing/card
+  - issuing/cardholder
+  - issuing/dispute
+  - issuing/transaction
   - loginlink
   - order
-  - orderitem
   - orderreturn
+  - paymentintent
   - paymentsource
   - payout
   - plan
   - product
   - recipient
   - refund
+  - reporting/reportrun
+  - reporting/reporttype
   - reversal
+  - sigma/scheduledqueryrun
   - sku
   - source
+  - sourcetransaction
   - sub
   - subitem
+  - terminal/connectiontoken
+  - terminal/location
+  - terminal/reader
   - token
+  - topup
   - transfer
+  - usagerecord
+  - webhookendpoint
 - name: golang.org/x/net
   version: ab5485076ff3407ad2d02db054635913f017b0ed
   subpackages:

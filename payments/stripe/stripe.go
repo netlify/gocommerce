@@ -2,10 +2,12 @@ package stripe
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"encoding/json"
 
+	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
 	"github.com/pkg/errors"
 	stripe "github.com/stripe/stripe-go"
@@ -56,16 +58,39 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 		return nil, errors.New("Stripe requires a stripe_token for creating a payment")
 	}
 
-	return func(amount uint64, currency string) (string, error) {
-		return s.charge(bp.StripeToken, amount, currency)
+	return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+		return s.charge(bp.StripeToken, amount, currency, order, invoiceNumber)
 	}, nil
 }
 
-func (s *stripePaymentProvider) charge(token string, amount uint64, currency string) (string, error) {
+func prepareShippingAddress(addr models.Address) *stripe.ShippingDetailsParams {
+	return &stripe.ShippingDetailsParams{
+		Address: &stripe.AddressParams{
+			Line1:      &addr.Address1,
+			Line2:      &addr.Address2,
+			City:       &addr.City,
+			State:      &addr.State,
+			PostalCode: &addr.Zip,
+			Country:    &addr.Country,
+		},
+	}
+}
+
+func (s *stripePaymentProvider) charge(token string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+	stripeAmount := int64(amount)
+	stripeDescription := fmt.Sprintf("Invoice No. %d", invoiceNumber)
 	ch, err := s.client.Charges.New(&stripe.ChargeParams{
-		Amount:   amount,
-		Source:   &stripe.SourceParams{Token: token},
-		Currency: stripe.Currency(currency),
+		Amount:      &stripeAmount,
+		Source:      &stripe.SourceParams{Token: &token},
+		Currency:    &currency,
+		Description: &stripeDescription,
+		Shipping:    prepareShippingAddress(order.ShippingAddress),
+		Params: stripe.Params{
+			Metadata: map[string]string{
+				"order_id":       order.ID,
+				"invoice_number": fmt.Sprintf("%d", invoiceNumber),
+			},
+		},
 	})
 
 	if err != nil {
@@ -80,9 +105,10 @@ func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 }
 
 func (s *stripePaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+	stripeAmount := int64(amount)
 	ref, err := s.client.Refunds.New(&stripe.RefundParams{
-		Charge: transactionID,
-		Amount: amount,
+		Charge: &transactionID,
+		Amount: &stripeAmount,
 	})
 	if err != nil {
 		return "", err

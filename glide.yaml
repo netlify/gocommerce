@@ -18,7 +18,7 @@ import:
 - package: github.com/netlify/mailme
   version: c4a76ce443c1122ead2518b28cc7ffaf1091cc9a
 - package: github.com/stripe/stripe-go
-  version: v24.0.0
+  version: ^v52.0.0
   subpackages:
   - client
 - package: gopkg.in/gomail.v2
@@ -44,6 +44,8 @@ import:
   version: v1.3.0
 - package: github.com/imdario/mergo
   version: 0.2.2
+- package: github.com/pariz/gountries
+  version: 0.1.3
 testImport:
 - package: github.com/stretchr/testify
   version: v1.1.3

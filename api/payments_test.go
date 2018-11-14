@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -19,11 +19,13 @@ import (
 
 	"strings"
 
+	paypalsdk "github.com/netlify/PayPal-Go-SDK"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/gocommerce/payments"
 	stripe "github.com/stripe/stripe-go"
+	"github.com/stripe/stripe-go/form"
 )
 
 // ------------------------------------------------------------------------------------------------
@@ -331,6 +333,10 @@ func TestPaymentCreate(t *testing.T) {
 			rsp := test.DB.Save(test.Data.secondOrder)
 			require.NoError(t, rsp.Error, "Failed to update order")
 
+			addr := test.Data.secondOrder.ShippingAddress
+			addr.Country = "United States"
+			assert.NoError(t, test.DB.Save(&addr).Error)
+
 			var loginCount, paymentCount int
 			paymentID := "4CF18861HF410323V"
 			amtString := fmt.Sprintf("%.2f", float64(test.Data.secondOrder.Total)/100)
@@ -341,6 +347,40 @@ func TestPaymentCreate(t *testing.T) {
 					fmt.Fprint(w, `{"access_token":"EEwJ6tF9x5WCIZDYzyZGaz6Khbw7raYRIBV_WxVvgmsG","expires_in":100000}`)
 					loginCount++
 				case "/v1/payments/payment/" + paymentID:
+					if r.Method == http.MethodPatch {
+						payload := []paypalsdk.PaymentPatch{}
+						assert.NoError(t, json.NewDecoder(r.Body).Decode(&payload))
+						for _, patch := range payload {
+							switch patch.Path {
+							case "/transactions/0/invoice_number":
+								assert.Equal(t, "1", patch.Value)
+							case "/transactions/0/item_list":
+								rawVal, ok := patch.Value.(map[string]interface{})
+								assert.True(t, ok)
+								val := paypalsdk.ItemList{}
+								dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+									Result:  &val,
+									TagName: "json",
+								})
+								assert.NoError(t, err)
+								assert.NoError(t, dec.Decode(&rawVal))
+								assert.Len(t, val.Items, 2)
+								for _, item := range val.Items {
+									switch item.SKU {
+									case "456-i-rollover-all-things":
+										assert.Equal(t, test.Data.secondLineItem1.Title, item.Name)
+										assert.Equal(t, test.Data.secondLineItem1.Description, item.Description)
+									case "234-fancy-belts":
+										assert.Equal(t, test.Data.secondLineItem2.Title, item.Name)
+										assert.Equal(t, test.Data.secondLineItem2.Description, item.Description)
+									}
+								}
+
+								assert.NotNil(t, val.ShippingAddress)
+								assert.Equal(t, test.Data.secondOrder.ShippingAddress.Name, val.ShippingAddress.RecipientName)
+							}
+						}
+					}
 					w.Header().Add("Content-Type", "application/json")
 					fmt.Fprint(w, `{"id":"`+paymentID+`","transactions":[{"amount":{"total":"`+amtString+`","currency":"`+test.Data.secondOrder.Currency+`"}}]}`)
 					paymentCount++
@@ -365,6 +405,7 @@ func TestPaymentCreate(t *testing.T) {
 				PaypalID:     paymentID,
 				PaypalUserID: "456",
 				Provider:     payments.PayPalProvider,
+				OrderID:      test.Data.secondOrder.ID,
 			}
 
 			body, err := json.Marshal(params)
@@ -377,14 +418,20 @@ func TestPaymentCreate(t *testing.T) {
 			assert.Equal(t, paymentID, trans.ProcessorID)
 			assert.Equal(t, models.PaidState, trans.Status)
 			assert.Equal(t, 1, loginCount, "too many login calls")
-			assert.Equal(t, 2, paymentCount, "too many payment calls")
+			assert.Equal(t, 3, paymentCount, "too many payment calls")
 		})
 	})
 	t.Run("Stripe", func(t *testing.T) {
+		test := NewRouteTest(t)
+
 		callCount := 0
-		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, body *stripe.RequestValues, params *stripe.Params) {
+		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
 			switch path {
 			case "/charges":
+				payload := params.GetParams()
+				fmt.Println("meta:", payload.Metadata)
+				assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
+				assert.Equal(t, "1", payload.Metadata["invoice_number"])
 				callCount++
 			default:
 				t.Fatalf("unknown Stripe API call to %s", path)
@@ -392,7 +439,6 @@ func TestPaymentCreate(t *testing.T) {
 		}))
 		defer stripe.SetBackend(stripe.APIBackend, nil)
 
-		test := NewRouteTest(t)
 		test.Data.firstOrder.PaymentState = models.PendingState
 		rsp := test.DB.Save(test.Data.firstOrder)
 		require.NoError(t, rsp.Error, "Failed to update order")
@@ -574,6 +620,7 @@ type paypalPaymentParams struct {
 	PaypalID     string `json:"paypal_payment_id"`
 	PaypalUserID string `json:"paypal_user_id"`
 	Provider     string `json:"provider"`
+	OrderID      string `json:"order_id"`
 }
 
 type paypalPreauthorizeParams struct {
@@ -622,7 +669,7 @@ func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (p
 	return mp.preauthorize, nil
 }
 
-func (mp *memProvider) charge(amount uint64, currency string) (string, error) {
+func (mp *memProvider) charge(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
@@ -643,7 +690,7 @@ func (mp *memProvider) preauthorize(amount uint64, currency string, description 
 	return nil, nil
 }
 
-type stripeCallFunc func(method, path, key string, body *stripe.RequestValues, params *stripe.Params)
+type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{})
 
 func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
 	return &trackingStripeBackend{fn}
@@ -653,11 +700,17 @@ type trackingStripeBackend struct {
 	trackingFunc stripeCallFunc
 }
 
-func (t trackingStripeBackend) Call(method, path, key string, body *stripe.RequestValues, params *stripe.Params, v interface{}) error {
-	t.trackingFunc(method, path, key, body, params)
+func (t trackingStripeBackend) Call(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+	t.trackingFunc(method, path, key, params, v)
 	return nil
 }
 
-func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body io.Reader, params *stripe.Params, v interface{}) error {
+func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body *bytes.Buffer, params *stripe.Params, v interface{}) error {
 	return nil
 }
+
+func (t trackingStripeBackend) CallRaw(method, path, key string, body *form.Values, params *stripe.Params, v interface{}) error {
+	return nil
+}
+
+func (t trackingStripeBackend) SetMaxNetworkRetries(maxNetworkRetries int) {}
