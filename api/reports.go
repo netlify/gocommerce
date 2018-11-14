@@ -32,7 +32,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 		Where("payment_state = 'paid' AND instance_id = ?", instanceID).
 		Group("currency")
 
-	query, err := parseTimeQueryParams(query, r.URL.Query())
+	query, err := parseTimeQueryParams(query, query.NewScope(models.Order{}).QuotedTableName(), r.URL.Query())
 	if err != nil {
 		return badRequestError(err.Error())
 	}
