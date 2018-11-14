@@ -27,7 +27,8 @@ var sortFields = map[string]string{
 }
 
 func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
-	query = addFilters(query, query.NewScope(models.Transaction{}).QuotedTableName(), params, []string{
+	transactionTable := query.NewScope(models.Transaction{}).QuotedTableName()
+	query = addFilters(query, transactionTable, params, []string{
 		"processor_id",
 		"user_id",
 		"order_id",
@@ -38,18 +39,18 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 	})
 
 	if values, exists := params["min_amount"]; exists {
-		query = query.Where("amount >= ?", values[0])
+		query = query.Where(transactionTable+".amount >= ?", values[0])
 	}
 
 	if values, exists := params["max_amount"]; exists {
-		query = query.Where("amount <= ?", values[0])
+		query = query.Where(transactionTable+".amount <= ?", values[0])
 	}
 
 	query, err := parseLimitQueryParam(query, params)
 	if err != nil {
 		return nil, err
 	}
-	return parseTimeQueryParams(query, params)
+	return parseTimeQueryParams(query, transactionTable, params)
 }
 
 func parseUserBulkDeleteParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
@@ -78,7 +79,7 @@ func parseUserQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return parseTimeQueryParams(query, params)
+	return parseTimeQueryParams(query, userTable, params)
 }
 
 func sortField(value string) string {
@@ -123,11 +124,13 @@ func addNegativeAddressFilter(query *gorm.DB, params url.Values, queryField stri
 }
 
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
+
 	if tax := params.Get("tax"); tax != "" {
 		if tax == "yes" || tax == "true" {
-			query = query.Where("taxes > 0")
+			query = query.Where(orderTable + ".taxes > 0")
 		} else {
-			query = query.Where("taxes = 0")
+			query = query.Where(orderTable + ".taxes = 0")
 		}
 	}
 
@@ -158,8 +161,6 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	} else {
 		query = query.Order("created_at desc")
 	}
-
-	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
 	if items := params.Get("items"); items != "" {
 		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
@@ -193,7 +194,7 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 		"coupon_code",
 	})
 
-	return parseTimeQueryParams(query, params)
+	return parseTimeQueryParams(query, orderTable, params)
 }
 
 func parseLimitQueryParam(query *gorm.DB, params url.Values) (*gorm.DB, error) {
@@ -229,16 +230,16 @@ func getTimeQueryParams(params url.Values) (from *time.Time, to *time.Time, err 
 	return
 }
 
-func parseTimeQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+func parseTimeQueryParams(query *gorm.DB, tableName string, params url.Values) (*gorm.DB, error) {
 	from, to, err := getTimeQueryParams(params)
 	if err != nil {
 		return nil, err
 	}
 	if from != nil {
-		query = query.Where("created_at >= ?", from)
+		query = query.Where(tableName+".created_at >= ?", from)
 	}
 	if to != nil {
-		query = query.Where("created_at <= ?", to)
+		query = query.Where(tableName+".created_at <= ?", to)
 	}
 	return query, nil
 }

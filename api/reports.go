@@ -32,7 +32,7 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 		Where("payment_state = 'paid' AND instance_id = ?", instanceID).
 		Group("currency")
 
-	query, err := parseTimeQueryParams(query, r.URL.Query())
+	query, err := parseTimeQueryParams(query, query.NewScope(models.Order{}).QuotedTableName(), r.URL.Query())
 	if err != nil {
 		return badRequestError(err.Error())
 	}
@@ -67,16 +67,16 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 		Group("sku, path, currency").
 		Order("total desc")
 
-	query = query.Where("orders.instance_id = ?", instanceID)
+	query = query.Where(ordersTable+".instance_id = ?", instanceID)
 	from, to, err := getTimeQueryParams(r.URL.Query())
 	if err != nil {
 		return badRequestError(err.Error())
 	}
 	if from != nil {
-		query = query.Where("orders.created_at >= ?", from)
+		query = query.Where(ordersTable+".created_at >= ?", from)
 	}
 	if to != nil {
-		query.Where("orders.created_at <= ?", to)
+		query.Where(ordersTable+".created_at <= ?", to)
 	}
 
 	rows, err := query.Rows()

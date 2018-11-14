@@ -333,6 +333,16 @@ func TestOrdersList(t *testing.T) {
 			extractPayload(t, http.StatusOK, recorder, &orders)
 			assert.Len(t, orders, 1)
 		})
+		t.Run("RangeWithParams", func(t *testing.T) {
+			test := NewRouteTest(t)
+			token := test.Data.testUserToken
+			url := fmt.Sprintf("/orders?per_page=50&page=1&from=%d&billing_countries=dcland", test.Data.firstOrder.CreatedAt.Unix())
+			recorder := test.TestEndpoint(http.MethodGet, url, nil, token)
+
+			orders := []models.Order{}
+			extractPayload(t, http.StatusOK, recorder, &orders)
+			assert.Len(t, orders, 2)
+		})
 	})
 	t.Run("Pagination", func(t *testing.T) {
 		test := NewRouteTest(t)
