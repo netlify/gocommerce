@@ -530,11 +530,13 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if orderParams.FulfillmentState != "" {
-		_, ok := map[string]bool{
-			"pending":  true,
-			"shipping": true,
-			"shipped":  true,
-		}[orderParams.FulfillmentState]
+		ok := false
+		for _, state := range models.FulfillmentStates {
+			if state == orderParams.FulfillmentState {
+				ok = true
+				break
+			}
+		}
 		if !ok {
 			tx.Rollback()
 			return badRequestError("Bad fulfillment state: " + orderParams.FulfillmentState)

@@ -18,6 +18,9 @@ const PendingState = "pending"
 // PaidState is the paid state of an Order
 const PaidState = "paid"
 
+// ShippingState is the shipping state of an order
+const ShippingState = "shipping"
+
 // ShippedState is the shipped state of an Order
 const ShippedState = "shipped"
 
@@ -34,8 +37,8 @@ var PaymentStates = []string{
 // FulfillmentStates are the possible values for the FulfillmentState field
 var FulfillmentStates = []string{
 	PendingState,
+	ShippingState,
 	ShippedState,
-	FailedState,
 }
 
 // NumberType | StringType | BoolType are the different types supported in custom data for orders
