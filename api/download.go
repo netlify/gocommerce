@@ -110,11 +110,11 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
 	downloadsTable := a.db.NewScope(models.Download{}).QuotedTableName()
 
-	query := a.db.Joins("join " + orderTable + " as orders ON " + downloadsTable + ".order_id = orders.id and orders.payment_state = 'paid'")
+	query := a.db.Joins("join " + orderTable + " as orders ON " + downloadsTable + ".order_id = " + orderTable + ".id and " + orderTable + ".payment_state = 'paid'")
 	if order != nil {
-		query = query.Where("orders.id = ?", order.ID)
+		query = query.Where(orderTable+".id = ?", order.ID)
 	} else {
-		query = query.Where("orders.user_id = ?", claims.Subject)
+		query = query.Where(orderTable+".user_id = ?", claims.Subject)
 	}
 
 	offset, limit, err := paginate(w, r, query.Model(&models.Download{}))

@@ -39,11 +39,11 @@ func parsePaymentQueryParams(query *gorm.DB, params url.Values) (*gorm.DB, error
 	})
 
 	if values, exists := params["min_amount"]; exists {
-		query = query.Where("amount >= ?", values[0])
+		query = query.Where(transactionTable+".amount >= ?", values[0])
 	}
 
 	if values, exists := params["max_amount"]; exists {
-		query = query.Where("amount <= ?", values[0])
+		query = query.Where(transactionTable+".amount <= ?", values[0])
 	}
 
 	query, err := parseLimitQueryParam(query, params)
@@ -124,11 +124,13 @@ func addNegativeAddressFilter(query *gorm.DB, params url.Values, queryField stri
 }
 
 func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
+	orderTable := query.NewScope(models.Order{}).QuotedTableName()
+
 	if tax := params.Get("tax"); tax != "" {
 		if tax == "yes" || tax == "true" {
-			query = query.Where("taxes > 0")
+			query = query.Where(orderTable + ".taxes > 0")
 		} else {
-			query = query.Where("taxes = 0")
+			query = query.Where(orderTable + ".taxes = 0")
 		}
 	}
 
@@ -159,8 +161,6 @@ func parseOrderParams(query *gorm.DB, params url.Values) (*gorm.DB, error) {
 	} else {
 		query = query.Order("created_at desc")
 	}
-
-	orderTable := query.NewScope(models.Order{}).QuotedTableName()
 
 	if items := params.Get("items"); items != "" {
 		lineItemTable := query.NewScope(models.LineItem{}).QuotedTableName()
