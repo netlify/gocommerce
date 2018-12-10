@@ -80,7 +80,11 @@ func TestOrderCreate(t *testing.T) {
 		assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 999, was %v", order.Total))
 		assert.Len(t, order.LineItems, 1)
-		meta := order.LineItems[0].MetaData
+
+		lineItem := order.LineItems[0]
+		assert.Equal(t, lineItem.CalculationDetail.Total, int64(total))
+
+		meta := lineItem.MetaData
 		require.NotNil(t, meta, "Expected meta data for line item")
 		_, ok := meta["attendees"]
 		require.True(t, ok, "Line item should have attendees")
