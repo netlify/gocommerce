@@ -15,6 +15,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/netlify/gocommerce/calculator"
 	"github.com/netlify/gocommerce/claims"
 	"github.com/netlify/gocommerce/models"
 	"github.com/stretchr/testify/require"
@@ -164,6 +165,89 @@ func TestOrderCreate(t *testing.T) {
 		assert.Equal(t, "Germany", order.BillingAddress.Country)
 		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1105, was %v", order.Total))
 		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Taxes))
+	})
+
+	t.Run("WithCoupon", func(t *testing.T) {
+		test := NewRouteTest(t)
+		test.Config.SiteURL = server.URL
+
+		couponServer := startCouponList("SPECIAL-EVENT", 10)
+		defer couponServer.Close()
+		test.Config.Coupons.URL = couponServer.URL
+
+		body := strings.NewReader(`{
+			"email": "info@example.com",
+			"shipping_address": {
+				"name": "Test User",
+				"address1": "610 22nd Street",
+				"city": "San Francisco", "state": "CA", "country": "USA", "zip": "94107"
+			},
+			"line_items": [{"path": "/simple-product", "quantity": 1}],
+			"coupon": "SPECIAL-EVENT"
+		}`)
+		token := test.Data.testUserToken
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		var total uint64 = 899
+		var discount uint64 = 100
+		assert.Equal(t, "info@example.com", order.Email, "Email should be info@example.com, was %v", order.Email)
+		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 899, was %v", order.Total))
+		assert.Equal(t, discount, order.Discount, fmt.Sprintf("Discount should be 100, was %v", order.Total))
+		assert.Len(t, order.LineItems, 1)
+
+		lineItem := order.LineItems[0]
+		assert.Equal(t, int64(total), lineItem.CalculationDetail.Total, fmt.Sprintf("Total should be 899, was %d", lineItem.CalculationDetail.Total))
+		assert.Equal(t, discount, lineItem.CalculationDetail.Discount, fmt.Sprintf("Discount should be 100, was %d", lineItem.CalculationDetail.Discount))
+		assert.Len(t, lineItem.CalculationDetail.DiscountItems, 1)
+
+		discountItem := lineItem.CalculationDetail.DiscountItems[0]
+		assert.Equal(t, calculator.DiscountTypeCoupon, discountItem.Type)
+		assert.Equal(t, uint64(10), discountItem.Percentage)
+		assert.Equal(t, uint64(0), discountItem.Fixed)
+	})
+
+	t.Run("WithMemberDiscount", func(t *testing.T) {
+		test := NewRouteTest(t)
+
+		settings := calculator.Settings{
+			MemberDiscounts: []*calculator.MemberDiscount{
+				&calculator.MemberDiscount{
+					Claims: map[string]string{
+						"email": test.Data.testUser.Email,
+					},
+					Percentage: 15,
+					ProductTypes: []string{"Book"},
+				},
+			},
+		}
+		server := startTestSiteWithSettings(settings)
+		defer server.Close()
+		test.Config.SiteURL = server.URL
+
+		body := strings.NewReader(defaultPayload)
+		token := test.Data.testUserToken
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		var total uint64 = 849
+		var discount uint64 = 150
+		assert.Equal(t, "info@example.com", order.Email, "Email should be info@example.com, was %v", order.Email)
+		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 849, was %v", order.Total))
+		assert.Equal(t, discount, order.Discount, fmt.Sprintf("Discount should be 150, was %v", order.Total))
+		assert.Len(t, order.LineItems, 1)
+
+		lineItem := order.LineItems[0]
+		assert.Equal(t, int64(total), lineItem.CalculationDetail.Total, fmt.Sprintf("Total should be 849, was %d", lineItem.CalculationDetail.Total))
+		assert.Equal(t, discount, lineItem.CalculationDetail.Discount, fmt.Sprintf("Discount should be 150, was %d", lineItem.CalculationDetail.Discount))
+		assert.Len(t, lineItem.CalculationDetail.DiscountItems, 1)
+
+		discountItem := lineItem.CalculationDetail.DiscountItems[0]
+		assert.Equal(t, calculator.DiscountTypeMember, discountItem.Type)
+		assert.Equal(t, uint64(15), discountItem.Percentage)
+		assert.Equal(t, uint64(0), discountItem.Fixed)
 	})
 }
 

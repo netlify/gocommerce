@@ -481,3 +481,20 @@ func startTestSiteWithSettings(settings interface{}) *httptest.Server {
 		}
 	}))
 }
+
+func startCouponList(name string, percentage uint64) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			fmt.Fprintf(w, `{
+				"coupons": {
+					"%s": {
+						"percentage": %d
+					}
+				}
+			}\n`, name, percentage)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+}

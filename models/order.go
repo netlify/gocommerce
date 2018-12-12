@@ -188,6 +188,13 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 			Taxes:    item.Taxes,
 			Total:    item.Total,
 		}
+
+		for _, discount := range item.DiscountItems {
+			discount := DiscountItem{
+				DiscountItem: discount,
+			}
+			o.LineItems[i].CalculationDetail.DiscountItems = append(o.LineItems[i].CalculationDetail.DiscountItems, discount)
+		}
 	}
 
 	if price.Total > 0 {
