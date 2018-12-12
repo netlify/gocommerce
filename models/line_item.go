@@ -13,6 +13,31 @@ import (
 	"github.com/pborman/uuid"
 )
 
+// DiscountItem provides details about a discount that was applied
+type DiscountItem struct {
+	ID         int64 `json:"-"`
+	LineItemID int64 `json:"-"`
+
+	calculator.DiscountItem `gorm:"embedded"`
+}
+
+// TableName returns the database table name for the DiscountItem model.
+func (DiscountItem) TableName() string {
+	return tableName("discount_items")
+}
+
+// CalculationDetail holds details about pricing for line items
+type CalculationDetail struct {
+	Subtotal uint64 `json:"subtotal"`
+
+	Discount      uint64         `json:"discount"`
+	DiscountItems []DiscountItem `json:"discount_items" gorm:"foreignkey:LineItemID"`
+
+	NetTotal uint64 `json:"net_total"`
+	Taxes    uint64 `json:"taxes"`
+	Total    int64  `json:"total"`
+}
+
 // LineItem is a single item in an Order.
 type LineItem struct {
 	ID      int64  `json:"id"`
@@ -27,6 +52,8 @@ type LineItem struct {
 
 	Price uint64 `json:"price"`
 	VAT   uint64 `json:"vat"`
+
+	*CalculationDetail `json:"calculation" gorm:"embedded;embedded_prefix:calculation_"`
 
 	PriceItems []*PriceItem `json:"price_items"`
 	AddonItems []*AddonItem `json:"addons"`

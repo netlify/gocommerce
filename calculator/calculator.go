@@ -8,6 +8,13 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// DiscountItem provides details about a discount that was applied
+type DiscountItem struct {
+	Type       DiscountType `json:"type"`
+	Percentage uint64       `json:"percentage"`
+	Fixed      uint64       `json:"fixed"`
+}
+
 // Price represents the total price of all line items.
 type Price struct {
 	Items []ItemPrice
@@ -28,6 +35,8 @@ type ItemPrice struct {
 	NetTotal uint64
 	Taxes    uint64
 	Total    int64
+
+	DiscountItems []DiscountItem
 }
 
 // PaymentMethods settings
@@ -182,14 +191,26 @@ func calculateAmountsForSingleItem(settings *Settings, lineLogger logrus.FieldLo
 	// apply discount to original price
 	coupon := params.Coupon
 	if coupon != nil && coupon.ValidForType(item.ProductType()) && coupon.ValidForProduct(item.ProductSku()) {
-		itemPrice.Discount = calculateDiscount(singlePrice, coupon.PercentageDiscount(), coupon.FixedDiscount(params.Currency)*multiplier)
+		discountItem := DiscountItem{
+			Type:       DiscountTypeCoupon,
+			Percentage: coupon.PercentageDiscount(),
+			Fixed:      coupon.FixedDiscount(params.Currency) * multiplier,
+		}
+		itemPrice.Discount = calculateDiscount(singlePrice, discountItem.Percentage, discountItem.Fixed)
+		itemPrice.DiscountItems = append(itemPrice.DiscountItems, discountItem)
 	}
 	if settings != nil && settings.MemberDiscounts != nil {
 		for _, discount := range settings.MemberDiscounts {
 
 			if jwtClaims != nil && claims.HasClaims(jwtClaims, discount.Claims) && discount.ValidForType(item.ProductType()) && discount.ValidForProduct(item.ProductSku()) {
 				lineLogger = lineLogger.WithField("discount", discount.Claims)
-				itemPrice.Discount += calculateDiscount(singlePrice, discount.Percentage, discount.FixedDiscount(params.Currency)*multiplier)
+				discountItem := DiscountItem{
+					Type:       DiscountTypeMember,
+					Percentage: discount.Percentage,
+					Fixed:      discount.FixedDiscount(params.Currency) * multiplier,
+				}
+				itemPrice.Discount += calculateDiscount(singlePrice, discountItem.Percentage, discountItem.Fixed)
+				itemPrice.DiscountItems = append(itemPrice.DiscountItems, discountItem)
 			}
 		}
 	}

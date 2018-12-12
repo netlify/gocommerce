@@ -179,6 +179,24 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	o.Discount = price.Discount
 	o.NetTotal = price.NetTotal
 
+	// apply price details to line items
+	for i, item := range price.Items {
+		o.LineItems[i].CalculationDetail = &CalculationDetail{
+			Discount: item.Discount,
+			Subtotal: item.Subtotal,
+			NetTotal: item.NetTotal,
+			Taxes:    item.Taxes,
+			Total:    item.Total,
+		}
+
+		for _, discount := range item.DiscountItems {
+			discount := DiscountItem{
+				DiscountItem: discount,
+			}
+			o.LineItems[i].CalculationDetail.DiscountItems = append(o.LineItems[i].CalculationDetail.DiscountItems, discount)
+		}
+	}
+
 	if price.Total > 0 {
 		o.Total = uint64(price.Total)
 	}
