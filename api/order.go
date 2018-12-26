@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/go-chi/chi"
 	"github.com/jinzhu/gorm"
 	"github.com/mattes/vat"
@@ -641,6 +640,13 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 			Path:     orderItem.Path,
 			OrderID:  order.ID,
 		}
+
+		for _, addon := range orderItem.Addons {
+			lineItem.AddonItems = append(lineItem.AddonItems, &models.AddonItem{
+				Sku: addon.Sku,
+			})
+		}
+
 		order.LineItems = append(order.LineItems, lineItem)
 		sem <- 1
 		wg.Add(1)
@@ -654,7 +660,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 				return
 			}
 
-			if err := a.processLineItem(ctx, order, item, orderItem); err != nil {
+			if err := a.processLineItem(ctx, order, item); err != nil {
 				sharedErr.setError(err)
 			}
 		}(lineItem, orderItem)
@@ -735,56 +741,11 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	return address, nil
 }
 
-func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *orderLineItem) error {
+func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem) error {
 	config := gcontext.GetConfig(ctx)
 	jwtClaims := gcontext.GetClaimsAsMap(ctx)
-	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
 
-	doc, err := goquery.NewDocumentFromResponse(resp)
-	if err != nil {
-		return err
-	}
-
-	metaTag := doc.Find(".gocommerce-product")
-	if metaTag.Length() == 0 {
-		return fmt.Errorf("No script tag with class gocommerce-product tag found for '%v'", item.Title)
-	}
-	metaProducts := []*models.LineItemMetadata{}
-	var parsingErr error
-	metaTag.EachWithBreak(func(_ int, tag *goquery.Selection) bool {
-		meta := &models.LineItemMetadata{}
-		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
-		if parsingErr != nil {
-			return false
-		}
-		metaProducts = append(metaProducts, meta)
-		return true
-	})
-	if parsingErr != nil {
-		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
-	}
-
-	if len(metaProducts) == 1 && item.Sku == "" {
-		item.Sku = metaProducts[0].Sku
-	}
-
-	for _, meta := range metaProducts {
-		if meta.Sku == item.Sku {
-			for _, addon := range orderItem.Addons {
-				item.AddonItems = append(item.AddonItems, &models.AddonItem{
-					Sku: addon.Sku,
-				})
-			}
-
-			return item.Process(jwtClaims, order, meta)
-		}
-	}
-
-	return fmt.Errorf("No product Sku from path matched: %v", item.Sku)
+	return item.Process(config, jwtClaims, order)
 }
 
 func orderQuery(db *gorm.DB) *gorm.DB {

@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/calculator"
 	"github.com/netlify/gocommerce/claims"
+	"github.com/netlify/gocommerce/conf"
 	"github.com/pborman/uuid"
 )
 
@@ -248,7 +251,12 @@ func (i *LineItem) GetQuantity() uint64 {
 }
 
 // Process calculates the price of a LineItem.
-func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta *LineItemMetadata) error {
+func (i *LineItem) Process(config *conf.Configuration, userClaims map[string]interface{}, order *Order) error {
+	meta, err := i.FetchMeta(config.SiteURL)
+	if err != nil {
+		return err
+	}
+
 	i.Sku = meta.Sku
 	i.Title = meta.Title
 	i.Description = meta.Description
@@ -277,6 +285,59 @@ func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta
 		i.AddonItems[index].Price = lowestPrice.cents
 	}
 
+	order.Downloads = i.MissingDownloads(order, meta)
+
+	return i.calculatePrice(userClaims, meta.Prices, order.Currency)
+}
+
+// FetchMeta determines the product metadata for the item based on its path
+func (i *LineItem) FetchMeta(siteURL string) (*LineItemMetadata, error) {
+	resp, err := http.Get(siteURL + i.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	doc, err := goquery.NewDocumentFromResponse(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	metaTag := doc.Find(".gocommerce-product")
+	if metaTag.Length() == 0 {
+		return nil, fmt.Errorf("No script tag with class gocommerce-product tag found for '%v'", i.Title)
+	}
+	metaProducts := []*LineItemMetadata{}
+	var parsingErr error
+	metaTag.EachWithBreak(func(_ int, tag *goquery.Selection) bool {
+		meta := &LineItemMetadata{}
+		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
+		if parsingErr != nil {
+			return false
+		}
+		metaProducts = append(metaProducts, meta)
+		return true
+	})
+	if parsingErr != nil {
+		return nil, fmt.Errorf("Error parsing product metadata: %v", parsingErr)
+	}
+
+	if len(metaProducts) == 1 && i.Sku == "" {
+		i.Sku = metaProducts[0].Sku
+	}
+
+	for _, meta := range metaProducts {
+		if meta.Sku == i.Sku {
+			return meta, nil
+		}
+	}
+
+	return nil, fmt.Errorf("No product Sku from path matched: %v", i.Sku)
+}
+
+// MissingDownloads returns all downloads that are not yet listed in the order
+func (i *LineItem) MissingDownloads(order *Order, meta *LineItemMetadata) []Download {
+	downloads := []Download{}
 	for _, download := range meta.Downloads {
 		alreadyCreated := false
 		for _, d := range order.Downloads {
@@ -292,10 +353,9 @@ func (i *LineItem) Process(userClaims map[string]interface{}, order *Order, meta
 		download.OrderID = order.ID
 		download.Title = i.Title
 		download.Sku = i.Sku
-		order.Downloads = append(order.Downloads, download)
+		downloads = append(downloads, download)
 	}
-
-	return i.calculatePrice(userClaims, meta.Prices, order.Currency)
+	return downloads
 }
 
 func (i *LineItem) calculatePrice(userClaims map[string]interface{}, prices []PriceMetadata, currency string) error {
