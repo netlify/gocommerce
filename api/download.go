@@ -83,7 +83,6 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	orderID := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
-	claims := gcontext.GetClaims(ctx)
 
 	order := &models.Order{}
 	if orderID != "" {
@@ -114,6 +113,7 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	if order != nil {
 		query = query.Where(orderTable+".id = ?", order.ID)
 	} else {
+		claims := gcontext.GetClaims(ctx)
 		query = query.Where(orderTable+".user_id = ?", claims.Subject)
 	}
 
