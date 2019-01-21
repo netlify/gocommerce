@@ -73,6 +73,7 @@ func prepareShippingAddress(addr models.Address) *stripe.ShippingDetailsParams {
 			PostalCode: &addr.Zip,
 			Country:    &addr.Country,
 		},
+		Name: &addr.Name,
 	}
 }
 
