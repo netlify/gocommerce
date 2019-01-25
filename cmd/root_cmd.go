@@ -5,7 +5,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/netlify/gocommerce/conf"
-	"github.com/netlify/gocommerce/models"
 )
 
 var configFile = ""
@@ -36,8 +35,5 @@ func execWithConfig(cmd *cobra.Command, fn func(globalConfig *conf.GlobalConfigu
 		logrus.Fatalf("Failed to load configuration: %+v", err)
 	}
 
-	if globalConfig.DB.Namespace != "" {
-		models.Namespace = globalConfig.DB.Namespace
-	}
 	fn(globalConfig, config)
 }

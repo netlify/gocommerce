@@ -22,6 +22,10 @@ var Namespace string
 
 // Connect will connect to that storage engine
 func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
+	if config.DB.Namespace != "" {
+		Namespace = config.DB.Namespace
+	}
+
 	if config.DB.Dialect == "" {
 		config.DB.Dialect = config.DB.Driver
 	}
