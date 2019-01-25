@@ -69,6 +69,7 @@ func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
 
 	globalConfig := new(conf.GlobalConfiguration)
 	globalConfig.DB.Automigrate = true
+	globalConfig.DB.Namespace = "test"
 
 	config := new(conf.Configuration)
 	config.JWT.Secret = "testsecret"

@@ -25,9 +25,6 @@ func multi(cmd *cobra.Command, args []string) {
 	if globalConfig.OperatorToken == "" {
 		logrus.Fatal("Operator token secret is required")
 	}
-	if globalConfig.DB.Namespace != "" {
-		models.Namespace = globalConfig.DB.Namespace
-	}
 
 	db, err := models.Connect(globalConfig)
 	if err != nil {
