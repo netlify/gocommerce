@@ -110,7 +110,7 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
 	downloadsTable := a.db.NewScope(models.Download{}).QuotedTableName()
 
-	query := a.db.Joins("join " + orderTable + " as orders ON " + downloadsTable + ".order_id = " + orderTable + ".id and " + orderTable + ".payment_state = 'paid'")
+	query := a.db.Joins("join " + orderTable + " ON " + downloadsTable + ".order_id = " + orderTable + ".id and " + orderTable + ".payment_state = 'paid'")
 	if order != nil {
 		query = query.Where(orderTable+".id = ?", order.ID)
 	} else {

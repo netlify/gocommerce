@@ -63,7 +63,7 @@ func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
 	query := a.db.
 		Model(&models.LineItem{}).
 		Select("sku, path, sum(quantity * price) as total, currency").
-		Joins("JOIN " + ordersTable + " as orders " + "ON orders.id = " + itemsTable + ".order_id " + "AND orders.payment_state = 'paid'").
+		Joins("JOIN " + ordersTable + " ON " + ordersTable + ".id = " + itemsTable + ".order_id " + "AND " + ordersTable + ".payment_state = 'paid'").
 		Group("sku, path, currency").
 		Order("total desc")
 
