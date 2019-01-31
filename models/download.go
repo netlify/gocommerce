@@ -22,7 +22,7 @@ type Download struct {
 
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"-" sql:"index:idx_downloads_deleted_at"`
+	DeletedAt *time.Time `json:"-" sql:"index"`
 }
 
 // TableName returns the database table name for the Download model.

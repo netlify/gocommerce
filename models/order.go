@@ -50,7 +50,7 @@ const (
 
 // Order model
 type Order struct {
-	InstanceID    string `json:"-"`
+	InstanceID    string `json:"-" sql:"index"`
 	ID            string `json:"id"`
 	InvoiceNumber int64  `json:"invoice_number,omitempty"`
 
@@ -100,9 +100,9 @@ type Order struct {
 	Coupon    *Coupon `json:"coupon,omitempty" sql:"-"`
 	RawCoupon string  `json:"-" sql:"type:text"`
 
-	CreatedAt time.Time  `json:"created_at"`
+	CreatedAt time.Time  `json:"created_at" sql:"index"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	DeletedAt *time.Time `json:"-" sql:"index:idx_orders_deleted_at"`
+	DeletedAt *time.Time `json:"-" sql:"index"`
 }
 
 // TableName returns the database table name for the Order model.
