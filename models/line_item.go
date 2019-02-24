@@ -28,14 +28,14 @@ func (DiscountItem) TableName() string {
 
 // CalculationDetail holds details about pricing for line items
 type CalculationDetail struct {
-	Subtotal uint64 `json:"subtotal"`
+	Subtotal float64 `json:"subtotal"`
 
-	Discount      uint64         `json:"discount"`
+	Discount      float64         `json:"discount"`
 	DiscountItems []DiscountItem `json:"discount_items" gorm:"foreignkey:LineItemID"`
 
-	NetTotal uint64 `json:"net_total"`
-	Taxes    uint64 `json:"taxes"`
-	Total    int64  `json:"total"`
+	NetTotal float64 `json:"net_total"`
+	Taxes    float64 `json:"taxes"`
+	Total    float64  `json:"total"`
 }
 
 // LineItem is a single item in an Order.
@@ -50,16 +50,16 @@ type LineItem struct {
 
 	Path string `json:"path"`
 
-	Price uint64 `json:"price"`
-	VAT   uint64 `json:"vat"`
+	Price float64 `json:"price"`
+	VAT   float64 `json:"vat"`
 
 	*CalculationDetail `json:"calculation" gorm:"embedded;embedded_prefix:calculation_"`
 
 	PriceItems []*PriceItem `json:"price_items"`
 	AddonItems []*AddonItem `json:"addons"`
-	AddonPrice uint64       `json:"addon_price"`
+	AddonPrice float64       `json:"addon_price"`
 
-	Quantity uint64 `json:"quantity"`
+	Quantity float64 `json:"quantity"`
 
 	MetaData    map[string]interface{} `sql:"-" json:"meta"`
 	RawMetaData string                 `json:"-" sql:"type:text"`
@@ -113,9 +113,9 @@ func (i *LineItem) BeforeDelete(tx *gorm.DB) error {
 type PriceItem struct {
 	ID int64 `json:"id"`
 
-	Amount uint64 `json:"amount"`
+	Amount float64 `json:"amount"`
 	Type   string `json:"type"`
-	VAT    uint64 `json:"vat"`
+	VAT    float64 `json:"vat"`
 }
 
 // TableName returns the database table name for the PriceItem model.
@@ -129,7 +129,7 @@ func (i *PriceItem) ProductSku() string {
 }
 
 // PriceInLowestUnit implements part of the calculator.Item interface.
-func (i *PriceItem) PriceInLowestUnit() uint64 {
+func (i *PriceItem) PriceInLowestUnit() float64 {
 	return i.Amount
 }
 
@@ -139,7 +139,7 @@ func (i *PriceItem) ProductType() string {
 }
 
 // FixedVAT implements part of the calculator.Item interface.
-func (i *PriceItem) FixedVAT() uint64 {
+func (i *PriceItem) FixedVAT() float64 {
 	return i.VAT
 }
 
@@ -149,7 +149,7 @@ func (i *PriceItem) TaxableItems() []calculator.Item {
 }
 
 // GetQuantity implements part of the calculator.Item interface.
-func (i *PriceItem) GetQuantity() uint64 {
+func (i *PriceItem) GetQuantity() float64 {
 	return 1
 }
 
@@ -161,7 +161,7 @@ type AddonItem struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 
-	Price uint64 `json:"price"`
+	Price float64 `json:"price"`
 }
 
 // TableName returns the database table name for the AddonItem model.
@@ -177,14 +177,14 @@ type PriceMetadata struct {
 	Items    []PriceMetaItem   `json:"items"`
 	Claims   map[string]string `json:"claims"`
 
-	cents uint64
+	cents float64
 }
 
 // PriceMetaItem model
 type PriceMetaItem struct {
 	Amount string `json:"amount"`
 	Type   string `json:"type"`
-	VAT    uint64 `json:"vat"`
+	VAT    float64 `json:"vat"`
 }
 
 // AddonMetaItem model
@@ -200,7 +200,7 @@ type LineItemMetadata struct {
 	Sku         string          `json:"sku"`
 	Title       string          `json:"title"`
 	Description string          `json:"description"`
-	VAT         uint64          `json:"vat"`
+	VAT         float64          `json:"vat"`
 	Prices      []PriceMetadata `json:"prices"`
 	Type        string          `json:"type"`
 
@@ -216,7 +216,7 @@ func (i *LineItem) ProductSku() string {
 }
 
 // PriceInLowestUnit implements part of the calculator.Item interface.
-func (i *LineItem) PriceInLowestUnit() uint64 {
+func (i *LineItem) PriceInLowestUnit() float64 {
 	return i.Price + i.AddonPrice
 }
 
@@ -226,7 +226,7 @@ func (i *LineItem) ProductType() string {
 }
 
 // FixedVAT implements part of the calculator.Item interface.
-func (i *LineItem) FixedVAT() uint64 {
+func (i *LineItem) FixedVAT() float64 {
 	return i.VAT
 }
 
@@ -243,7 +243,7 @@ func (i *LineItem) TaxableItems() []calculator.Item {
 }
 
 // GetQuantity implements part of the calculator.Item interface.
-func (i *LineItem) GetQuantity() uint64 {
+func (i *LineItem) GetQuantity() float64 {
 	return i.Quantity
 }
 
@@ -310,7 +310,7 @@ func (i *LineItem) calculatePrice(userClaims map[string]interface{}, prices []Pr
 		if err != nil {
 			return err
 		}
-		i.PriceItems[index] = &PriceItem{Amount: uint64(amount * 100), Type: item.Type, VAT: item.VAT}
+		i.PriceItems[index] = &PriceItem{Amount: float64(amount * 100), Type: item.Type, VAT: item.VAT}
 	}
 	for _, addon := range i.AddonItems {
 		i.AddonPrice += addon.Price
@@ -328,7 +328,7 @@ func determineLowestPrice(userClaims map[string]interface{}, prices []PriceMetad
 			if err != nil {
 				return lowestPrice, err
 			}
-			price.cents = uint64(amount * 100)
+			price.cents = float64(amount * 100)
 			if (!found || price.cents < lowestPrice.cents) && claims.HasClaims(userClaims, price.Claims) {
 				lowestPrice = price
 				found = true

@@ -25,7 +25,7 @@ const MaxConcurrentLookups = 10
 type orderLineItem struct {
 	Sku      string                 `json:"sku"`
 	Path     string                 `json:"path"`
-	Quantity uint64                 `json:"quantity"`
+	Quantity float64                 `json:"quantity"`
 	Addons   []orderAddon           `json:"addons"`
 	MetaData map[string]interface{} `json:"meta"`
 }

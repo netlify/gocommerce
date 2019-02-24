@@ -19,7 +19,7 @@ type Coupon struct {
 	StartDate *time.Time `json:"start_date,omitempty"`
 	EndDate   *time.Time `json:"end_date,omitempty"`
 
-	Percentage  uint64         `json:"percentage,omitempty"`
+	Percentage  float64         `json:"percentage,omitempty"`
 	FixedAmount []*FixedAmount `json:"fixed,omitempty"`
 
 	ProductTypes []string               `json:"product_types,omitempty"`
@@ -77,18 +77,18 @@ func (c *Coupon) ValidForType(productType string) bool {
 }
 
 // ValidForPrice returns whether a coupon applies to a specific amount.
-func (c *Coupon) ValidForPrice(currency string, price uint64) bool {
+func (c *Coupon) ValidForPrice(currency string, price float64) bool {
 	// TODO: Support for coupons based on amount
 	return true
 }
 
 // PercentageDiscount returns the percentage discount of a Coupon.
-func (c *Coupon) PercentageDiscount() uint64 {
+func (c *Coupon) PercentageDiscount() float64 {
 	return c.Percentage
 }
 
 // FixedDiscount returns the amount of fixed discount for a Coupon.
-func (c *Coupon) FixedDiscount(currency string) uint64 {
+func (c *Coupon) FixedDiscount(currency string) float64 {
 	if c.FixedAmount != nil {
 		for _, discount := range c.FixedAmount {
 			if discount.Currency == currency {
@@ -103,7 +103,7 @@ func (c *Coupon) FixedDiscount(currency string) uint64 {
 
 // Nopes - no `round` method in go
 // See https://gist.github.com/siddontang/1806573b9a8574989ccb
-func rint(x float64) uint64 {
+func rint(x float64) float64 {
 	v, frac := math.Modf(x)
 	if x > 0.0 {
 		if frac > 0.5 || (frac == 0.5 && uint64(v)%2 != 0) {
@@ -115,5 +115,5 @@ func rint(x float64) uint64 {
 		}
 	}
 
-	return uint64(v)
+	return float64(v)
 }

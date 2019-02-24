@@ -28,7 +28,7 @@ import (
 
 // PaymentParams holds the parameters for creating a payment
 type PaymentParams struct {
-	Amount       uint64 `json:"amount"`
+	Amount       float64 `json:"amount"`
 	Currency     string `json:"currency"`
 	ProviderType string `json:"provider"`
 	Description  string `json:"description"`
@@ -341,7 +341,7 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 			return badRequestError("Could not read params: %v", err)
 		}
 	case "application/x-www-form-urlencoded":
-		amt, err := strconv.ParseUint(r.FormValue("amount"), 10, 64)
+		amt, err := strconv.ParseFloat(r.FormValue("amount"), 64)
 		if err != nil {
 			return badRequestError("Error parsing amount: %v", err)
 		}
@@ -389,7 +389,7 @@ func (a *API) getTransaction(payID string) (*models.Transaction, *HTTPError) {
 	return trans, nil
 }
 
-func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount uint64) error {
+func (a *API) verifyAmount(ctx context.Context, order *models.Order, amount float64) error {
 	if order.Total != amount {
 		return fmt.Errorf("Amount calculated for order didn't match amount to charge. %v vs %v", order.Total, amount)
 	}

@@ -26,7 +26,7 @@ type Transaction struct {
 	User   *User  `json:"-"`
 	UserID string `json:"user_id,omitempty"`
 
-	Amount   uint64 `json:"amount"`
+	Amount   float64 `json:"amount"`
 	Currency string `json:"currency"`
 
 	FailureCode        string `json:"failure_code,omitempty"`

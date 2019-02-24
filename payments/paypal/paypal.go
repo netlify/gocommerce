@@ -90,7 +90,7 @@ func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 		return nil, errors.New("Payments requires a paypal_payment_id and paypal_user_id pair")
 	}
 
-	return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+	return func(amount float64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 		return p.charge(bp.PaypalID, bp.PaypalUserID, amount, currency, order, invoiceNumber)
 	}, nil
 }
@@ -107,7 +107,7 @@ func prepareItemsFromOrder(order *models.Order) []paypalsdk.Item {
 			Description: lineItem.Description,
 		}
 		if lineItem.FixedVAT() > 0 {
-			item.Tax = fmt.Sprintf("%d%%", lineItem.FixedVAT())
+			item.Tax = fmt.Sprintf("%f%%", lineItem.FixedVAT())
 		}
 		items = append(items, item)
 	}
@@ -162,7 +162,7 @@ func (p *paypalPaymentProvider) updatePaymentWithOrder(paymentID string, order *
 	return err
 }
 
-func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount float64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	payment, err := p.client.GetPayment(paymentID)
 	if err != nil {
 		return "", err
@@ -197,7 +197,7 @@ func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 	return p.refund, nil
 }
 
-func (p *paypalPaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+func (p *paypalPaymentProvider) refund(transactionID string, amount float64, currency string) (string, error) {
 	amt := &paypalsdk.Amount{
 		Total:    formatAmount(amount),
 		Currency: currency,
@@ -211,12 +211,12 @@ func (p *paypalPaymentProvider) refund(transactionID string, amount uint64, curr
 
 func (p *paypalPaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
 	config := gcontext.GetConfig(ctx)
-	return func(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+	return func(amount float64, currency string, description string) (*payments.PreauthorizationResult, error) {
 		return p.preauthorize(config, amount, currency, description)
 	}, nil
 }
 
-func (p *paypalPaymentProvider) preauthorize(config *conf.Configuration, amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+func (p *paypalPaymentProvider) preauthorize(config *conf.Configuration, amount float64, currency string, description string) (*payments.PreauthorizationResult, error) {
 	profile, err := p.getExperience()
 	if err != nil {
 		return nil, errors.Wrap(err, "error creating paypal experience")
@@ -275,6 +275,6 @@ func (p *paypalPaymentProvider) getExperience() (*paypalsdk.WebProfile, error) {
 	return profile, nil
 }
 
-func formatAmount(amount uint64) string {
+func formatAmount(amount float64) string {
 	return strconv.FormatFloat(float64(amount)/100, 'f', 2, 64)
 }

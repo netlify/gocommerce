@@ -25,7 +25,7 @@ func TestCouponView(t *testing.T) {
 		recorder := test.TestEndpoint(http.MethodGet, "/coupons/coupon-code", nil, nil)
 		coupon := &models.Coupon{}
 		extractPayload(t, http.StatusOK, recorder, coupon)
-		assert.Equal(t, uint64(15), coupon.Percentage, "Expected coupon percetage to be 15")
+		assert.InDelta(t, float64(15), 1.00, coupon.Percentage, "Expected coupon percetage to be 15")
 		assert.Equal(t, "coupon-code", coupon.Code, "Expected coupon code to be 'coupon-code'")
 	})
 }

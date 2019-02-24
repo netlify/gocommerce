@@ -67,13 +67,13 @@ type Order struct {
 	Downloads []Download `json:"downloads"`
 
 	Currency string `json:"currency"`
-	Taxes    uint64 `json:"taxes"`
-	Shipping uint64 `json:"shipping"`
-	SubTotal uint64 `json:"subtotal"`
-	Discount uint64 `json:"discount"`
-	NetTotal uint64 `json:"net_total"`
+	Taxes    float64 `json:"taxes"`
+	Shipping float64 `json:"shipping"`
+	SubTotal float64 `json:"subtotal"`
+	Discount float64 `json:"discount"`
+	NetTotal float64 `json:"net_total"`
 
-	Total uint64 `json:"total"`
+	Total float64 `json:"total"`
 
 	PaymentState     string `json:"payment_state"`
 	FulfillmentState string `json:"fulfillment_state"`
@@ -198,7 +198,7 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	}
 
 	if price.Total > 0 {
-		o.Total = uint64(price.Total)
+		o.Total = float64(price.Total)
 	}
 }
 

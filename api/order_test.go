@@ -77,13 +77,13 @@ func TestOrderCreate(t *testing.T) {
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusCreated, recorder, order)
-		var total uint64 = 999
+		var total float64 = 999
 		assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 999, was %v", order.Total))
 		assert.Len(t, order.LineItems, 1)
 
 		lineItem := order.LineItems[0]
-		assert.Equal(t, lineItem.CalculationDetail.Total, int64(total))
+		assert.InDelta(t, lineItem.CalculationDetail.Total, float64(total), 1.00)
 
 		meta := lineItem.MetaData
 		require.NotNil(t, meta, "Expected meta data for line item")
@@ -132,13 +132,13 @@ func TestOrderCreate(t *testing.T) {
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusCreated, recorder, order)
-		var total uint64 = 1069
-		var taxes uint64 = 70
+		var total float64 = 1069
+		var taxes float64 = 70
 		assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 		assert.Equal(t, "Germany", order.ShippingAddress.Country)
 		assert.Equal(t, "Germany", order.BillingAddress.Country)
-		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1069, was %v", order.Total))
-		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 70, was %v", order.Total))
+		assert.InDelta(t, total, order.Total, 1.00, fmt.Sprintf("Total should be 1069, was %v", order.Total))
+		assert.InDelta(t, taxes, order.Taxes, 1.00, fmt.Sprintf("Total should be 70, was %v", order.Total))
 	})
 
 	t.Run("BundleWithTaxes", func(t *testing.T) {
@@ -158,13 +158,13 @@ func TestOrderCreate(t *testing.T) {
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusCreated, recorder, order)
-		var total uint64 = 1105
-		var taxes uint64 = 106
+		var total float64 = 1105
+		var taxes float64 = 106
 		assert.Equal(t, "info@example.com", order.Email, "Total should be info@example.com, was %v", order.Email)
 		assert.Equal(t, "Germany", order.ShippingAddress.Country)
 		assert.Equal(t, "Germany", order.BillingAddress.Country)
-		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 1105, was %v", order.Total))
-		assert.Equal(t, taxes, order.Taxes, fmt.Sprintf("Total should be 106, was %v", order.Taxes))
+		assert.InDelta(t, total, order.Total, 1.00, fmt.Sprintf("Total should be 1105, was %v", order.Total))
+		assert.InDelta(t, taxes, order.Taxes, 1.00, fmt.Sprintf("Total should be 106, was %v", order.Taxes))
 	})
 
 	t.Run("WithCoupon", func(t *testing.T) {
@@ -190,22 +190,22 @@ func TestOrderCreate(t *testing.T) {
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusCreated, recorder, order)
-		var total uint64 = 899
-		var discount uint64 = 100
+		var total float64 = 899
+		var discount float64 = 100
 		assert.Equal(t, "info@example.com", order.Email, "Email should be info@example.com, was %v", order.Email)
-		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 899, was %v", order.Total))
-		assert.Equal(t, discount, order.Discount, fmt.Sprintf("Discount should be 100, was %v", order.Total))
+		assert.InDelta(t, total, order.Total, 1.00, fmt.Sprintf("Total should be 899, was %v", order.Total))
+		assert.InDelta(t, discount, order.Discount, 1.00, fmt.Sprintf("Discount should be 100, was %v", order.Total))
 		assert.Len(t, order.LineItems, 1)
 
 		lineItem := order.LineItems[0]
-		assert.Equal(t, int64(total), lineItem.CalculationDetail.Total, fmt.Sprintf("Total should be 899, was %d", lineItem.CalculationDetail.Total))
-		assert.Equal(t, discount, lineItem.CalculationDetail.Discount, fmt.Sprintf("Discount should be 100, was %d", lineItem.CalculationDetail.Discount))
+		assert.InDelta(t, float64(total), lineItem.CalculationDetail.Total, 1.00, fmt.Sprintf("Total should be 899, was %f", lineItem.CalculationDetail.Total))
+		assert.InDelta(t, discount, lineItem.CalculationDetail.Discount, 1.00, fmt.Sprintf("Discount should be 100, was %f", lineItem.CalculationDetail.Discount))
 		assert.Len(t, lineItem.CalculationDetail.DiscountItems, 1)
 
 		discountItem := lineItem.CalculationDetail.DiscountItems[0]
 		assert.Equal(t, calculator.DiscountTypeCoupon, discountItem.Type)
-		assert.Equal(t, uint64(10), discountItem.Percentage)
-		assert.Equal(t, uint64(0), discountItem.Fixed)
+		assert.InDelta(t, float64(10), discountItem.Percentage, 1.00)
+		assert.InDelta(t, float64(0), discountItem.Fixed, 1.00)
 	})
 
 	t.Run("WithMemberDiscount", func(t *testing.T) {
@@ -232,22 +232,22 @@ func TestOrderCreate(t *testing.T) {
 
 		order := &models.Order{}
 		extractPayload(t, http.StatusCreated, recorder, order)
-		var total uint64 = 849
-		var discount uint64 = 150
+		var total float64 = 849
+		var discount float64 = 150
 		assert.Equal(t, "info@example.com", order.Email, "Email should be info@example.com, was %v", order.Email)
-		assert.Equal(t, total, order.Total, fmt.Sprintf("Total should be 849, was %v", order.Total))
-		assert.Equal(t, discount, order.Discount, fmt.Sprintf("Discount should be 150, was %v", order.Total))
+		assert.InDelta(t, total, order.Total, 1.00, fmt.Sprintf("Total should be 849, was %v", order.Total))
+		assert.InDelta(t, discount, order.Discount, 1.00, fmt.Sprintf("Discount should be 150, was %v", order.Total))
 		assert.Len(t, order.LineItems, 1)
 
 		lineItem := order.LineItems[0]
-		assert.Equal(t, int64(total), lineItem.CalculationDetail.Total, fmt.Sprintf("Total should be 849, was %d", lineItem.CalculationDetail.Total))
-		assert.Equal(t, discount, lineItem.CalculationDetail.Discount, fmt.Sprintf("Discount should be 150, was %d", lineItem.CalculationDetail.Discount))
+		assert.InDelta(t, float64(total), lineItem.CalculationDetail.Total, 1.00, fmt.Sprintf("Total should be 849, was %f", lineItem.CalculationDetail.Total))
+		assert.InDelta(t, discount, lineItem.CalculationDetail.Discount,  1.00, fmt.Sprintf("Discount should be 150, was %f", lineItem.CalculationDetail.Discount))
 		assert.Len(t, lineItem.CalculationDetail.DiscountItems, 1)
 
 		discountItem := lineItem.CalculationDetail.DiscountItems[0]
 		assert.Equal(t, calculator.DiscountTypeMember, discountItem.Type)
-		assert.Equal(t, uint64(15), discountItem.Percentage)
-		assert.Equal(t, uint64(0), discountItem.Fixed)
+		assert.Equal(t, float64(15), discountItem.Percentage)
+		assert.Equal(t, float64(0), discountItem.Fixed)
 	})
 }
 

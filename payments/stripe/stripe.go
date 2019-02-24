@@ -58,7 +58,7 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request)
 		return nil, errors.New("Stripe requires a stripe_token for creating a payment")
 	}
 
-	return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+	return func(amount float64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 		return s.charge(bp.StripeToken, amount, currency, order, invoiceNumber)
 	}, nil
 }
@@ -77,7 +77,7 @@ func prepareShippingAddress(addr models.Address) *stripe.ShippingDetailsParams {
 	}
 }
 
-func (s *stripePaymentProvider) charge(token string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+func (s *stripePaymentProvider) charge(token string, amount float64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	stripeAmount := int64(amount)
 	stripeDescription := fmt.Sprintf("Invoice No. %d", invoiceNumber)
 	ch, err := s.client.Charges.New(&stripe.ChargeParams{
@@ -105,7 +105,7 @@ func (s *stripePaymentProvider) NewRefunder(ctx context.Context, r *http.Request
 	return s.refund, nil
 }
 
-func (s *stripePaymentProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+func (s *stripePaymentProvider) refund(transactionID string, amount float64, currency string) (string, error) {
 	stripeAmount := int64(amount)
 	ref, err := s.client.Refunds.New(&stripe.RefundParams{
 		Charge: &transactionID,

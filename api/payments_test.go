@@ -608,14 +608,14 @@ func validateAllTransactions(t *testing.T, testData *TestData, trans []models.Tr
 }
 
 type stripePaymentParams struct {
-	Amount      uint64 `json:"amount"`
+	Amount      float64 `json:"amount"`
 	Currency    string `json:"currency"`
 	StripeToken string `json:"stripe_token"`
 	Provider    string `json:"provider"`
 }
 
 type paypalPaymentParams struct {
-	Amount       uint64 `json:"amount"`
+	Amount       float64 `json:"amount"`
 	Currency     string `json:"currency"`
 	PaypalID     string `json:"paypal_payment_id"`
 	PaypalUserID string `json:"paypal_user_id"`
@@ -624,7 +624,7 @@ type paypalPaymentParams struct {
 }
 
 type paypalPreauthorizeParams struct {
-	Amount      uint64 `json:"amount"`
+	Amount      float64 `json:"amount"`
 	Currency    string `json:"currency"`
 	Description string `json:"description"`
 	Provider    string `json:"provider"`
@@ -651,7 +651,7 @@ type memProvider struct {
 }
 
 type refundCall struct {
-	amount   uint64
+	amount   float64
 	id       string
 	currency string
 }
@@ -669,11 +669,11 @@ func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (p
 	return mp.preauthorize, nil
 }
 
-func (mp *memProvider) charge(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+func (mp *memProvider) charge(amount float64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	return "", errors.New("Shouldn't have called this")
 }
 
-func (mp *memProvider) refund(transactionID string, amount uint64, currency string) (string, error) {
+func (mp *memProvider) refund(transactionID string, amount float64, currency string) (string, error) {
 	if mp.refundCalls == nil {
 		mp.refundCalls = []refundCall{}
 	}
@@ -686,7 +686,7 @@ func (mp *memProvider) refund(transactionID string, amount uint64, currency stri
 	return fmt.Sprintf("trans-%d", len(mp.refundCalls)), nil
 }
 
-func (mp *memProvider) preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
+func (mp *memProvider) preauthorize(amount float64, currency string, description string) (*payments.PreauthorizationResult, error) {
 	return nil, nil
 }
 
