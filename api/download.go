@@ -130,3 +130,44 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	log.WithField("download_count", len(downloads)).Debugf("Successfully retrieved %d downloads", len(downloads))
 	return sendJSON(w, http.StatusOK, downloads)
 }
+
+// DownloadRefresh makes sure downloads are up to date
+func (a *API) DownloadRefresh(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	orderID := gcontext.GetOrderID(ctx)
+	config := gcontext.GetConfig(ctx)
+	log := getLogEntry(r)
+
+	order := &models.Order{}
+	if orderID == "" {
+		return badRequestError("Order id missing")
+	}
+
+	query := a.db.Where("id = ?", orderID).
+		Preload("LineItems").
+		Preload("Downloads")
+	if result := query.First(order); result.Error != nil {
+		if result.RecordNotFound() {
+			return notFoundError("Download order not found")
+		}
+		return internalServerError("Error during database query").WithInternalError(result.Error)
+	}
+
+	if !hasOrderAccess(ctx, order) {
+		return unauthorizedError("You don't have permission to access this order")
+	}
+
+	if order.PaymentState != models.PaidState {
+		return unauthorizedError("This order has not been completed yet")
+	}
+
+	if err := order.UpdateDownloads(config, log); err != nil {
+		return internalServerError("Error during updating downloads").WithInternalError(err)
+	}
+
+	if result := a.db.Save(order); result.Error != nil {
+		return internalServerError("Error during saving order").WithInternalError(result.Error)
+	}
+
+	return sendJSON(w, http.StatusOK, map[string]string{})
+}
