@@ -37,7 +37,7 @@ release: ## Upload release to GitHub releases.
 
 
 deps: ## Install dependencies.
-	@go get -u golang.org/x/lint/golint
+	@go get golang.org/x/lint/golint
 	@go mod download
 
 image: ## Build the Docker image.
