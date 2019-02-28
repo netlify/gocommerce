@@ -6,7 +6,9 @@ require (
 	github.com/PuerkitoBio/goquery v1.1.0
 	github.com/andybalholm/cascadia v0.0.0-20161224141413-349dd0209470
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/denisenkom/go-mssqldb v0.0.0-20190204142019-df6d76eb9289 // indirect
 	github.com/dgrijalva/jwt-go v3.0.0+incompatible
+	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/fsnotify/fsnotify v0.0.0-20170329110642-4da3e2cfbabc
 	github.com/go-chi/chi v3.1.0+incompatible
 	github.com/go-sql-driver/mysql v1.3.0
@@ -16,10 +18,12 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0
 	github.com/jinzhu/gorm v1.9.1
 	github.com/jinzhu/inflection v0.0.0-20170102125226-1c35d901db3d
+	github.com/jinzhu/now v0.0.0-20181116074157-8ec929ed50c3 // indirect
 	github.com/joho/godotenv v0.0.0-20161216230537-726cc8b906e3
 	github.com/kelseyhightower/envconfig v1.3.0
 	github.com/kr/logfmt v0.0.0-20140226030751-b84e30acd515
 	github.com/lib/pq v0.0.0-20170306183709-ca5bc43047f2
+	github.com/logpacker/PayPal-Go-SDK v1.1.4 // indirect
 	github.com/magiconair/properties v1.7.3
 	github.com/mattes/vat v0.0.0-20160607175015-805d21ad0739
 	github.com/mattn/go-sqlite3 v1.10.0
@@ -50,6 +54,7 @@ require (
 	github.com/streadway/amqp v0.0.0-20170707203015-2cbfe40c9341
 	github.com/stretchr/testify v1.2.2
 	github.com/stripe/stripe-go v52.0.0+incompatible
+	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613 // indirect
 	golang.org/x/net v0.0.0-20170721033204-ab5485076ff3
 	golang.org/x/oauth2 v0.0.0-20170807180024-9a379c6b3e95
 	golang.org/x/sys v0.0.0-20170721163517-c4489faa6e5a
