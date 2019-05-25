@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"sync"
@@ -14,6 +15,8 @@ import (
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+
+	nfhttp "github.com/netlify/netlify-commons/http"
 )
 
 const maxConcurrentHooks = 5
@@ -156,7 +159,20 @@ func RunHooks(db *gorm.DB, log *logrus.Entry) {
 		id := uuid.NewRandom().String()
 		sem := make(chan bool, maxConcurrentHooks)
 		table := Hook{}.TableName()
-		client := &http.Client{}
+		client := &http.Client{
+			Transport: &http.Transport{
+				DialContext: nfhttp.SafeDialContext((&net.Dialer{
+					Timeout:   30 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).DialContext),
+				MaxIdleConns:          100,
+				IdleConnTimeout:       90 * time.Second,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ExpectContinueTimeout: 1 * time.Second,
+			},
+		}
+
 		for {
 			hooks := []*Hook{}
 			tx := db.Begin()
