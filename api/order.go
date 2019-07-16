@@ -589,6 +589,20 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	return sendJSON(w, http.StatusOK, existingOrder)
 }
 
+func userFromClaims(db *gorm.DB, claims *claims.JWTClaims, log logrus.FieldLogger) (*models.User, *HTTPError) {
+	user := new(models.User)
+	result := db.First(user, "id = ?", claims.Subject)
+	if result.RecordNotFound() {
+		log.Debugf("Didn't find a user for id %s ~ going to create one", claims.Subject)
+		user.ID = claims.Subject
+		user.Email = claims.Email
+		db.Create(user)
+	} else if result.Error != nil {
+		return nil, internalServerError("Token had an invalid ID").WithInternalError(result.Error)
+	}
+	return user, nil
+}
+
 // An order's email is determined by a few things. The rules guiding it are:
 // 1 - if no claims are provided then the one in the params is used (for anon orders)
 // 2 - if claims are provided they must be a valid user id
@@ -607,15 +621,9 @@ func setOrderEmail(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims, l
 		log = log.WithField("user_id", claims.Subject)
 		order.UserID = claims.Subject
 
-		user := new(models.User)
-		result := tx.First(user, "id = ?", claims.Subject)
-		if result.RecordNotFound() {
-			log.Debugf("Didn't find a user for id %s ~ going to create one", claims.Subject)
-			user.ID = claims.Subject
-			user.Email = claims.Email
-			tx.Create(user)
-		} else if result.Error != nil {
-			return internalServerError("Token had an invalid ID").WithInternalError(result.Error)
+		user, err := userFromClaims(tx, claims, log)
+		if err != nil {
+			return err
 		}
 
 		if order.Email == "" {
@@ -735,37 +743,53 @@ func (a *API) processAddress(tx *gorm.DB, order *models.Order, name string, addr
 	return address, nil
 }
 
-func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *orderLineItem) error {
-	config := gcontext.GetConfig(ctx)
-	jwtClaims := gcontext.GetClaimsAsMap(ctx)
-	resp, err := a.httpClient.Get(config.SiteURL + item.Path)
+func (a *API) extractMetadata(url string, selector string) ([]string, error) {
+	resp, err := a.httpClient.Get(url)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	doc, err := goquery.NewDocumentFromResponse(resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	metaTag := doc.Find(".gocommerce-product")
+	metaTag := doc.Find(selector)
 	if metaTag.Length() == 0 {
-		return fmt.Errorf("No script tag with class gocommerce-product tag found for '%v'", item.Title)
+		return []string{}, nil
 	}
-	metaProducts := []*models.LineItemMetadata{}
+	products := make([]string, 0, metaTag.Length())
 	var parsingErr error
 	metaTag.EachWithBreak(func(_ int, tag *goquery.Selection) bool {
-		meta := &models.LineItemMetadata{}
-		parsingErr = json.Unmarshal([]byte(tag.Text()), meta)
-		if parsingErr != nil {
-			return false
-		}
-		metaProducts = append(metaProducts, meta)
+		products = append(products, tag.Text())
 		return true
 	})
 	if parsingErr != nil {
-		return fmt.Errorf("Error parsing product metadata: %v", parsingErr)
+		return nil, fmt.Errorf("Error parsing product metadata: %v", parsingErr)
+	}
+
+	return products, nil
+}
+
+func (a *API) processLineItem(ctx context.Context, order *models.Order, item *models.LineItem, orderItem *orderLineItem) error {
+	config := gcontext.GetConfig(ctx)
+	jwtClaims := gcontext.GetClaimsAsMap(ctx)
+	metaTags, err := a.extractMetadata(config.SiteURL+item.Path, ".gocommerce-product")
+	if err != nil {
+		return err
+	}
+	if len(metaTags) == 0 {
+		return fmt.Errorf("No script tag with class gocommerce-product tag found for '%v'", item.Title)
+	}
+
+	metaProducts := []*models.LineItemMetadata{}
+	for _, metaJSON := range metaTags {
+		meta := &models.LineItemMetadata{}
+		if err := json.Unmarshal([]byte(metaJSON), meta); err != nil {
+			return err
+		}
+		metaProducts = append(metaProducts, meta)
 	}
 
 	if len(metaProducts) == 1 && item.Sku == "" {
