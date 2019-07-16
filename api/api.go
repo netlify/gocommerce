@@ -82,6 +82,8 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 		r.Route("/orders", api.orderRoutes)
 		r.Route("/users", api.userRoutes)
 
+		r.Post("/subscriptions", api.SubscriptionCreate)
+
 		r.Route("/downloads", func(r *router) {
 			r.With(authRequired).Get("/", api.DownloadList)
 			r.Get("/{download_id}", api.DownloadURL)
