@@ -2,7 +2,7 @@
 language: go
 
 go:
-  - "1.11"
+  - "1.13"
 
 env:
   global:
@@ -11,4 +11,4 @@ env:
 install: make deps
 script: make all
 notifications:
-    email: false
+  email: false

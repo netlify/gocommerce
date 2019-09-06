@@ -47,3 +47,5 @@ require (
 	gopkg.in/gomail.v2 v2.0.0-20150902115704-41f357289737 // indirect
 	gopkg.in/yaml.v2 v2.0.0-20170721122051-25c4ec802a7d // indirect
 )
+
+go 1.13
