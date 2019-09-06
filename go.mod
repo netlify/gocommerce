@@ -35,11 +35,10 @@ require (
 	github.com/spf13/cobra v0.0.0-20170228191748-fcd0c5a1df88
 	github.com/spf13/pflag v1.0.0 // indirect
 	github.com/stretchr/testify v1.2.2
-	github.com/stripe/stripe-go v52.0.0+incompatible
-	golang.org/x/net v0.0.0-20170721033204-ab5485076ff3 // indirect
+	github.com/stripe/stripe-go v62.9.0+incompatible
+	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/oauth2 v0.0.0-20170807180024-9a379c6b3e95 // indirect
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58 // indirect
-	golang.org/x/text v0.0.0-20170714085652-836efe42bb4a // indirect
 	google.golang.org/api v0.0.0-20170821230356-dd6bdadc5852 // indirect
 	google.golang.org/appengine v0.0.0-20170814190942-d9a072cfa7b9 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
