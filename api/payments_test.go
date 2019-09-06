@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -659,14 +660,17 @@ type refundCall struct {
 func (mp *memProvider) Name() string {
 	return mp.name
 }
-func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request) (payments.Charger, error) {
+func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Charger, error) {
 	return mp.charge, nil
 }
-func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
+func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Refunder, error) {
 	return mp.refund, nil
 }
-func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
+func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Preauthorizer, error) {
 	return mp.preauthorize, nil
+}
+func (mp *memProvider) NewConfirmer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Confirmer, error) {
+	return mp.confirm, nil
 }
 
 func (mp *memProvider) charge(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
@@ -688,6 +692,10 @@ func (mp *memProvider) refund(transactionID string, amount uint64, currency stri
 
 func (mp *memProvider) preauthorize(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
 	return nil, nil
+}
+
+func (mp *memProvider) confirm(paymentID string) error {
+	return nil
 }
 
 type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{})

@@ -37,6 +37,8 @@ type Transaction struct {
 
 	CreatedAt time.Time  `json:"created_at"`
 	DeletedAt *time.Time `json:"-"`
+
+	ProviderMetadata map[string]interface{} `json:"provider_metadata,omitempty" sql:"-"`
 }
 
 // TableName returns the database table name for the Transaction model.

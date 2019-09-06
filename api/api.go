@@ -116,12 +116,11 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 		})
 
 		r.Route("/payments", func(r *router) {
-			r.Use(adminRequired)
-
-			r.Get("/", api.PaymentList)
+			r.With(adminRequired).Get("/", api.PaymentList)
 			r.Route("/{payment_id}", func(r *router) {
-				r.Get("/", api.PaymentView)
-				r.With(addGetBody).Post("/refund", api.PaymentRefund)
+				r.With(adminRequired).Get("/", api.PaymentView)
+				r.With(adminRequired).With(addGetBody).Post("/refund", api.PaymentRefund)
+				r.Post("/confirm", api.PaymentConfirm)
 			})
 		})
 
