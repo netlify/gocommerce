@@ -11,6 +11,7 @@ import (
 
 	"github.com/netlify/gocommerce/models"
 	"github.com/pariz/gountries"
+	"github.com/sirupsen/logrus"
 
 	paypalsdk "github.com/netlify/PayPal-Go-SDK"
 	"github.com/netlify/gocommerce/conf"
@@ -76,7 +77,7 @@ func (p *paypalPaymentProvider) Name() string {
 	return payments.PayPalProvider
 }
 
-func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request) (payments.Charger, error) {
+func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Charger, error) {
 	var bp paypalBodyParams
 	bod, err := r.GetBody()
 	if err != nil {
@@ -193,7 +194,7 @@ func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount u
 	return executeResult.ID, nil
 }
 
-func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
+func (p *paypalPaymentProvider) NewRefunder(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Refunder, error) {
 	return p.refund, nil
 }
 
@@ -209,7 +210,7 @@ func (p *paypalPaymentProvider) refund(transactionID string, amount uint64, curr
 	return ref.ID, nil
 }
 
-func (p *paypalPaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
+func (p *paypalPaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Preauthorizer, error) {
 	config := gcontext.GetConfig(ctx)
 	return func(amount uint64, currency string, description string) (*payments.PreauthorizationResult, error) {
 		return p.preauthorize(config, amount, currency, description)
@@ -277,4 +278,8 @@ func (p *paypalPaymentProvider) getExperience() (*paypalsdk.WebProfile, error) {
 
 func formatAmount(amount uint64) string {
 	return strconv.FormatFloat(float64(amount)/100, 'f', 2, 64)
+}
+
+func (p *paypalPaymentProvider) NewConfirmer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Confirmer, error) {
+	return nil, errors.New("Paypal does not provide manual 2-step confirmation")
 }

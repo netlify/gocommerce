@@ -100,7 +100,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", params.ProviderType)
 	}
-	charge, err := provider.NewCharger(ctx, r)
+	charge, err := provider.NewCharger(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -167,6 +167,14 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	tr.ProcessorID = processorID
 	tr.InvoiceNumber = invoiceNumber
 
+	if pendingErr, ok := err.(*payments.PaymentPendingError); ok {
+		tr.Status = models.PendingState
+		tr.ProviderMetadata = pendingErr.Metadata()
+		tx.Create(tr)
+		tx.Commit()
+		return sendJSON(w, 200, tr)
+	}
+
 	if err != nil {
 		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		tr.FailureDescription = err.Error()
@@ -204,6 +212,75 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	}()
 
 	return sendJSON(w, http.StatusOK, tr)
+}
+
+// PaymentConfirm allows client to confirm if a pending transaction has been completed. Updates transaction and order
+func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+
+	payID := chi.URLParam(r, "payment_id")
+	trans, httpErr := a.getTransaction(payID)
+	if httpErr != nil {
+		return httpErr
+	}
+
+	if trans.UserID != "" {
+		token := gcontext.GetToken(ctx)
+		if token == nil {
+			return unauthorizedError("You must be logged in to confirm this payment")
+		}
+		claims := token.Claims.(*claims.JWTClaims)
+		if trans.UserID != claims.Subject {
+			return unauthorizedError("You must be logged in to confirm this payment")
+		}
+	}
+
+	log := getLogEntry(r)
+	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
+	if httpErr != nil {
+		return httpErr
+	}
+	if order.PaymentProcessor == "" {
+		return badRequestError("Order does not specify a payment provider")
+	}
+
+	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
+	if provider == nil {
+		return badRequestError("Payment provider '%s' not configured", order.PaymentProcessor)
+	}
+	confirm, err := provider.NewConfirmer(ctx, r, log.WithField("component", "payment_provider"))
+	if err != nil {
+		return badRequestError("Error creating payment provider: %v", err)
+	}
+
+	if err := confirm(trans.ProcessorID); err != nil {
+		if confirmFail, ok := err.(*payments.PaymentConfirmFailError); ok {
+			return badRequestError("Error confirming payment: %s", confirmFail.Error())
+		}
+		return internalServerError("Error on provider while trying to confirm: %v. Try again later.", err)
+	}
+
+	tx := a.db.Begin()
+
+	if trans.InvoiceNumber == 0 {
+		invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
+		if err != nil {
+			tx.Rollback()
+			return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+		}
+		trans.InvoiceNumber = invoiceNumber
+	}
+
+	trans.Status = models.PaidState
+	tx.Save(trans)
+	order.State = models.PaidState
+	order.InvoiceNumber = trans.InvoiceNumber
+	tx.Save(order)
+	if err := tx.Commit().Error; err != nil {
+		return internalServerError("Saving payment failed").WithInternalError(err)
+	}
+
+	return sendJSON(w, 200, trans)
 }
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins.
@@ -280,7 +357,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", order.PaymentProcessor)
 	}
-	refund, err := provider.NewRefunder(ctx, r)
+	refund, err := provider.NewRefunder(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -328,6 +405,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	log := getLogEntry(r)
 	params := PaymentParams{}
 	ct := r.Header.Get("Content-Type")
 	mediaType, _, err := mime.ParseMediaType(ct)
@@ -362,7 +440,7 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", providerType)
 	}
-	preauthorize, err := provider.NewPreauthorizer(ctx, r)
+	preauthorize, err := provider.NewPreauthorizer(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -426,7 +504,8 @@ func createPaymentProviders(c *conf.Configuration) (map[string]payments.Provider
 	provs := map[string]payments.Provider{}
 	if c.Payment.Stripe.Enabled {
 		p, err := stripe.NewPaymentProvider(stripe.Config{
-			SecretKey: c.Payment.Stripe.SecretKey,
+			SecretKey:         c.Payment.Stripe.SecretKey,
+			UsePaymentIntents: c.Payment.Stripe.UsePaymentIntents,
 		})
 		if err != nil {
 			return nil, err
