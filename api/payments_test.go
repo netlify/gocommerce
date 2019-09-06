@@ -427,7 +427,7 @@ func TestPaymentCreate(t *testing.T) {
 		callCount := 0
 		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
 			switch path {
-			case "/charges":
+			case "/v1/charges":
 				payload := params.GetParams()
 				fmt.Println("meta:", payload.Metadata)
 				assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
