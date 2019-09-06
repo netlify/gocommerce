@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/jinzhu/gorm"
 	"github.com/sebest/xff"
@@ -15,7 +16,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"
-	"github.com/netlify/netlify-commons/graceful"
+	"github.com/netlify/gocommerce/graceful"
 )
 
 const (
@@ -38,13 +39,17 @@ type API struct {
 // ListenAndServe starts the REST API.
 func (a *API) ListenAndServe(hostAndPort string) {
 	log := logrus.WithField("component", "api")
-	server := graceful.NewGracefulServer(a.handler, log)
-	if err := server.Bind(hostAndPort); err != nil {
-		log.WithError(err).Fatal("http server bind failed")
+	server := &http.Server{
+		Addr:    hostAndPort,
+		Handler: a.handler,
 	}
 
-	if err := server.Listen(); err != nil {
-		log.WithError(err).Fatal("http server listen failed")
+	closer, done := graceful.DetectShutdown(log)
+	defer done()
+	closer.Register("api", server, time.Second*60)
+
+	if err := server.ListenAndServe(); err != nil {
+		log.WithError(err).Fatal("API server failed")
 	}
 }
 
