@@ -86,7 +86,11 @@ func paymentComplete(r *http.Request, tx *gorm.DB, tr *models.Transaction, order
 	config := gcontext.GetConfig(ctx)
 
 	tr.Status = models.PaidState
-	tx.Create(tr)
+	if tx.NewRecord(tr) {
+		tx.Create(tr)
+	} else {
+		tx.Save(tr)
+	}
 	order.PaymentState = models.PaidState
 	tx.Save(order)
 
