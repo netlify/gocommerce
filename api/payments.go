@@ -80,12 +80,40 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error 
 	return sendJSON(w, http.StatusOK, order.Transactions)
 }
 
+func paymentComplete(r *http.Request, tx *gorm.DB, tr *models.Transaction, order *models.Order) {
+	ctx := r.Context()
+	log := getLogEntry(r)
+	config := gcontext.GetConfig(ctx)
+
+	tr.Status = models.PaidState
+	tx.Create(tr)
+	order.PaymentState = models.PaidState
+	tx.Save(order)
+
+	if config.Webhooks.Payment != "" {
+		hook, err := models.NewHook("payment", config.SiteURL, config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
+		if err != nil {
+			log.WithError(err).Error("Failed to process webhook")
+		}
+		tx.Save(hook)
+	}
+}
+
+func sendOrderConfirmation(ctx context.Context, log logrus.FieldLogger, tr *models.Transaction) {
+	mailer := gcontext.GetMailer(ctx)
+
+	err1 := mailer.OrderConfirmationMail(tr)
+	err2 := mailer.OrderReceivedMail(tr)
+
+	if err1 != nil || err2 != nil {
+		log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
+	}
+}
+
 // PaymentCreate is the endpoint for creating a payment for an order
 func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
-	config := gcontext.GetConfig(ctx)
-	mailer := gcontext.GetMailer(ctx)
 
 	params := PaymentParams{Currency: "USD"}
 	err := json.NewDecoder(r.Body).Decode(&params)
@@ -156,21 +184,28 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
 
-	invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
-	if err != nil {
-		tx.Rollback()
-		return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+	invoiceNumber := order.InvoiceNumber
+	if invoiceNumber == 0 {
+		var err error
+		invoiceNumber, err = models.NextInvoiceNumber(tx, order.InstanceID)
+		if err != nil {
+			tx.Rollback()
+			return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+		}
+		order.InvoiceNumber = invoiceNumber
 	}
 
 	tr := models.NewTransaction(order)
 	processorID, err := charge(params.Amount, params.Currency, order, invoiceNumber)
 	tr.ProcessorID = processorID
 	tr.InvoiceNumber = invoiceNumber
+	order.PaymentProcessor = provider.Name()
 
 	if pendingErr, ok := err.(*payments.PaymentPendingError); ok {
 		tr.Status = models.PendingState
 		tr.ProviderMetadata = pendingErr.Metadata()
 		tx.Create(tr)
+		tx.Save(order)
 		tx.Commit()
 		return sendJSON(w, 200, tr)
 	}
@@ -184,32 +219,10 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("There was an error charging your card: %v", err).WithInternalError(err)
 	}
 
-	// mark order and transaction as paid
-	tr.Status = models.PaidState
-	tx.Create(tr)
-	order.PaymentProcessor = provider.Name()
-	order.PaymentState = models.PaidState
-	order.InvoiceNumber = invoiceNumber
-	tx.Save(order)
-
-	if config.Webhooks.Payment != "" {
-		hook, err := models.NewHook("payment", config.SiteURL, config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
-		if err != nil {
-			log.WithError(err).Error("Failed to process webhook")
-		}
-		tx.Save(hook)
-	}
-
+	paymentComplete(r, tx, tr, order)
 	tx.Commit()
 
-	go func() {
-		err1 := mailer.OrderConfirmationMail(tr)
-		err2 := mailer.OrderReceivedMail(tr)
-
-		if err1 != nil || err2 != nil {
-			log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
-		}
-	}()
+	go sendOrderConfirmation(ctx, log, tr)
 
 	return sendJSON(w, http.StatusOK, tr)
 }
@@ -271,14 +284,12 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 		trans.InvoiceNumber = invoiceNumber
 	}
 
-	trans.Status = models.PaidState
-	tx.Save(trans)
-	order.State = models.PaidState
-	order.InvoiceNumber = trans.InvoiceNumber
-	tx.Save(order)
+	paymentComplete(r, tx, trans, order)
 	if err := tx.Commit().Error; err != nil {
 		return internalServerError("Saving payment failed").WithInternalError(err)
 	}
+
+	go sendOrderConfirmation(ctx, log, trans)
 
 	return sendJSON(w, 200, trans)
 }
