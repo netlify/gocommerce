@@ -13,7 +13,6 @@ import (
 	"github.com/sirupsen/logrus"
 	stripe "github.com/stripe/stripe-go"
 	"github.com/stripe/stripe-go/client"
-	"github.com/stripe/stripe-go/paymentintent"
 )
 
 type stripePaymentProvider struct {
@@ -137,7 +136,7 @@ func (s *stripePaymentProvider) chargePaymentIntent(paymentMethodID string, amou
 		)),
 		Confirm: stripe.Bool(true),
 	}
-	intent, err := paymentintent.New(params)
+	intent, err := s.client.PaymentIntents.New(params)
 	if err != nil {
 		return "", err
 	}
@@ -185,7 +184,7 @@ func (s *stripePaymentProvider) NewConfirmer(ctx context.Context, r *http.Reques
 }
 
 func (s *stripePaymentProvider) confirm(paymentID string) error {
-	_, err := paymentintent.Confirm(paymentID, nil)
+	_, err := s.client.PaymentIntents.Confirm(paymentID, nil)
 
 	if stripeErr, ok := err.(*stripe.Error); ok {
 		return payments.NewPaymentConfirmFailError(stripeErr.Msg)
