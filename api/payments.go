@@ -234,6 +234,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 // PaymentConfirm allows client to confirm if a pending transaction has been completed. Updates transaction and order
 func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	log := getLogEntry(r)
 
 	payID := chi.URLParam(r, "payment_id")
 	trans, httpErr := a.getTransaction(payID)
@@ -252,10 +253,12 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	log := getLogEntry(r)
-	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
-	if httpErr != nil {
-		return httpErr
+	order := &models.Order{}
+	if rsp := a.db.Find(order, "id = ?", trans.OrderID); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			return notFoundError("Order not found")
+		}
+		return internalServerError("Error while querying for order").WithInternalError(rsp.Error)
 	}
 	if order.PaymentProcessor == "" {
 		return badRequestError("Order does not specify a payment provider")
