@@ -205,16 +205,16 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	tr.InvoiceNumber = invoiceNumber
 	order.PaymentProcessor = provider.Name()
 
-	if pendingErr, ok := err.(*payments.PaymentPendingError); ok {
-		tr.Status = models.PendingState
-		tr.ProviderMetadata = pendingErr.Metadata()
-		tx.Create(tr)
-		tx.Save(order)
-		tx.Commit()
-		return sendJSON(w, 200, tr)
-	}
-
 	if err != nil {
+		if pendingErr, ok := err.(*payments.PaymentPendingError); ok {
+			tr.Status = models.PendingState
+			tr.ProviderMetadata = pendingErr.Metadata()
+			tx.Create(tr)
+			tx.Save(order)
+			tx.Commit()
+			return sendJSON(w, 200, tr)
+		}
+
 		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		tr.FailureDescription = err.Error()
 		tr.Status = models.FailedState
