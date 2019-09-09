@@ -302,7 +302,7 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 
 	go sendOrderConfirmation(ctx, log, trans)
 
-	return sendJSON(w, 200, trans)
+	return sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins.
