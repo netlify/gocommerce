@@ -441,7 +441,7 @@ func TestPaymentCreate(t *testing.T) {
 					test.Config.Payment.Stripe.UsePaymentIntents = true
 
 					callCount := 0
-					stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
+					stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
 						switch path {
 						case "/v1/payment_intents":
 							payload := params.GetParams()
@@ -470,8 +470,10 @@ func TestPaymentCreate(t *testing.T) {
 							}
 
 							callCount++
+							return nil
 						default:
 							t.Fatalf("unknown Stripe API call to %s", path)
+							return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
 						}
 					}))
 					defer stripe.SetBackend(stripe.APIBackend, nil)
@@ -515,15 +517,17 @@ func TestPaymentCreate(t *testing.T) {
 			test := NewRouteTest(t)
 
 			callCount := 0
-			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
+			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
 				switch path {
 				case "/v1/charges":
 					payload := params.GetParams()
 					assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
 					assert.Equal(t, "1", payload.Metadata["invoice_number"])
 					callCount++
+					return nil
 				default:
 					t.Fatalf("unknown Stripe API call to %s", path)
+					return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
 				}
 			}))
 			defer stripe.SetBackend(stripe.APIBackend, nil)
@@ -550,6 +554,65 @@ func TestPaymentCreate(t *testing.T) {
 			assert.Equal(t, 1, callCount)
 		})
 	})
+}
+
+func TestPaymentConfirm(t *testing.T) {
+	tests := map[string]struct {
+		Status           string
+		OK               bool
+		ExpectedStatus   int
+		ExpectedAPICalls int
+	}{
+		"default":    {models.PendingState, true, http.StatusOK, 1},
+		"idempotent": {models.PaidState, true, http.StatusOK, 0},
+		"declined":   {models.PendingState, false, http.StatusBadRequest, 1},
+	}
+
+	for name, testParams := range tests {
+		t.Run(name, func(t *testing.T) {
+			test := NewRouteTest(t)
+			test.Config.Payment.Stripe.UsePaymentIntents = true
+
+			callCount := 0
+			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+				if path == fmt.Sprintf("/v1/payment_intents/%s/confirm", stripePaymentIntentID) {
+					if intent, ok := v.(*stripe.PaymentIntent); ok {
+						intent.ID = stripePaymentIntentID
+						intent.Status = stripe.PaymentIntentStatusSucceeded
+					} else {
+						t.Errorf("unknown response receiver: %T", v)
+					}
+					callCount++
+
+					if !testParams.OK {
+						return &stripe.Error{Code: stripe.ErrorCodeCardDeclined, HTTPStatusCode: http.StatusForbidden}
+					}
+
+					return nil
+				}
+
+				t.Fatalf("unknown Stripe API call to %s", path)
+				return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
+			}))
+			defer stripe.SetBackend(stripe.APIBackend, nil)
+
+			test.Data.firstOrder.PaymentState = testParams.Status
+			require.NoError(t, test.DB.Save(test.Data.firstOrder).Error, "Failed to update order")
+			test.Data.firstTransaction.Status = testParams.Status
+			test.Data.firstTransaction.ProcessorID = stripePaymentIntentID
+			require.NoError(t, test.DB.Save(test.Data.firstTransaction).Error, "Failed to update transaction")
+
+			recorder := test.TestEndpoint(http.MethodPost, fmt.Sprintf("/payments/%s/confirm", test.Data.firstTransaction.ID), nil, test.Data.testUserToken)
+
+			trans := models.Transaction{}
+			extractPayload(t, testParams.ExpectedStatus, recorder, &trans)
+			if testParams.OK {
+				assert.Equal(t, models.PaidState, trans.Status)
+			}
+			assert.Equal(t, testParams.ExpectedAPICalls, callCount)
+		})
+	}
+
 }
 
 func TestPaymentPreauthorize(t *testing.T) {
@@ -788,7 +851,7 @@ func (mp *memProvider) confirm(paymentID string) error {
 	return nil
 }
 
-type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{})
+type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{}) error
 
 func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
 	return &trackingStripeBackend{fn}
@@ -799,8 +862,7 @@ type trackingStripeBackend struct {
 }
 
 func (t trackingStripeBackend) Call(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
-	t.trackingFunc(method, path, key, params, v)
-	return nil
+	return t.trackingFunc(method, path, key, params, v)
 }
 
 func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body *bytes.Buffer, params *stripe.Params, v interface{}) error {
