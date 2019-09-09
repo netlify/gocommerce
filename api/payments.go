@@ -253,6 +253,10 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
+	if trans.Status == models.PaidState {
+		return sendJSON(w, http.StatusOK, trans)
+	}
+
 	order := &models.Order{}
 	if rsp := a.db.Find(order, "id = ?", trans.OrderID); rsp.Error != nil {
 		if rsp.RecordNotFound() {
