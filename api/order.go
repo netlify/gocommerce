@@ -667,7 +667,7 @@ func (a *API) createLineItems(ctx context.Context, tx *gorm.DB, order *models.Or
 
 	for _, item := range order.LineItems {
 		order.SubTotal = order.SubTotal + (item.Price+item.AddonPrice)*item.Quantity
-		if err := tx.Save(&item).Error; err != nil {
+		if err := tx.Save(item).Error; err != nil {
 			return internalServerError("Error creating line item").WithInternalError(err)
 		}
 	}
