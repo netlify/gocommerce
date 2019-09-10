@@ -80,12 +80,44 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error 
 	return sendJSON(w, http.StatusOK, order.Transactions)
 }
 
+func paymentComplete(r *http.Request, tx *gorm.DB, tr *models.Transaction, order *models.Order) {
+	ctx := r.Context()
+	log := getLogEntry(r)
+	config := gcontext.GetConfig(ctx)
+
+	tr.Status = models.PaidState
+	if tx.NewRecord(tr) {
+		tx.Create(tr)
+	} else {
+		tx.Save(tr)
+	}
+	order.PaymentState = models.PaidState
+	tx.Save(order)
+
+	if config.Webhooks.Payment != "" {
+		hook, err := models.NewHook("payment", config.SiteURL, config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
+		if err != nil {
+			log.WithError(err).Error("Failed to process webhook")
+		}
+		tx.Save(hook)
+	}
+}
+
+func sendOrderConfirmation(ctx context.Context, log logrus.FieldLogger, tr *models.Transaction) {
+	mailer := gcontext.GetMailer(ctx)
+
+	err1 := mailer.OrderConfirmationMail(tr)
+	err2 := mailer.OrderReceivedMail(tr)
+
+	if err1 != nil || err2 != nil {
+		log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
+	}
+}
+
 // PaymentCreate is the endpoint for creating a payment for an order
 func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
-	config := gcontext.GetConfig(ctx)
-	mailer := gcontext.GetMailer(ctx)
 
 	params := PaymentParams{Currency: "USD"}
 	err := json.NewDecoder(r.Body).Decode(&params)
@@ -100,7 +132,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", params.ProviderType)
 	}
-	charge, err := provider.NewCharger(ctx, r)
+	charge, err := provider.NewCharger(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -156,18 +188,33 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("We failed to authorize the amount for this order: %v", err)
 	}
 
-	invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
-	if err != nil {
-		tx.Rollback()
-		return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+	invoiceNumber := order.InvoiceNumber
+	if invoiceNumber == 0 {
+		var err error
+		invoiceNumber, err = models.NextInvoiceNumber(tx, order.InstanceID)
+		if err != nil {
+			tx.Rollback()
+			return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+		}
+		order.InvoiceNumber = invoiceNumber
 	}
 
 	tr := models.NewTransaction(order)
 	processorID, err := charge(params.Amount, params.Currency, order, invoiceNumber)
 	tr.ProcessorID = processorID
 	tr.InvoiceNumber = invoiceNumber
+	order.PaymentProcessor = provider.Name()
 
 	if err != nil {
+		if pendingErr, ok := err.(*payments.PaymentPendingError); ok {
+			tr.Status = models.PendingState
+			tr.ProviderMetadata = pendingErr.Metadata()
+			tx.Create(tr)
+			tx.Save(order)
+			tx.Commit()
+			return sendJSON(w, 200, tr)
+		}
+
 		tr.FailureCode = strconv.FormatInt(http.StatusInternalServerError, 10)
 		tr.FailureDescription = err.Error()
 		tr.Status = models.FailedState
@@ -176,34 +223,88 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("There was an error charging your card: %v", err).WithInternalError(err)
 	}
 
-	// mark order and transaction as paid
-	tr.Status = models.PaidState
-	tx.Create(tr)
-	order.PaymentProcessor = provider.Name()
-	order.PaymentState = models.PaidState
-	order.InvoiceNumber = invoiceNumber
-	tx.Save(order)
-
-	if config.Webhooks.Payment != "" {
-		hook, err := models.NewHook("payment", config.SiteURL, config.Webhooks.Payment, order.UserID, config.Webhooks.Secret, order)
-		if err != nil {
-			log.WithError(err).Error("Failed to process webhook")
-		}
-		tx.Save(hook)
+	paymentComplete(r, tx, tr, order)
+	if err := tx.Commit().Error; err != nil {
+		return internalServerError("Saving payment failed").WithInternalError(err)
 	}
 
-	tx.Commit()
-
-	go func() {
-		err1 := mailer.OrderConfirmationMail(tr)
-		err2 := mailer.OrderReceivedMail(tr)
-
-		if err1 != nil || err2 != nil {
-			log.Errorf("Error sending order confirmation mails: %v %v", err1, err2)
-		}
-	}()
+	go sendOrderConfirmation(ctx, log, tr)
 
 	return sendJSON(w, http.StatusOK, tr)
+}
+
+// PaymentConfirm allows client to confirm if a pending transaction has been completed. Updates transaction and order
+func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	log := getLogEntry(r)
+
+	payID := chi.URLParam(r, "payment_id")
+	trans, httpErr := a.getTransaction(payID)
+	if httpErr != nil {
+		return httpErr
+	}
+
+	if trans.UserID != "" {
+		token := gcontext.GetToken(ctx)
+		if token == nil {
+			return unauthorizedError("You must be logged in to confirm this payment")
+		}
+		claims := token.Claims.(*claims.JWTClaims)
+		if trans.UserID != claims.Subject {
+			return unauthorizedError("You must be logged in to confirm this payment")
+		}
+	}
+
+	if trans.Status == models.PaidState {
+		return sendJSON(w, http.StatusOK, trans)
+	}
+
+	order := &models.Order{}
+	if rsp := a.db.Find(order, "id = ?", trans.OrderID); rsp.Error != nil {
+		if rsp.RecordNotFound() {
+			return notFoundError("Order not found")
+		}
+		return internalServerError("Error while querying for order").WithInternalError(rsp.Error)
+	}
+	if order.PaymentProcessor == "" {
+		return badRequestError("Order does not specify a payment provider")
+	}
+
+	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
+	if provider == nil {
+		return badRequestError("Payment provider '%s' not configured", order.PaymentProcessor)
+	}
+	confirm, err := provider.NewConfirmer(ctx, r, log.WithField("component", "payment_provider"))
+	if err != nil {
+		return badRequestError("Error creating payment provider: %v", err)
+	}
+
+	if err := confirm(trans.ProcessorID); err != nil {
+		if confirmFail, ok := err.(*payments.PaymentConfirmFailError); ok {
+			return badRequestError("Error confirming payment: %s", confirmFail.Error())
+		}
+		return internalServerError("Error on provider while trying to confirm: %v. Try again later.", err)
+	}
+
+	tx := a.db.Begin()
+
+	if trans.InvoiceNumber == 0 {
+		invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
+		if err != nil {
+			tx.Rollback()
+			return internalServerError("We failed to generate a valid invoice ID, please try again later: %v", err)
+		}
+		trans.InvoiceNumber = invoiceNumber
+	}
+
+	paymentComplete(r, tx, trans, order)
+	if err := tx.Commit().Error; err != nil {
+		return internalServerError("Saving payment failed").WithInternalError(err)
+	}
+
+	go sendOrderConfirmation(ctx, log, trans)
+
+	return sendJSON(w, http.StatusOK, trans)
 }
 
 // PaymentList will list all the payments that meet the criteria. It is only available to admins.
@@ -280,7 +381,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", order.PaymentProcessor)
 	}
-	refund, err := provider.NewRefunder(ctx, r)
+	refund, err := provider.NewRefunder(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -328,6 +429,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 // PreauthorizePayment creates a new payment that can be authorized in the browser
 func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	log := getLogEntry(r)
 	params := PaymentParams{}
 	ct := r.Header.Get("Content-Type")
 	mediaType, _, err := mime.ParseMediaType(ct)
@@ -362,7 +464,7 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 	if provider == nil {
 		return badRequestError("Payment provider '%s' not configured", providerType)
 	}
-	preauthorize, err := provider.NewPreauthorizer(ctx, r)
+	preauthorize, err := provider.NewPreauthorizer(ctx, r, log.WithField("component", "payment_provider"))
 	if err != nil {
 		return badRequestError("Error creating payment provider: %v", err)
 	}
@@ -426,7 +528,8 @@ func createPaymentProviders(c *conf.Configuration) (map[string]payments.Provider
 	provs := map[string]payments.Provider{}
 	if c.Payment.Stripe.Enabled {
 		p, err := stripe.NewPaymentProvider(stripe.Config{
-			SecretKey: c.Payment.Stripe.SecretKey,
+			SecretKey:         c.Payment.Stripe.SecretKey,
+			UsePaymentIntents: c.Payment.Stripe.UsePaymentIntents,
 		})
 		if err != nil {
 			return nil, err

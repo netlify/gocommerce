@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -325,6 +327,8 @@ func runPaymentRefund(test *RouteTest, url string, params interface{}) *httptest
 	return test.TestEndpoint(http.MethodPost, url, bytes.NewBuffer(body), token)
 }
 
+var stripePaymentIntentID = fmt.Sprintf("payment-intent-%d", rand.Int())
+
 func TestPaymentCreate(t *testing.T) {
 	t.Run("PayPal", func(t *testing.T) {
 		t.Run("Simple", func(t *testing.T) {
@@ -422,44 +426,198 @@ func TestPaymentCreate(t *testing.T) {
 		})
 	})
 	t.Run("Stripe", func(t *testing.T) {
-		test := NewRouteTest(t)
+		t.Run("PaymentIntent", func(t *testing.T) {
+			stripeCardSimple := "payment-method-simple"
+			stripeCardSCA := "payment-method-sca"
+			stripeClientSecret := "payment-intent-secret"
 
-		callCount := 0
-		stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) {
-			switch path {
-			case "/v1/charges":
-				payload := params.GetParams()
-				fmt.Println("meta:", payload.Metadata)
-				assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
-				assert.Equal(t, "1", payload.Metadata["invoice_number"])
-				callCount++
-			default:
-				t.Fatalf("unknown Stripe API call to %s", path)
+			tests := map[string]string{
+				"AutomaticConfirm": stripeCardSimple,
+				"ActionRequired":   stripeCardSCA,
 			}
-		}))
-		defer stripe.SetBackend(stripe.APIBackend, nil)
 
-		test.Data.firstOrder.PaymentState = models.PendingState
-		rsp := test.DB.Save(test.Data.firstOrder)
-		require.NoError(t, rsp.Error, "Failed to update order")
+			for name, card := range tests {
+				t.Run(name, func(t *testing.T) {
+					test := NewRouteTest(t)
+					test.Config.Payment.Stripe.UsePaymentIntents = true
 
-		params := &stripePaymentParams{
-			Amount:      test.Data.firstOrder.Total,
-			Currency:    test.Data.firstOrder.Currency,
-			StripeToken: "123456",
-			Provider:    payments.StripeProvider,
-		}
+					callCount := 0
+					stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+						switch path {
+						case "/v1/payment_intents":
+							payload := params.GetParams()
+							assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
+							assert.Equal(t, "1", payload.Metadata["invoice_number"])
 
-		body, err := json.Marshal(params)
-		require.NoError(t, err)
+							pm := ""
+							if intentParams, ok := params.(*stripe.PaymentIntentParams); ok {
+								pm = *intentParams.PaymentMethod
+							} else {
+								t.Errorf("unknown params object: %T", intentParams)
+							}
 
-		recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
+							if intent, ok := v.(*stripe.PaymentIntent); ok {
+								intent.ID = stripePaymentIntentID
+								switch pm {
+								case stripeCardSimple:
+									intent.Status = stripe.PaymentIntentStatusSucceeded
+								case stripeCardSCA:
+									intent.Status = stripe.PaymentIntentStatusRequiresAction
+									intent.ClientSecret = stripeClientSecret
+								default:
+									t.Errorf("unknown payment method: %s", pm)
+								}
+							} else {
+								t.Errorf("unknown response receiver: %T", v)
+							}
 
-		trans := models.Transaction{}
-		extractPayload(t, http.StatusOK, recorder, &trans)
-		assert.Equal(t, models.PaidState, trans.Status)
-		assert.Equal(t, 1, callCount)
+							callCount++
+							return nil
+						default:
+							t.Fatalf("unknown Stripe API call to %s", path)
+							return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
+						}
+					}))
+					defer stripe.SetBackend(stripe.APIBackend, nil)
+
+					test.Data.firstOrder.PaymentState = models.PendingState
+					rsp := test.DB.Save(test.Data.firstOrder)
+					require.NoError(t, rsp.Error, "Failed to update order")
+
+					params := &stripePaymentParams{
+						Amount:                test.Data.firstOrder.Total,
+						Currency:              test.Data.firstOrder.Currency,
+						StripePaymentMethodID: card,
+						Provider:              payments.StripeProvider,
+					}
+
+					body, err := json.Marshal(params)
+					require.NoError(t, err)
+
+					recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
+
+					trans := models.Transaction{}
+					extractPayload(t, http.StatusOK, recorder, &trans)
+					expectedStatus := ""
+					switch card {
+					case stripeCardSimple:
+						expectedStatus = models.PaidState
+					case stripeCardSCA:
+						expectedStatus = models.PendingState
+					}
+					assert.Equal(t, expectedStatus, trans.Status)
+					assert.Equal(t, stripePaymentIntentID, trans.ProcessorID)
+					if expectedStatus == models.PendingState {
+						assert.Equal(t, trans.ProviderMetadata["payment_intent_secret"], stripeClientSecret)
+					}
+					assert.Equal(t, 1, callCount)
+
+					order := &models.Order{}
+					require.NoError(t, test.DB.Find(order, "id = ?", trans.OrderID).Error)
+					assert.Equal(t, expectedStatus, order.PaymentState)
+				})
+			}
+		})
+		t.Run("Charges", func(t *testing.T) {
+			test := NewRouteTest(t)
+
+			callCount := 0
+			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+				switch path {
+				case "/v1/charges":
+					payload := params.GetParams()
+					assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
+					assert.Equal(t, "1", payload.Metadata["invoice_number"])
+					callCount++
+					return nil
+				default:
+					t.Fatalf("unknown Stripe API call to %s", path)
+					return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
+				}
+			}))
+			defer stripe.SetBackend(stripe.APIBackend, nil)
+
+			test.Data.firstOrder.PaymentState = models.PendingState
+			rsp := test.DB.Save(test.Data.firstOrder)
+			require.NoError(t, rsp.Error, "Failed to update order")
+
+			params := &stripePaymentParams{
+				Amount:      test.Data.firstOrder.Total,
+				Currency:    test.Data.firstOrder.Currency,
+				StripeToken: "123456",
+				Provider:    payments.StripeProvider,
+			}
+
+			body, err := json.Marshal(params)
+			require.NoError(t, err)
+
+			recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
+
+			trans := models.Transaction{}
+			extractPayload(t, http.StatusOK, recorder, &trans)
+			assert.Equal(t, models.PaidState, trans.Status)
+			assert.Equal(t, 1, callCount)
+		})
 	})
+}
+
+func TestPaymentConfirm(t *testing.T) {
+	tests := map[string]struct {
+		Status           string
+		OK               bool
+		ExpectedStatus   int
+		ExpectedAPICalls int
+	}{
+		"default":    {models.PendingState, true, http.StatusOK, 1},
+		"idempotent": {models.PaidState, true, http.StatusOK, 0},
+		"declined":   {models.PendingState, false, http.StatusBadRequest, 1},
+	}
+
+	for name, testParams := range tests {
+		t.Run(name, func(t *testing.T) {
+			test := NewRouteTest(t)
+			test.Config.Payment.Stripe.UsePaymentIntents = true
+
+			callCount := 0
+			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
+				if path == fmt.Sprintf("/v1/payment_intents/%s/confirm", stripePaymentIntentID) {
+					if intent, ok := v.(*stripe.PaymentIntent); ok {
+						intent.ID = stripePaymentIntentID
+						intent.Status = stripe.PaymentIntentStatusSucceeded
+					} else {
+						t.Errorf("unknown response receiver: %T", v)
+					}
+					callCount++
+
+					if !testParams.OK {
+						return &stripe.Error{Code: stripe.ErrorCodeCardDeclined, HTTPStatusCode: http.StatusForbidden}
+					}
+
+					return nil
+				}
+
+				t.Fatalf("unknown Stripe API call to %s", path)
+				return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
+			}))
+			defer stripe.SetBackend(stripe.APIBackend, nil)
+
+			test.Data.firstOrder.PaymentState = testParams.Status
+			require.NoError(t, test.DB.Save(test.Data.firstOrder).Error, "Failed to update order")
+			test.Data.firstTransaction.Status = testParams.Status
+			test.Data.firstTransaction.ProcessorID = stripePaymentIntentID
+			require.NoError(t, test.DB.Save(test.Data.firstTransaction).Error, "Failed to update transaction")
+
+			recorder := test.TestEndpoint(http.MethodPost, fmt.Sprintf("/payments/%s/confirm", test.Data.firstTransaction.ID), nil, test.Data.testUserToken)
+
+			trans := models.Transaction{}
+			extractPayload(t, testParams.ExpectedStatus, recorder, &trans)
+			if testParams.OK {
+				assert.Equal(t, models.PaidState, trans.Status)
+			}
+			assert.Equal(t, testParams.ExpectedAPICalls, callCount)
+		})
+	}
+
 }
 
 func TestPaymentPreauthorize(t *testing.T) {
@@ -608,10 +766,11 @@ func validateAllTransactions(t *testing.T, testData *TestData, trans []models.Tr
 }
 
 type stripePaymentParams struct {
-	Amount      uint64 `json:"amount"`
-	Currency    string `json:"currency"`
-	StripeToken string `json:"stripe_token"`
-	Provider    string `json:"provider"`
+	Amount                uint64 `json:"amount"`
+	Currency              string `json:"currency"`
+	StripeToken           string `json:"stripe_token"`
+	StripePaymentMethodID string `json:"stripe_payment_method_id"`
+	Provider              string `json:"provider"`
 }
 
 type paypalPaymentParams struct {
@@ -659,14 +818,17 @@ type refundCall struct {
 func (mp *memProvider) Name() string {
 	return mp.name
 }
-func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request) (payments.Charger, error) {
+func (mp *memProvider) NewCharger(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Charger, error) {
 	return mp.charge, nil
 }
-func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request) (payments.Refunder, error) {
+func (mp *memProvider) NewRefunder(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Refunder, error) {
 	return mp.refund, nil
 }
-func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request) (payments.Preauthorizer, error) {
+func (mp *memProvider) NewPreauthorizer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Preauthorizer, error) {
 	return mp.preauthorize, nil
+}
+func (mp *memProvider) NewConfirmer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Confirmer, error) {
+	return mp.confirm, nil
 }
 
 func (mp *memProvider) charge(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
@@ -690,7 +852,11 @@ func (mp *memProvider) preauthorize(amount uint64, currency string, description 
 	return nil, nil
 }
 
-type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{})
+func (mp *memProvider) confirm(paymentID string) error {
+	return nil
+}
+
+type stripeCallFunc func(method, path, key string, params stripe.ParamsContainer, v interface{}) error
 
 func NewTrackingStripeBackend(fn stripeCallFunc) stripe.Backend {
 	return &trackingStripeBackend{fn}
@@ -701,8 +867,7 @@ type trackingStripeBackend struct {
 }
 
 func (t trackingStripeBackend) Call(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
-	t.trackingFunc(method, path, key, params, v)
-	return nil
+	return t.trackingFunc(method, path, key, params, v)
 }
 
 func (t trackingStripeBackend) CallMultipart(method, path, key, boundary string, body *bytes.Buffer, params *stripe.Params, v interface{}) error {
