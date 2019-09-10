@@ -10,16 +10,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func newStructuredLogger(logger *logrus.Logger) func(next http.Handler) http.Handler {
+func newStructuredLogger(logger logrus.FieldLogger) func(next http.Handler) http.Handler {
 	return chimiddleware.RequestLogger(&structuredLogger{logger})
 }
 
 type structuredLogger struct {
-	Logger *logrus.Logger
+	Logger logrus.FieldLogger
 }
 
 func (l *structuredLogger) NewLogEntry(r *http.Request) chimiddleware.LogEntry {
-	entry := &structuredLoggerEntry{Logger: logrus.NewEntry(l.Logger)}
+	entry := &structuredLoggerEntry{Logger: l.Logger}
 	logFields := logrus.Fields{
 		"component":   "api",
 		"method":      r.Method,

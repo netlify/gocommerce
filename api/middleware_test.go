@@ -21,13 +21,13 @@ type MiddlewareTestSuite struct {
 }
 
 func (ts *MiddlewareTestSuite) SetupTest() {
-	globalConfig, err := conf.LoadGlobal("test.env")
+	globalConfig, log, err := conf.LoadGlobal("test.env")
 	require.NoError(ts.T(), err)
 	globalConfig.MultiInstanceMode = true
-	db, err := models.Connect(globalConfig)
+	db, err := models.Connect(globalConfig, log)
 	require.NoError(ts.T(), err)
 
-	api := NewAPI(globalConfig, db)
+	api := NewAPI(globalConfig, log, db)
 	ts.API = api
 }
 

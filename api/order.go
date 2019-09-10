@@ -85,6 +85,7 @@ func (a *API) withOrderID(w http.ResponseWriter, r *http.Request) (context.Conte
 // ClaimOrders will look for any orders with no user id belonging to an email and claim them
 func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	db := a.DB(r)
 	log := getLogEntry(r)
 	instanceID := gcontext.GetInstanceID(ctx)
 
@@ -103,7 +104,7 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	})
 
 	// now find all the order associated with that email
-	query := orderQuery(a.db)
+	query := orderQuery(db)
 	query = query.Where(&models.Order{
 		InstanceID: instanceID,
 		UserID:     "",
@@ -115,7 +116,7 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Failed to query for orders with email: %s", claims.Email).WithInternalError(res.Error)
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 
 	// create the user
 	user := models.User{
@@ -154,7 +155,7 @@ func (a *API) ReceiptView(w http.ResponseWriter, r *http.Request) error {
 	logEntrySetField(r, "order_id", id)
 
 	order := &models.Order{}
-	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
+	if result := orderQuery(a.DB(r)).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
@@ -198,7 +199,7 @@ func (a *API) ResendOrderReceipt(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	order := &models.Order{}
-	if result := orderQuery(a.db).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
+	if result := orderQuery(a.DB(r)).Preload("Transactions").First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
@@ -246,7 +247,7 @@ func (a *API) OrderList(w http.ResponseWriter, r *http.Request) error {
 
 	var err error
 	params := r.URL.Query()
-	query := orderQuery(a.db)
+	query := orderQuery(a.DB(r))
 	query, err = parseOrderParams(query, params)
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
@@ -286,7 +287,7 @@ func (a *API) OrderView(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
 
 	order := &models.Order{}
-	if result := orderQuery(a.db).First(order, "id = ?", id); result.Error != nil {
+	if result := orderQuery(a.DB(r)).First(order, "id = ?", id); result.Error != nil {
 		if result.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
@@ -338,7 +339,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 		"email":    params.Email,
 		"currency": params.Currency,
 	}).Debug("Created order, starting to process request")
-	tx := a.db.Begin()
+	tx := a.DB(r).Begin()
 
 	order.IP = r.RemoteAddr
 	order.MetaData = params.MetaData
@@ -425,6 +426,7 @@ func (a *API) OrderCreate(w http.ResponseWriter, r *http.Request) error {
 // There are also blocks to changing certain fields after the state has been locked
 func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	db := a.DB(r)
 	orderID := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 	claims := gcontext.GetClaims(ctx)
@@ -440,7 +442,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 	// verify that the order exists
 	existingOrder := new(models.Order)
 
-	rsp := orderQuery(a.db).First(existingOrder, "id = ?", orderID)
+	rsp := orderQuery(db).First(existingOrder, "id = ?", orderID)
 	if rsp.RecordNotFound() {
 		return notFoundError("Failed to find order with id '%s'", orderID)
 	}
@@ -486,7 +488,7 @@ func (a *API) OrderUpdate(w http.ResponseWriter, r *http.Request) error {
 		changes = append(changes, "vatnumber")
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 
 	//
 	// handle the addresses

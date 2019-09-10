@@ -15,13 +15,14 @@ const maxIPsPerDay = 50
 // DownloadURL returns a signed URL to download a purchased asset.
 func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	db := a.DB(r)
 	downloadID := chi.URLParam(r, "download_id")
 	logEntrySetField(r, "download_id", downloadID)
 	claims := gcontext.GetClaims(ctx)
 	assets := gcontext.GetAssetStore(ctx)
 
 	download := &models.Download{}
-	if result := a.db.Where("id = ?", downloadID).First(download); result.Error != nil {
+	if result := db.Where("id = ?", downloadID).First(download); result.Error != nil {
 		if result.RecordNotFound() {
 			return notFoundError("Download not found")
 		}
@@ -29,7 +30,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	order := &models.Order{}
-	if result := a.db.Where("id = ?", download.OrderID).First(order); result.Error != nil {
+	if result := db.Where("id = ?", download.OrderID).First(order); result.Error != nil {
 		if result.RecordNotFound() {
 			return notFoundError("Download order not found")
 		}
@@ -44,7 +45,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 		return unauthorizedError("This download has not been paid yet")
 	}
 
-	rows, err := a.db.Model(&models.Event{}).
+	rows, err := db.Model(&models.Event{}).
 		Select("count(distinct(ip))").
 		Where("order_id = ? and created_at > ? and changes = 'download'", order.ID, time.Now().Add(-24*time.Hour)).
 		Rows()
@@ -66,7 +67,7 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Error signing download").WithInternalError(err)
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 	tx.Model(download).Updates(map[string]interface{}{"download_count": gorm.Expr("download_count + 1")})
 	var subject string
 	if claims != nil {
@@ -81,12 +82,13 @@ func (a *API) DownloadURL(w http.ResponseWriter, r *http.Request) error {
 // DownloadList lists all purchased downloads for an order or a user.
 func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	db := a.DB(r)
 	orderID := gcontext.GetOrderID(ctx)
 	log := getLogEntry(r)
 
 	order := &models.Order{}
 	if orderID != "" {
-		if result := a.db.Where("id = ?", orderID).First(order); result.Error != nil {
+		if result := db.Where("id = ?", orderID).First(order); result.Error != nil {
 			if result.RecordNotFound() {
 				return notFoundError("Download order not found")
 			}
@@ -106,10 +108,10 @@ func (a *API) DownloadList(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
-	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
-	downloadsTable := a.db.NewScope(models.Download{}).QuotedTableName()
+	orderTable := db.NewScope(models.Order{}).QuotedTableName()
+	downloadsTable := db.NewScope(models.Download{}).QuotedTableName()
 
-	query := a.db.Joins("join " + orderTable + " ON " + downloadsTable + ".order_id = " + orderTable + ".id and " + orderTable + ".payment_state = 'paid'")
+	query := db.Joins("join " + orderTable + " ON " + downloadsTable + ".order_id = " + orderTable + ".id and " + orderTable + ".payment_state = 'paid'")
 	if order != nil {
 		query = query.Where(orderTable+".id = ?", order.ID)
 	} else {

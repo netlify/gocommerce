@@ -253,7 +253,7 @@ func TestPaymentsRefund(t *testing.T) {
 		err = signHTTPRequest(r, testAdminToken("magical-unicorn", ""), test.Config.JWT.Secret)
 		require.NoError(t, err)
 
-		NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, defaultVersion).handler.ServeHTTP(w, r)
+		NewAPIWithVersion(ctx, test.GlobalConfig, logrus.StandardLogger(), test.DB, defaultVersion).handler.ServeHTTP(w, r)
 
 		rsp := new(models.Transaction)
 		extractPayload(t, http.StatusOK, w, rsp)
@@ -674,7 +674,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 			globalConfig := new(conf.GlobalConfiguration)
 			ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, test.Config, "")
 			require.NoError(t, err)
-			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
+			NewAPIWithVersion(ctx, test.GlobalConfig, logrus.StandardLogger(), test.DB, "").handler.ServeHTTP(recorder, req)
 
 			rsp := payments.PreauthorizationResult{}
 			extractPayload(t, http.StatusOK, recorder, &rsp)
@@ -715,7 +715,7 @@ func TestPaymentPreauthorize(t *testing.T) {
 			globalConfig := new(conf.GlobalConfiguration)
 			ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, test.Config, "")
 			require.NoError(t, err)
-			NewAPIWithVersion(ctx, test.GlobalConfig, test.DB, "").handler.ServeHTTP(recorder, req)
+			NewAPIWithVersion(ctx, test.GlobalConfig, logrus.StandardLogger(), test.DB, "").handler.ServeHTTP(recorder, req)
 
 			rsp := payments.PreauthorizationResult{}
 			extractPayload(t, http.StatusOK, recorder, &rsp)

@@ -20,7 +20,7 @@ func (a *API) withUser(w http.ResponseWriter, r *http.Request) (context.Context,
 	logEntrySetField(r, "user_id", userID)
 	ctx := r.Context()
 
-	if u, err := models.GetUser(a.db, userID); err != nil {
+	if u, err := models.GetUser(a.DB(r), userID); err != nil {
 		return nil, internalServerError("problem while querying for userID: %s", userID).WithInternalError(err)
 	} else if u != nil {
 		ctx = gcontext.WithUser(ctx, u)
@@ -81,15 +81,16 @@ func persistUserName(tx *gorm.DB, order *models.Order, claims *claims.JWTClaims)
 // limit     # of records to return (max)
 func (a *API) UserList(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
+	db := a.DB(r)
 
-	query, err := parseUserQueryParams(a.db, r.URL.Query())
+	query, err := parseUserQueryParams(db, r.URL.Query())
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
 	log.Debug("Parsed url params")
 
-	orderTable := a.db.NewScope(models.Order{}).QuotedTableName()
-	userTable := a.db.NewScope(models.User{}).QuotedTableName()
+	orderTable := db.NewScope(models.Order{}).QuotedTableName()
+	userTable := db.NewScope(models.User{}).QuotedTableName()
 	query = query.
 		Joins("LEFT JOIN " + orderTable + " ON " + userTable + ".id = " + orderTable + ".user_id").
 		Group(userTable + ".id")
@@ -131,7 +132,7 @@ func (a *API) UserView(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	orders := []models.Order{}
-	a.db.Where("user_id = ?", user.ID).Find(&orders).Count(&user.OrderCount)
+	a.DB(r).Where("user_id = ?", user.ID).Find(&orders).Count(&user.OrderCount)
 
 	return sendJSON(w, http.StatusOK, user)
 }
@@ -146,7 +147,7 @@ func (a *API) AddressList(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	addrs := []models.Address{}
-	results := a.db.Where("user_id = ?", userID).Find(&addrs)
+	results := a.DB(r).Where("user_id = ?", userID).Find(&addrs)
 	if results.Error != nil {
 		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
@@ -168,7 +169,7 @@ func (a *API) AddressView(w http.ResponseWriter, r *http.Request) error {
 		ID:     addrID,
 		UserID: userID,
 	}
-	results := a.db.First(addr)
+	results := a.DB(r).First(addr)
 	if results.Error != nil {
 		return internalServerError("problem while querying for userID: %s", userID).WithInternalError(results.Error)
 	}
@@ -190,7 +191,7 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	rsp := a.db.Delete(user)
+	rsp := a.DB(r).Delete(user)
 	if rsp.Error != nil {
 		return internalServerError("error while deleting user").WithInternalError(rsp.Error)
 	}
@@ -201,8 +202,9 @@ func (a *API) UserDelete(w http.ResponseWriter, r *http.Request) error {
 
 func (a *API) UserBulkDelete(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
+	db := a.DB(r)
 
-	query, err := parseUserBulkDeleteParams(a.db, r.URL.Query())
+	query, err := parseUserBulkDeleteParams(db, r.URL.Query())
 	if err != nil {
 		return badRequestError("Bad parameters in query: %v", err)
 	}
@@ -212,7 +214,7 @@ func (a *API) UserBulkDelete(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("error while deleting user").WithInternalError(result.Error)
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 	defer func() {
 		if r := recover(); r != nil {
 			tx.Rollback()
@@ -246,7 +248,7 @@ func (a *API) AddressDelete(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	rsp := a.db.Delete(&models.Address{ID: addrID})
+	rsp := a.DB(r).Delete(&models.Address{ID: addrID})
 	if rsp.RecordNotFound() {
 		log.Warn("Attempted to delete an address that doesn't exist")
 		return nil
@@ -282,7 +284,7 @@ func (a *API) CreateNewAddress(w http.ResponseWriter, r *http.Request) error {
 		ID:             uuid.NewRandom().String(),
 		UserID:         userID,
 	}
-	rsp := a.db.Create(&addr)
+	rsp := a.DB(r).Create(&addr)
 	if rsp.Error != nil {
 		return internalServerError("failed to save address").WithInternalError(rsp.Error)
 	}

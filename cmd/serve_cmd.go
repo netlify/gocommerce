@@ -19,29 +19,29 @@ var serveCmd = cobra.Command{
 	},
 }
 
-func serve(globalConfig *conf.GlobalConfiguration, config *conf.Configuration) {
-	db, err := models.Connect(globalConfig)
+func serve(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, config *conf.Configuration) {
+	db, err := models.Connect(globalConfig, log.WithField("component", "db"))
 	if err != nil {
-		logrus.Fatalf("Error opening database: %+v", err)
+		log.Fatalf("Error opening database: %+v", err)
 	}
 	defer db.Close()
 
-	bgDB, err := models.Connect(globalConfig)
+	bgDB, err := models.Connect(globalConfig, log.WithField("component", "db").WithField("bgdb", true))
 	if err != nil {
-		logrus.Fatalf("Error opening database: %+v", err)
+		log.Fatalf("Error opening database: %+v", err)
 	}
 	defer bgDB.Close()
 
 	ctx, err := api.WithInstanceConfig(context.Background(), globalConfig.SMTP, config, "")
 	if err != nil {
-		logrus.Fatalf("Error loading instance config: %+v", err)
+		log.Fatalf("Error loading instance config: %+v", err)
 	}
-	api := api.NewAPIWithVersion(ctx, globalConfig, db, Version)
+	api := api.NewAPIWithVersion(ctx, globalConfig, log, db, Version)
 
 	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
-	logrus.Infof("GoCommerce API started on: %s", l)
+	log.Infof("GoCommerce API started on: %s", l)
 
-	models.RunHooks(bgDB, logrus.WithField("component", "hooks"))
+	models.RunHooks(bgDB, log.WithField("component", "hooks"))
 
 	api.ListenAndServe(l)
 }

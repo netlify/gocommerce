@@ -18,7 +18,7 @@ var multiCmd = cobra.Command{
 }
 
 func multi(cmd *cobra.Command, args []string) {
-	globalConfig, err := conf.LoadGlobal(configFile)
+	globalConfig, log, err := conf.LoadGlobal(configFile)
 	if err != nil {
 		logrus.Fatalf("Failed to load configuration: %+v", err)
 	}
@@ -26,20 +26,20 @@ func multi(cmd *cobra.Command, args []string) {
 		logrus.Fatal("Operator token secret is required")
 	}
 
-	db, err := models.Connect(globalConfig)
+	db, err := models.Connect(globalConfig, log.WithField("component", "db"))
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
 	defer db.Close()
 
-	bgDB, err := models.Connect(globalConfig)
+	bgDB, err := models.Connect(globalConfig, log.WithField("component", "db").WithField("bgdb", true))
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}
 	defer bgDB.Close()
 
 	globalConfig.MultiInstanceMode = true
-	api := api.NewAPIWithVersion(context.Background(), globalConfig, db.Debug(), Version)
+	api := api.NewAPIWithVersion(context.Background(), globalConfig, log, db.Debug(), Version)
 
 	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
 	logrus.Infof("GoCommerce API started on: %s", l)

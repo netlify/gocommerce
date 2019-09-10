@@ -5,6 +5,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/kelseyhightower/envconfig"
+	"github.com/sirupsen/logrus"
 )
 
 // DBConfiguration holds all the database related configuration.
@@ -39,7 +40,7 @@ type GlobalConfiguration struct {
 	}
 	DB                DBConfiguration
 	Logging           LoggingConfig `envconfig:"LOG"`
-	OperatorToken     string              `split_words:"true"`
+	OperatorToken     string        `split_words:"true"`
 	MultiInstanceMode bool
 	SMTP              SMTPConfiguration `json:"smtp"`
 }
@@ -118,19 +119,20 @@ func loadEnvironment(filename string) error {
 }
 
 // LoadGlobal will construct the core config from the file
-func LoadGlobal(filename string) (*GlobalConfiguration, error) {
+func LoadGlobal(filename string) (*GlobalConfiguration, *logrus.Entry, error) {
 	if err := loadEnvironment(filename); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	config := new(GlobalConfiguration)
 	if err := envconfig.Process("gocommerce", config); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if _, err := ConfigureLogging(&config.Logging); err != nil {
-		return nil, err
+	log, err := ConfigureLogging(&config.Logging)
+	if err != nil {
+		return nil, nil, err
 	}
-	return config, nil
+	return config, log, nil
 }
 
 // LoadConfig loads the per-instance configuration from a file

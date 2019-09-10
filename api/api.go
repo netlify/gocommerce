@@ -73,12 +73,12 @@ func waitForTermination(log logrus.FieldLogger, done <-chan struct{}) {
 }
 
 // NewAPI instantiates a new REST API using the default version.
-func NewAPI(globalConfig *conf.GlobalConfiguration, db *gorm.DB) *API {
-	return NewAPIWithVersion(context.Background(), globalConfig, db, defaultVersion)
+func NewAPI(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB) *API {
+	return NewAPIWithVersion(context.Background(), globalConfig, log, db, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API.
-func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
+func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB, version string) *API {
 	api := &API{
 		config:     globalConfig,
 		db:         db,
@@ -87,7 +87,7 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 	}
 
 	xffmw, _ := xff.Default()
-	logger := newStructuredLogger(logrus.StandardLogger())
+	logger := newStructuredLogger(log)
 
 	r := newRouter()
 	r.UseBypass(xffmw.Handler)
@@ -98,6 +98,7 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 
 	r.Route("/", func(r *router) {
 		r.UseBypass(logger)
+		r.Use(api.loggingDB)
 		if globalConfig.MultiInstanceMode {
 			r.Use(api.loadInstanceConfig)
 		}
@@ -147,9 +148,10 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 
 	if globalConfig.MultiInstanceMode {
 		// Operator microservice API
-		r.WithBypass(logger).With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
+		r.WithBypass(logger).With(api.loggingDB).With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
 		r.Route("/instances", func(r *router) {
 			r.UseBypass(logger)
+			r.Use(api.loggingDB)
 			r.Use(api.verifyOperatorRequest)
 
 			r.Post("/", api.CreateInstance)
