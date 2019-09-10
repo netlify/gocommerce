@@ -418,35 +418,34 @@ func signInstanceRequest(req *http.Request, instanceID string, jwtSecret string)
 // TEST SITE
 // ------------------------------------------------------------------------------------------------
 
+func productMetaFrame(meta string) string {
+	return fmt.Sprintf(`<!doctype html>
+<html>
+<head><title>Test Product</title></head>
+<body>
+	<script class="gocommerce-product">
+		%s
+	</script>
+</body>
+</html>`,
+	meta)
+}
+
 func handleTestProducts(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/simple-product":
-		fmt.Fprintln(w, `<!doctype html>
-			<html>
-			<head><title>Test Product</title></head>
-			<body>
-				<script class="gocommerce-product">
-				{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-					{"amount": "9.99", "currency": "USD"}
-				]}
-				</script>
-			</body>
-			</html>`)
+		fmt.Fprintln(w, productMetaFrame(`
+			{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+				{"amount": "9.99", "currency": "USD"}
+			]}`))
 	case "/bundle-product":
-		fmt.Fprintln(w, `<!doctype html>
-			<html>
-			<head><title>Test Product</title></head>
-			<body>
-				<script class="gocommerce-product">
-				{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
-					{"amount": "9.99", "currency": "USD", "items": [
-						{"amount": "7.00", "type": "Book"},
-						{"amount": "2.99", "type": "E-Book"}
-					]}
+		fmt.Fprintln(w, productMetaFrame(`
+			{"sku": "product-1", "title": "Product 1", "type": "Book", "prices": [
+				{"amount": "9.99", "currency": "USD", "items": [
+					{"amount": "7.00", "type": "Book"},
+					{"amount": "2.99", "type": "E-Book"}
 				]}
-				</script>
-			</body>
-			</html>`)
+			]}`))
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}

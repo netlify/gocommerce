@@ -7,6 +7,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/calculator"
+	"github.com/netlify/gocommerce/conf"
 	"github.com/pborman/uuid"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -202,6 +203,18 @@ func (o *Order) CalculateTotal(settings *calculator.Settings, claims map[string]
 	}
 }
 
+// UpdateDownloads will refetch downloads for all line items in the order and
+// update the downloads in the order
+func (o *Order) UpdateDownloads(config *conf.Configuration, log logrus.FieldLogger) error {
+	updateMap := downloadRefreshItemSet{}
+	for _, item := range o.LineItems {
+		updateMap.Add(item, o)
+	}
+	updates, err := updateMap.Update(nil, config, log)
+	log.Debugf("Updated downloads of %d orders", len(updates))
+	return err
+}
+
 func (o *Order) BeforeDelete(tx *gorm.DB) error {
 	cascadeModels := map[string]interface{}{
 		"line item": &[]LineItem{},
@@ -223,4 +236,85 @@ func (o *Order) BeforeDelete(tx *gorm.DB) error {
 		}
 	}
 	return nil
+}
+
+type downloadRefreshItemSetEntry struct {
+	item   *LineItem
+	orders []*Order
+}
+type downloadRefreshInstanceItems map[string]*downloadRefreshItemSetEntry
+type downloadRefreshItemSet map[string]downloadRefreshInstanceItems
+
+// Add will take a line item and an order to persist in
+// the list of orders to update
+func (m downloadRefreshItemSet) Add(item *LineItem, order *Order) {
+	instance, ok := m[order.InstanceID]
+	if !ok {
+		instance = make(map[string]*downloadRefreshItemSetEntry)
+		m[order.InstanceID] = instance
+	}
+
+	mapping, ok := instance[item.Sku]
+	if !ok {
+		mapping = &downloadRefreshItemSetEntry{
+			item:   item,
+			orders: []*Order{},
+		}
+		instance[item.Sku] = mapping
+	}
+
+	mapping.orders = append(mapping.orders, order)
+}
+
+// UpdateDownloads fetches downloads for all line items and updates orders with new downloads
+func (m downloadRefreshItemSet) Update(db *gorm.DB, config *conf.Configuration, log logrus.FieldLogger) (updates []*Order, err error) {
+	// @todo: run in parallel with goroutines, lock orders with mutexes
+	for instanceID, items := range m {
+		if config == nil {
+			if db == nil {
+				err = errors.New("Instance config or database connection missing")
+				return
+			}
+			instance := Instance{}
+			if queryErr := db.First(&instance, Instance{ID: instanceID}).Error; queryErr != nil {
+				err = errors.Wrap(queryErr, "Failed fetching instance for order")
+				return
+			}
+			config = instance.BaseConfig
+		}
+
+		for _, entry := range items {
+			if entry.item.Sku == "" {
+				log.Warningf(
+					"Tried updating a line item without SKU at %s. Skipped to avoid memory update in FetchMeta",
+					entry.item.Path,
+				)
+				continue
+			}
+			log.Debugf("Updating downloads for item with sku '%s'", entry.item.Sku)
+			meta, fetchErr := entry.item.FetchMeta(config.SiteURL)
+			if fetchErr != nil {
+				// item might not be offered anymore, preserve downloads
+				log.WithError(fetchErr).
+					WithFields(map[string]interface{}{
+						"path": entry.item.Path,
+						"sku":  entry.item.Sku,
+					}).
+					Warning("Fetching product metadata failed. Skipping item.")
+				continue
+			}
+			for _, order := range entry.orders {
+				downloads := entry.item.MissingDownloads(order, meta)
+				if len(downloads) == 0 {
+					continue
+				}
+				// @todo: Lock order mutex if run in goroutines
+				order.Downloads = append(order.Downloads, downloads...)
+
+				updates = append(updates, order)
+			}
+		}
+	}
+
+	return
 }

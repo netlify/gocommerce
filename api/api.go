@@ -188,7 +188,10 @@ func (a *API) orderRoutes(r *router) {
 			r.With(addGetBody).Post("/", a.PaymentCreate)
 		})
 
-		r.Get("/downloads", a.DownloadList)
+		r.Route("/downloads", func(r *router) {
+			r.Get("/", a.DownloadList)
+			r.Post("/refresh", a.DownloadRefresh)
+		})
 		r.Get("/receipt", a.ReceiptView)
 		r.Post("/receipt", a.ResendOrderReceipt)
 	})
