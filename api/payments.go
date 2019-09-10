@@ -513,8 +513,13 @@ func queryForOrder(db *gorm.DB, orderID string, log logrus.FieldLogger) (*models
 }
 
 func queryForTransactions(db *gorm.DB, log logrus.FieldLogger, clause, id string) ([]models.Transaction, *HTTPError) {
+	params := []interface{}{}
+	if clause != "" {
+		params = []interface{}{clause, id}
+	}
+
 	trans := []models.Transaction{}
-	if rsp := db.Find(&trans, clause, id); rsp.Error != nil {
+	if rsp := db.Find(&trans, params...); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			return nil, notFoundError("Transactions not found")
 		}
