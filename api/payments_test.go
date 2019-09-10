@@ -429,6 +429,7 @@ func TestPaymentCreate(t *testing.T) {
 		t.Run("PaymentIntent", func(t *testing.T) {
 			stripeCardSimple := "payment-method-simple"
 			stripeCardSCA := "payment-method-sca"
+			stripeClientSecret := "payment-intent-secret"
 
 			tests := map[string]string{
 				"AutomaticConfirm": stripeCardSimple,
@@ -462,6 +463,7 @@ func TestPaymentCreate(t *testing.T) {
 									intent.Status = stripe.PaymentIntentStatusSucceeded
 								case stripeCardSCA:
 									intent.Status = stripe.PaymentIntentStatusRequiresAction
+									intent.ClientSecret = stripeClientSecret
 								default:
 									t.Errorf("unknown payment method: %s", pm)
 								}
@@ -505,6 +507,9 @@ func TestPaymentCreate(t *testing.T) {
 					}
 					assert.Equal(t, expectedStatus, trans.Status)
 					assert.Equal(t, stripePaymentIntentID, trans.ProcessorID)
+					if expectedStatus == models.PendingState {
+						assert.Equal(t, trans.ProviderMetadata["payment_intent_secret"], stripeClientSecret)
+					}
 					assert.Equal(t, 1, callCount)
 
 					order := &models.Order{}
