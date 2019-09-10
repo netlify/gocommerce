@@ -20,7 +20,7 @@ func (a *API) lookupCoupon(ctx context.Context, w http.ResponseWriter, code stri
 	coupon, err := couponCache.Lookup(code)
 	if err != nil {
 		switch v := err.(type) {
-		case coupons.CouponNotFound:
+		case *coupons.CouponNotFound:
 			return nil, notFoundError(v.Error())
 		default:
 			return nil, internalServerError("Error fetching coupon").WithInternalError(err)
