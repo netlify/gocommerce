@@ -26,7 +26,7 @@ type productsRow struct {
 func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 	instanceID := gcontext.GetInstanceID(r.Context())
 
-	query := a.db.
+	query := a.DB(r).
 		Model(&models.Order{}).
 		Select("sum(total) as total, sum(sub_total) as subtotal, sum(taxes) as taxes, currency, count(*) as orders").
 		Where("payment_state = 'paid' AND instance_id = ?", instanceID).
@@ -57,10 +57,11 @@ func (a *API) SalesReport(w http.ResponseWriter, r *http.Request) error {
 
 // ProductsReport list the products sold within a period
 func (a *API) ProductsReport(w http.ResponseWriter, r *http.Request) error {
+	db := a.DB(r)
 	instanceID := gcontext.GetInstanceID(r.Context())
-	ordersTable := a.db.NewScope(models.Order{}).QuotedTableName()
-	itemsTable := a.db.NewScope(models.LineItem{}).QuotedTableName()
-	query := a.db.
+	ordersTable := db.NewScope(models.Order{}).QuotedTableName()
+	itemsTable := db.NewScope(models.LineItem{}).QuotedTableName()
+	query := db.
 		Model(&models.LineItem{}).
 		Select("sku, path, sum(quantity * price) as total, currency").
 		Joins("JOIN " + ordersTable + " ON " + ordersTable + ".id = " + itemsTable + ".order_id " + "AND " + ordersTable + ".payment_state = 'paid'").

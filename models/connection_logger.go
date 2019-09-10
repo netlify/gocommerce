@@ -23,11 +23,7 @@ func (dbl *DBLogger) Print(params ...interface{}) {
 	}
 
 	level := params[0]
-	log := dbl.WithField("gorm_level", level)
-
-	if entry, ok := dbl.FieldLogger.(*logrus.Entry); ok && entry.Logger.Level >= logrus.TraceLevel {
-		log = log.WithField("gorm_source", params[1])
-	}
+	log := dbl.WithField("gorm_level", level).WithField("db_src", params[1])
 
 	if level != "sql" {
 		log.Debug(params[2:]...)

@@ -98,6 +98,7 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 
 	r.Route("/", func(r *router) {
 		r.UseBypass(logger)
+		r.Use(api.loggingDB)
 		if globalConfig.MultiInstanceMode {
 			r.Use(api.loadInstanceConfig)
 		}
@@ -147,9 +148,10 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 
 	if globalConfig.MultiInstanceMode {
 		// Operator microservice API
-		r.WithBypass(logger).With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
+		r.WithBypass(logger).With(api.loggingDB).With(api.verifyOperatorRequest).Get("/", api.GetAppManifest)
 		r.Route("/instances", func(r *router) {
 			r.UseBypass(logger)
+			r.Use(api.loggingDB)
 			r.Use(api.verifyOperatorRequest)
 
 			r.Post("/", api.CreateInstance)

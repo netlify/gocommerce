@@ -45,7 +45,7 @@ func (a *API) PaymentListForUser(w http.ResponseWriter, r *http.Request) error {
 		return notFoundError("Couldn't find a record for " + userID)
 	}
 
-	trans, httpErr := queryForTransactions(a.db, log, "user_id = ?", userID)
+	trans, httpErr := queryForTransactions(a.DB(r), log, "user_id = ?", userID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -60,7 +60,7 @@ func (a *API) PaymentListForOrder(w http.ResponseWriter, r *http.Request) error 
 	orderID := gcontext.GetOrderID(ctx)
 	claims := gcontext.GetClaims(ctx)
 
-	order, httpErr := queryForOrder(a.db, orderID, log)
+	order, httpErr := queryForOrder(a.DB(r), orderID, log)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -138,7 +138,7 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	orderID := gcontext.GetOrderID(ctx)
-	tx := a.db.Begin()
+	tx := a.DB(r).Begin()
 	order := &models.Order{}
 	loader := tx.
 		Preload("LineItems").
@@ -237,9 +237,10 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
 	log := getLogEntry(r)
+	db := a.DB(r)
 
 	payID := chi.URLParam(r, "payment_id")
-	trans, httpErr := a.getTransaction(payID)
+	trans, httpErr := getTransaction(db, payID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -260,7 +261,7 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	order := &models.Order{}
-	if rsp := a.db.Find(order, "id = ?", trans.OrderID); rsp.Error != nil {
+	if rsp := db.Find(order, "id = ?", trans.OrderID); rsp.Error != nil {
 		if rsp.RecordNotFound() {
 			return notFoundError("Order not found")
 		}
@@ -286,7 +287,7 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Error on provider while trying to confirm: %v. Try again later.", err)
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 
 	if trans.InvoiceNumber == 0 {
 		invoiceNumber, err := models.NextInvoiceNumber(tx, order.InstanceID)
@@ -311,7 +312,7 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) error {
 	log := getLogEntry(r)
 	instanceID := gcontext.GetInstanceID(r.Context())
-	query := a.db.Where("instance_id = ?", instanceID)
+	query := a.DB(r).Where("instance_id = ?", instanceID)
 
 	query, err := parsePaymentQueryParams(query, r.URL.Query())
 	if err != nil {
@@ -328,7 +329,7 @@ func (a *API) PaymentList(w http.ResponseWriter, r *http.Request) error {
 // PaymentView returns information about a single payment. It is only available to admins.
 func (a *API) PaymentView(w http.ResponseWriter, r *http.Request) error {
 	payID := chi.URLParam(r, "payment_id")
-	trans, httpErr := a.getTransaction(payID)
+	trans, httpErr := getTransaction(a.DB(r), payID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -339,6 +340,7 @@ func (a *API) PaymentView(w http.ResponseWriter, r *http.Request) error {
 // refunds if desired. It is only available to admins.
 func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+	db := a.DB(r)
 	config := gcontext.GetConfig(ctx)
 	params := PaymentParams{Currency: "USD"}
 	err := json.NewDecoder(r.Body).Decode(&params)
@@ -347,7 +349,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	payID := chi.URLParam(r, "payment_id")
-	trans, httpErr := a.getTransaction(payID)
+	trans, httpErr := getTransaction(db, payID)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -369,7 +371,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	log := getLogEntry(r)
-	order, httpErr := queryForOrder(a.db, trans.OrderID, log)
+	order, httpErr := queryForOrder(db, trans.OrderID, log)
 	if httpErr != nil {
 		return httpErr
 	}
@@ -398,7 +400,7 @@ func (a *API) PaymentRefund(w http.ResponseWriter, r *http.Request) error {
 		Status:     models.PendingState,
 	}
 
-	tx := a.db.Begin()
+	tx := db.Begin()
 	tx.Create(m)
 	provID := provider.Name()
 	log.Debugf("Starting refund to %s", provID)
@@ -480,8 +482,8 @@ func (a *API) PreauthorizePayment(w http.ResponseWriter, r *http.Request) error 
 // ------------------------------------------------------------------------------------------------
 // Helpers
 // ------------------------------------------------------------------------------------------------
-func (a *API) getTransaction(payID string) (*models.Transaction, *HTTPError) {
-	trans, err := models.GetTransaction(a.db, payID)
+func getTransaction(db *gorm.DB, payID string) (*models.Transaction, *HTTPError) {
+	trans, err := models.GetTransaction(db, payID)
 	if err != nil {
 		return nil, internalServerError("Error while querying for transactions").WithInternalError(err)
 	}

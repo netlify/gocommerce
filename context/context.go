@@ -6,6 +6,7 @@ import (
 	"context"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/jinzhu/gorm"
 
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/claims"
@@ -36,6 +37,7 @@ const (
 	orderIDKey         = contextKey("order_id")
 	instanceIDKey      = contextKey("instance_id")
 	instanceKey        = contextKey("instance")
+	dbKey              = contextKey("db")
 )
 
 // WithConfig adds the tenant configuration to the context.
@@ -251,4 +253,18 @@ func GetInstance(ctx context.Context) *models.Instance {
 		return nil
 	}
 	return obj.(*models.Instance)
+}
+
+// GetDB reads the database from the context.
+func GetDB(ctx context.Context) *gorm.DB {
+	obj := ctx.Value(dbKey)
+	if obj == nil {
+		return nil
+	}
+	return obj.(*gorm.DB)
+}
+
+// WithDB adds the database to the context.
+func WithDB(ctx context.Context, db *gorm.DB) context.Context {
+	return context.WithValue(ctx, dbKey, db)
 }
