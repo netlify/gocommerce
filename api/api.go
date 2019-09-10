@@ -73,12 +73,12 @@ func waitForTermination(log logrus.FieldLogger, done <-chan struct{}) {
 }
 
 // NewAPI instantiates a new REST API using the default version.
-func NewAPI(globalConfig *conf.GlobalConfiguration, db *gorm.DB) *API {
-	return NewAPIWithVersion(context.Background(), globalConfig, db, defaultVersion)
+func NewAPI(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB) *API {
+	return NewAPIWithVersion(context.Background(), globalConfig, log, db, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API.
-func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, db *gorm.DB, version string) *API {
+func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB, version string) *API {
 	api := &API{
 		config:     globalConfig,
 		db:         db,
@@ -87,7 +87,7 @@ func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfigurati
 	}
 
 	xffmw, _ := xff.Default()
-	logger := newStructuredLogger(logrus.StandardLogger())
+	logger := newStructuredLogger(log)
 
 	r := newRouter()
 	r.UseBypass(xffmw.Handler)

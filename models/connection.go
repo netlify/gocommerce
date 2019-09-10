@@ -5,10 +5,9 @@ import (
 	_ "github.com/GoogleCloudPlatform/cloudsql-proxy/proxy/dialers/mysql"
 	_ "github.com/GoogleCloudPlatform/cloudsql-proxy/proxy/dialers/postgres"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
-
-	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -21,7 +20,7 @@ import (
 var Namespace string
 
 // Connect will connect to that storage engine
-func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
+func Connect(config *conf.GlobalConfiguration, log logrus.FieldLogger) (*gorm.DB, error) {
 	if config.DB.Namespace != "" {
 		Namespace = config.DB.Namespace
 	}
@@ -34,9 +33,8 @@ func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
 		return nil, errors.Wrap(err, "opening database connection")
 	}
 
-	if logrus.StandardLogger().Level == logrus.DebugLevel {
-		db.LogMode(true)
-	}
+	db.SetLogger(NewDBLogger(log))
+	db.LogMode(true)
 
 	err = db.DB().Ping()
 	if err != nil {
@@ -44,7 +42,9 @@ func Connect(config *conf.GlobalConfiguration) (*gorm.DB, error) {
 	}
 
 	if config.DB.Automigrate {
-		if err := AutoMigrate(db); err != nil {
+		migDB := db.New()
+		migDB.SetLogger(NewDBLogger(log.WithField("task", "migration")))
+		if err := AutoMigrate(migDB); err != nil {
 			return nil, errors.Wrap(err, "migrating tables")
 		}
 	}

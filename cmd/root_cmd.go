@@ -25,8 +25,8 @@ func RootCmd() *cobra.Command {
 	return &rootCmd
 }
 
-func execWithConfig(cmd *cobra.Command, fn func(globalConfig *conf.GlobalConfiguration, config *conf.Configuration)) {
-	globalConfig, err := conf.LoadGlobal(configFile)
+func execWithConfig(cmd *cobra.Command, fn func(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, config *conf.Configuration)) {
+	globalConfig, log, err := conf.LoadGlobal(configFile)
 	if err != nil {
 		logrus.Fatalf("Failed to load configuration: %+v", err)
 	}
@@ -35,5 +35,5 @@ func execWithConfig(cmd *cobra.Command, fn func(globalConfig *conf.GlobalConfigu
 		logrus.Fatalf("Failed to load configuration: %+v", err)
 	}
 
-	fn(globalConfig, config)
+	fn(globalConfig, log, config)
 }
