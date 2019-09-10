@@ -224,7 +224,9 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	paymentComplete(r, tx, tr, order)
-	tx.Commit()
+	if err := tx.Commit().Error; err != nil {
+		return internalServerError("Saving payment failed").WithInternalError(err)
+	}
 
 	go sendOrderConfirmation(ctx, log, tr)
 
