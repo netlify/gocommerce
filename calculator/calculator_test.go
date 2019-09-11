@@ -349,15 +349,6 @@ func TestMixedDiscounts(t *testing.T) {
 func TestRealWorldTaxCalculations(t *testing.T) {
 	settings := &Settings{
 		PricesIncludeTaxes: true,
-		Taxes: []*Tax{&Tax{
-			Percentage:   7,
-			ProductTypes: []string{"Book"},
-			Countries:    []string{"USA"},
-		}, &Tax{
-			Percentage:   19,
-			ProductTypes: []string{"E-Book"},
-			Countries:    []string{"USA"},
-		}},
 	}
 
 	item1 := &TestItem{
@@ -371,26 +362,63 @@ func TestRealWorldTaxCalculations(t *testing.T) {
 			itemType: "E-Book",
 		}},
 	}
-	item2 := &TestItem{
-		price:    3490,
-		itemType: "Book",
-		items: []Item{&TestItem{
-			price:    2300,
-			itemType: "Book",
-		}, &TestItem{
-			price:    1190,
-			itemType: "E-Book",
-		}},
-	}
-	params := PriceParameters{"USA", "USD", nil, []Item{item1, item2}}
-	price := CalculatePrice(settings, nil, params, testLogger)
 
-	validatePrice(t, price, Price{
-		Subtotal: 5766,
-		Discount: 0,
-		NetTotal: 5766,
-		Taxes:    625,
-		Total:    6391,
+	t.Run("Single items", func(t *testing.T) {
+		settings.Taxes = []*Tax{&Tax{
+			Percentage:   7,
+			ProductTypes: []string{"Book"},
+			Countries:    []string{"USA"},
+		}, &Tax{
+			Percentage:   21,
+			ProductTypes: []string{"E-Book"},
+			Countries:    []string{"USA"},
+		}}
+
+		params := PriceParameters{"USA", "USD", nil, []Item{item1}}
+		price := CalculatePrice(settings, nil, params, testLogger)
+
+		validatePrice(t, price, Price{
+			Subtotal: 2602,
+			Discount: 0,
+			NetTotal: 2602,
+			Taxes:    298,
+			Total:    2900,
+		})
+	})
+
+	t.Run("Two items", func(t *testing.T) {
+		settings.Taxes = []*Tax{&Tax{
+			Percentage:   7,
+			ProductTypes: []string{"Book"},
+			Countries:    []string{"USA"},
+		}, &Tax{
+			Percentage:   19,
+			ProductTypes: []string{"E-Book"},
+			Countries:    []string{"USA"},
+		}}
+
+		item2 := &TestItem{
+			price:    3490,
+			itemType: "Book",
+			items: []Item{&TestItem{
+				price:    2300,
+				itemType: "Book",
+			}, &TestItem{
+				price:    1190,
+				itemType: "E-Book",
+			}},
+		}
+
+		params := PriceParameters{"USA", "USD", nil, []Item{item1, item2}}
+		price := CalculatePrice(settings, nil, params, testLogger)
+
+		validatePrice(t, price, Price{
+			Subtotal: 5766,
+			Discount: 0,
+			NetTotal: 5766,
+			Taxes:    624,
+			Total:    6390,
+		})
 	})
 }
 
