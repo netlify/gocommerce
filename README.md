@@ -63,6 +63,8 @@ tax has been included in that product.
 
 The easiest way to use GoCommerce is with [commerce-js](https://github.com/netlify/netlify-commerce-js).
 
+**IMPORTANT:** Since Release 1.8.0 of GoCommerce at least Version 5.0.0 of the JavaScript Client is required.
+
 ## Running the GoCommerce backend
 
 GoCommerce can be deployed to any server environment that runs Go. Minimum requirement for Go is version 1.11 since GoCommerce is using Go modules.
