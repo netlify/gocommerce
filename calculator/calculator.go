@@ -332,10 +332,13 @@ func calculateTaxes(amountToTax uint64, item Item, params PriceParameters, setti
 	subtotal = 0
 	for _, tax := range taxAmounts {
 		if includeTaxes {
-			tax.price = rint(float64(tax.price) / (100 + float64(tax.percentage)) * 100)
+			taxAmount := rint(float64(tax.price) / float64(100+tax.percentage) * 100 * (float64(tax.percentage) / 100))
+			tax.price -= taxAmount
+			taxes += taxAmount
+		} else {
+			taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
 		}
 		subtotal += tax.price
-		taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
 	}
 
 	return
