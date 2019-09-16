@@ -17,8 +17,6 @@ import (
 
 type stripePaymentProvider struct {
 	client *client.API
-
-	usePaymentIntents bool
 }
 
 type stripeBodyParams struct {
@@ -28,8 +26,7 @@ type stripeBodyParams struct {
 
 // Config contains the Stripe-specific configuration for payment providers.
 type Config struct {
-	SecretKey         string `mapstructure:"secret_key" json:"secret_key"`
-	UsePaymentIntents bool   `mapstructure:"use_payment_intents" json:"use_payment_intents"`
+	SecretKey string `mapstructure:"secret_key" json:"secret_key"`
 }
 
 // NewPaymentProvider creates a new Stripe payment provider using the provided configuration.
@@ -40,8 +37,6 @@ func NewPaymentProvider(config Config) (payments.Provider, error) {
 
 	s := stripePaymentProvider{
 		client: &client.API{},
-
-		usePaymentIntents: config.UsePaymentIntents,
 	}
 	s.client.Init(config.SecretKey, nil)
 	return &s, nil
@@ -60,16 +55,6 @@ func (s *stripePaymentProvider) NewCharger(ctx context.Context, r *http.Request,
 	err = json.NewDecoder(bod).Decode(&bp)
 	if err != nil {
 		return nil, err
-	}
-
-	if !s.usePaymentIntents {
-		log.Warning(`Deprecation Warning: Payment Intents are not enabled. Stripe requires those after Sep 14th 2019. Enable by setting "payment.stripe.use_payment_intents" to true`)
-		if bp.StripeToken == "" {
-			return nil, errors.New("Stripe requires a stripe_token for creating a payment")
-		}
-		return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
-			return s.chargeDeprecated(bp.StripeToken, amount, currency, order, invoiceNumber)
-		}, nil
 	}
 
 	if bp.StripePaymentMethodID == "" {
@@ -92,30 +77,6 @@ func prepareShippingAddress(addr models.Address) *stripe.ShippingDetailsParams {
 		},
 		Name: &addr.Name,
 	}
-}
-
-func (s *stripePaymentProvider) chargeDeprecated(token string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
-	stripeAmount := int64(amount)
-	stripeDescription := fmt.Sprintf("Invoice No. %d", invoiceNumber)
-	ch, err := s.client.Charges.New(&stripe.ChargeParams{
-		Amount:      &stripeAmount,
-		Source:      &stripe.SourceParams{Token: &token},
-		Currency:    &currency,
-		Description: &stripeDescription,
-		Shipping:    prepareShippingAddress(order.ShippingAddress),
-		Params: stripe.Params{
-			Metadata: map[string]string{
-				"order_id":       order.ID,
-				"invoice_number": fmt.Sprintf("%d", invoiceNumber),
-			},
-		},
-	})
-
-	if err != nil {
-		return "", err
-	}
-
-	return ch.ID, nil
 }
 
 func (s *stripePaymentProvider) chargePaymentIntent(paymentMethodID string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
@@ -176,10 +137,6 @@ func (s *stripePaymentProvider) NewPreauthorizer(ctx context.Context, r *http.Re
 }
 
 func (s *stripePaymentProvider) NewConfirmer(ctx context.Context, r *http.Request, log logrus.FieldLogger) (payments.Confirmer, error) {
-	if !s.usePaymentIntents {
-		return nil, errors.New("Cannot confirm a payment if not using payment intents")
-	}
-
 	return s.confirm, nil
 }
 
