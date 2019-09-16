@@ -1,0 +1,36 @@
+version: "3.5"
+
+networks:
+  db:
+
+services:
+  api:
+    image: netlify/gocommerce
+    build: .
+    env_file: .env
+    environment:
+      PORT: 8080
+      GOCOMMERCE_DB_DRIVER: mysql
+      GOCOMMERCE_DB_AUTOMIGRATE: 1
+      GOCOMMERCE_DB_DATABASE_URL: "gocommerce:gocommerce@tcp(db)/gocommerce"
+      GOCOMMERCE_DB_NAMESPACE: dev
+      GOCOMMERCE_LOG_LEVEL: debug
+    ports:
+      - 8080:8080
+    networks:
+      - db
+
+  db:
+    image: mysql:5.7
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: gocommerce
+      MYSQL_USER: gocommerce
+      MYSQL_PASSWORD: gocommerce
+    volumes:
+      - db_data:/var/lib/mysql
+    networks:
+      - db
+
+volumes:
+  db_data:
