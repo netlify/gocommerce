@@ -217,7 +217,7 @@ func TestOrderCreate(t *testing.T) {
 					Claims: map[string]string{
 						"email": test.Data.testUser.Email,
 					},
-					Percentage: 15,
+					Percentage:   15,
 					ProductTypes: []string{"Book"},
 				},
 			},
@@ -248,6 +248,68 @@ func TestOrderCreate(t *testing.T) {
 		assert.Equal(t, calculator.DiscountTypeMember, discountItem.Type)
 		assert.Equal(t, uint64(15), discountItem.Percentage)
 		assert.Equal(t, uint64(0), discountItem.Fixed)
+	})
+
+	t.Run("MultipleItemsWithDownloads", func(t *testing.T) {
+		test := NewRouteTest(t)
+
+		site := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/i/believe/i/can/fly":
+				fmt.Fprint(w, productMetaFrame(
+					`{
+						"sku": "123-i-can-fly-456",
+						"downloads": [{"title": "First Download", "url": "/assets/first-download"}],
+						"prices": [{"currency": "USD", "amount": "3.00"}]
+					}`,
+				))
+				return
+			case "/its/not/about/the/money":
+				fmt.Fprintf(w, productMetaFrame(
+					`{
+						"sku": "not-about-the-money",
+						"downloads": [{"title": "Second Download", "url": "/assets/second-download"}],
+						"prices": [{"currency": "USD", "amount": "5.00"}]
+					}`,
+				))
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer site.Close()
+		test.Config.SiteURL = site.URL
+
+		body := strings.NewReader(`{
+			"email": "info@example.com",
+			"shipping_address": {
+				"name": "Test User",
+				"address1": "Branengebranen",
+				"city": "Berlin", "country": "Germany", "zip": "94107"
+			},
+			"line_items": [
+				{"path": "/i/believe/i/can/fly", "quantity": 1},
+				{"path": "/its/not/about/the/money", "quantity": 1}
+			]
+		}`)
+		token := test.Data.testUserToken
+		recorder := test.TestEndpoint(http.MethodPost, "/orders", body, token)
+
+		order := &models.Order{}
+		extractPayload(t, http.StatusCreated, recorder, order)
+		assert.Len(t, order.Downloads, 2)
+		for _, dl := range order.Downloads {
+			fmt.Printf("dl: %+v\n", dl)
+			switch dl.Sku {
+			case "123-i-can-fly-456":
+				assert.Equal(t, "First Download", dl.Title)
+				assert.Equal(t, "/assets/first-download", dl.URL)
+			case "not-about-the-money":
+				assert.Equal(t, "Second Download", dl.Title)
+				assert.Equal(t, "/assets/second-download", dl.URL)
+			default:
+				t.Errorf("Unknown download item: %+v", dl)
+			}
+		}
 	})
 }
 
