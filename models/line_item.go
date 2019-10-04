@@ -285,7 +285,7 @@ func (i *LineItem) Process(config *conf.Configuration, userClaims map[string]int
 		i.AddonItems[index].Price = lowestPrice.cents
 	}
 
-	order.Downloads = i.MissingDownloads(order, meta)
+	order.Downloads = append(order.Downloads, i.MissingDownloads(order, meta)...)
 
 	return i.calculatePrice(userClaims, meta.Prices, order.Currency)
 }
@@ -338,10 +338,10 @@ func (i *LineItem) FetchMeta(siteURL string) (*LineItemMetadata, error) {
 // MissingDownloads returns all downloads that are not yet listed in the order
 func (i *LineItem) MissingDownloads(order *Order, meta *LineItemMetadata) []Download {
 	downloads := []Download{}
-	for _, download := range meta.Downloads {
+	for _, metaDownload := range meta.Downloads {
 		alreadyCreated := false
 		for _, d := range order.Downloads {
-			if d.URL == download.URL {
+			if d.URL == metaDownload.URL {
 				alreadyCreated = true
 				break
 			}
@@ -349,11 +349,14 @@ func (i *LineItem) MissingDownloads(order *Order, meta *LineItemMetadata) []Down
 		if alreadyCreated {
 			continue
 		}
-		download.ID = uuid.NewRandom().String()
-		download.OrderID = order.ID
-		download.Title = i.Title
-		download.Sku = i.Sku
-		downloads = append(downloads, download)
+		orderDownload := metaDownload
+		orderDownload.ID = uuid.NewRandom().String()
+		orderDownload.OrderID = order.ID
+		orderDownload.Sku = i.Sku
+		if orderDownload.Title == "" {
+			orderDownload.Title = i.Title
+		}
+		downloads = append(downloads, orderDownload)
 	}
 	return downloads
 }
