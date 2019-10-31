@@ -145,7 +145,8 @@ func (a *API) ClaimOrders(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	log.Info("Finished updating")
-	return sendJSON(w, http.StatusNoContent, "")
+	w.WriteHeader(http.StatusNoContent)
+	return nil
 }
 
 // ReceiptView renders an HTML receipt for an order
