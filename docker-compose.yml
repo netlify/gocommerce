@@ -19,6 +19,8 @@ services:
       - 8080:8080
     networks:
       - db
+    depends_on:
+      - db
 
   db:
     image: mysql:5.7
