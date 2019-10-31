@@ -5,8 +5,6 @@ please read the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## Setup
 
-> Install Go and Glide https://github.com/Masterminds/glide
-
 ```sh
 $ git clone https://github.com/netlify/gocommerce
 $ cd gocommerce
