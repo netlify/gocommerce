@@ -68,8 +68,6 @@ type Configuration struct {
 			Enabled   bool   `json:"enabled"`
 			PublicKey string `json:"public_key" split_words:"true"`
 			SecretKey string `json:"secret_key" split_words:"true"`
-
-			UsePaymentIntents bool `json:"use_payment_intents" split_words:"true"`
 		} `json:"stripe"`
 		PayPal struct {
 			Enabled  bool   `json:"enabled"`

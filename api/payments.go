@@ -535,8 +535,7 @@ func createPaymentProviders(c *conf.Configuration) (map[string]payments.Provider
 	provs := map[string]payments.Provider{}
 	if c.Payment.Stripe.Enabled {
 		p, err := stripe.NewPaymentProvider(stripe.Config{
-			SecretKey:         c.Payment.Stripe.SecretKey,
-			UsePaymentIntents: c.Payment.Stripe.UsePaymentIntents,
+			SecretKey: c.Payment.Stripe.SecretKey,
 		})
 		if err != nil {
 			return nil, err

@@ -439,8 +439,6 @@ func TestPaymentCreate(t *testing.T) {
 			for name, card := range tests {
 				t.Run(name, func(t *testing.T) {
 					test := NewRouteTest(t)
-					test.Config.Payment.Stripe.UsePaymentIntents = true
-
 					callCount := 0
 					stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
 						switch path {
@@ -518,46 +516,6 @@ func TestPaymentCreate(t *testing.T) {
 				})
 			}
 		})
-		t.Run("Charges", func(t *testing.T) {
-			test := NewRouteTest(t)
-
-			callCount := 0
-			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
-				switch path {
-				case "/v1/charges":
-					payload := params.GetParams()
-					assert.Equal(t, test.Data.firstOrder.ID, payload.Metadata["order_id"])
-					assert.Equal(t, "1", payload.Metadata["invoice_number"])
-					callCount++
-					return nil
-				default:
-					t.Fatalf("unknown Stripe API call to %s", path)
-					return &stripe.Error{Code: stripe.ErrorCodeURLInvalid}
-				}
-			}))
-			defer stripe.SetBackend(stripe.APIBackend, nil)
-
-			test.Data.firstOrder.PaymentState = models.PendingState
-			rsp := test.DB.Save(test.Data.firstOrder)
-			require.NoError(t, rsp.Error, "Failed to update order")
-
-			params := &stripePaymentParams{
-				Amount:      test.Data.firstOrder.Total,
-				Currency:    test.Data.firstOrder.Currency,
-				StripeToken: "123456",
-				Provider:    payments.StripeProvider,
-			}
-
-			body, err := json.Marshal(params)
-			require.NoError(t, err)
-
-			recorder := test.TestEndpoint(http.MethodPost, "/orders/first-order/payments", bytes.NewBuffer(body), test.Data.testUserToken)
-
-			trans := models.Transaction{}
-			extractPayload(t, http.StatusOK, recorder, &trans)
-			assert.Equal(t, models.PaidState, trans.Status)
-			assert.Equal(t, 1, callCount)
-		})
 	})
 }
 
@@ -576,8 +534,6 @@ func TestPaymentConfirm(t *testing.T) {
 	for name, testParams := range tests {
 		t.Run(name, func(t *testing.T) {
 			test := NewRouteTest(t)
-			test.Config.Payment.Stripe.UsePaymentIntents = true
-
 			callCount := 0
 			stripe.SetBackend(stripe.APIBackend, NewTrackingStripeBackend(func(method, path, key string, params stripe.ParamsContainer, v interface{}) error {
 				if path == fmt.Sprintf("/v1/payment_intents/%s/confirm", stripePaymentIntentID) {
