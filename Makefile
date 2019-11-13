@@ -8,7 +8,7 @@ all: lint test build ## Run the tests and build the binary.
 os = darwin
 arch = amd64
 
-build: test
+build:
 	@echo "Making gocommerce for $(os)/$(arch)"
 	GOOS=$(os) GOARCH=$(arch) go build -ldflags "-X github.com/netlify/gocommerce/cmd.Version=`git rev-parse HEAD`"
 
