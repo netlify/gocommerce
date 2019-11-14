@@ -92,7 +92,7 @@ func (p *paypalPaymentProvider) NewCharger(ctx context.Context, r *http.Request,
 	}
 
 	return func(amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
-		return p.charge(bp.PaypalID, bp.PaypalUserID, amount, currency, order, invoiceNumber)
+		return p.charge(log, bp.PaypalID, bp.PaypalUserID, amount, currency, order, invoiceNumber)
 	}, nil
 }
 
@@ -154,16 +154,10 @@ func (p *paypalPaymentProvider) updatePaymentWithOrder(paymentID string, order *
 	}
 
 	_, err := p.client.PatchPayment(paymentID, []paypalsdk.PaymentPatch{invoiceNumPatch, itemListPatch})
-	if err != nil {
-		switch e := err.(type) {
-		case *paypalsdk.ErrorResponse:
-			fmt.Println(e.Details)
-		}
-	}
 	return err
 }
 
-func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
+func (p *paypalPaymentProvider) charge(log logrus.FieldLogger, paymentID string, userID string, amount uint64, currency string, order *models.Order, invoiceNumber int64) (string, error) {
 	payment, err := p.client.GetPayment(paymentID)
 	if err != nil {
 		return "", err
@@ -183,7 +177,12 @@ func (p *paypalPaymentProvider) charge(paymentID string, userID string, amount u
 	}
 
 	if err := p.updatePaymentWithOrder(paymentID, order, invoiceNumber); err != nil {
-		return "", errors.Wrap(err, "Updating the PayPal payment with order details failed")
+		log := log.WithError(err)
+		switch e := err.(type) {
+		case *paypalsdk.ErrorResponse:
+			log = log.WithField("err_detail", e.Details)
+		}
+		log.Warn("Failed to update transaction with details")
 	}
 
 	executeResult, err := p.client.ExecuteApprovedPayment(paymentID, userID)
