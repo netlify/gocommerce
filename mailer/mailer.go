@@ -8,6 +8,7 @@ import (
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
 	"github.com/netlify/mailme"
+	"github.com/sirupsen/logrus"
 )
 
 // Mailer will send mail and use templates from the site for easy mail styling
@@ -68,6 +69,7 @@ func NewMailer(smtp conf.SMTPConfiguration, instanceConfig *conf.Configuration) 
 				"price":          price,
 				"hasProductType": hasProductType,
 			},
+			Logger: logrus.New(),
 		},
 	}
 }
