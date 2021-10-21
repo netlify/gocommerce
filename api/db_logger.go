@@ -6,6 +6,7 @@ import (
 
 	"github.com/jinzhu/gorm"
 	gcontext "github.com/netlify/gocommerce/context"
+	"github.com/netlify/gocommerce/featureflags"
 	"github.com/netlify/gocommerce/models"
 )
 
@@ -16,6 +17,9 @@ func (a *API) loggingDB(w http.ResponseWriter, r *http.Request) (context.Context
 
 	log := getLogEntry(r)
 	db := a.db.New()
+	if featureflags.UseAltDB.Enabled(r.Host) {
+		db = a.altDB
+	}
 	db.SetLogger(models.NewDBLogger(log))
 
 	return gcontext.WithDB(r.Context(), db), nil

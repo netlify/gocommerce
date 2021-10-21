@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/api"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
@@ -26,20 +27,29 @@ func multi(cmd *cobra.Command, args []string) {
 		logrus.Fatal("Operator token secret is required")
 	}
 
-	db, err := models.Connect(globalConfig, log.WithField("component", "db"))
+	db, err := models.Connect(globalConfig.DB, log.WithField("component", "db"))
 	if err != nil {
-		logrus.Fatalf("Error opening database: %+v", err)
+		log.Fatalf("Error opening database: %+v", err)
 	}
 	defer db.Close()
 
-	bgDB, err := models.Connect(globalConfig, log.WithField("component", "db").WithField("bgdb", true))
+	bgDB, err := models.Connect(globalConfig.DB, log.WithField("component", "db").WithField("bgdb", true))
 	if err != nil {
-		logrus.Fatalf("Error opening database: %+v", err)
+		log.Fatalf("Error opening database: %+v", err)
 	}
 	defer bgDB.Close()
 
+	var altDB *gorm.DB
+	if globalConfig.AltDB != nil {
+		altDB, err = models.Connect(*globalConfig.AltDB, log.WithField("component", "alt_db"))
+		if err != nil {
+			log.WithError(err).Fatal("Error opening alternate DB")
+		}
+		defer altDB.Close()
+	}
+
 	globalConfig.MultiInstanceMode = true
-	api := api.NewAPIWithVersion(context.Background(), globalConfig, log, db.Debug(), Version)
+	api := api.NewAPIWithVersion(context.Background(), globalConfig, log, db, altDB, Version)
 
 	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
 	logrus.Infof("GoCommerce API started on: %s", l)

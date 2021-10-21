@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jinzhu/gorm"
 	"github.com/netlify/gocommerce/api"
 	"github.com/netlify/gocommerce/conf"
 	"github.com/netlify/gocommerce/models"
@@ -20,23 +21,32 @@ var serveCmd = cobra.Command{
 }
 
 func serve(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, config *conf.Configuration) {
-	db, err := models.Connect(globalConfig, log.WithField("component", "db"))
+	db, err := models.Connect(globalConfig.DB, log.WithField("component", "db"))
 	if err != nil {
-		log.Fatalf("Error opening database: %+v", err)
+		log.WithError(err).Fatal("Error opening primary database")
 	}
 	defer db.Close()
 
-	bgDB, err := models.Connect(globalConfig, log.WithField("component", "db").WithField("bgdb", true))
+	bgDB, err := models.Connect(globalConfig.DB, log.WithField("component", "db").WithField("bgdb", true))
 	if err != nil {
 		log.Fatalf("Error opening database: %+v", err)
 	}
 	defer bgDB.Close()
 
+	var altDB *gorm.DB
+	if globalConfig.AltDB != nil {
+		altDB, err = models.Connect(*globalConfig.AltDB, log.WithField("component", "alt_db"))
+		if err != nil {
+			log.WithError(err).Fatal("Error opening alternate DB")
+		}
+		defer altDB.Close()
+	}
+
 	ctx, err := api.WithInstanceConfig(context.Background(), globalConfig.SMTP, config, "")
 	if err != nil {
 		log.Fatalf("Error loading instance config: %+v", err)
 	}
-	api := api.NewAPIWithVersion(ctx, globalConfig, log, db, Version)
+	api := api.NewAPIWithVersion(ctx, globalConfig, log, db, altDB, Version)
 
 	l := fmt.Sprintf("%v:%v", globalConfig.API.Host, globalConfig.API.Port)
 	log.Infof("GoCommerce API started on: %s", l)

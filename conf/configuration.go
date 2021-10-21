@@ -15,6 +15,7 @@ type DBConfiguration struct {
 	URL         string `envconfig:"DATABASE_URL" required:"true"`
 	Namespace   string
 	Automigrate bool
+	Debug       bool
 }
 
 // JWTConfiguration holds all the JWT related configuration.
@@ -39,8 +40,10 @@ type GlobalConfiguration struct {
 		Endpoint string
 	}
 	DB                DBConfiguration
+	AltDB             *DBConfiguration
 	Logging           LoggingConfig `envconfig:"LOG"`
 	OperatorToken     string        `split_words:"true"`
+	LaunchDarklyKey   string        `split_words:"true"`
 	MultiInstanceMode bool
 	SMTP              SMTPConfiguration `json:"smtp"`
 }

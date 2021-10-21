@@ -33,6 +33,7 @@ var (
 type API struct {
 	handler    http.Handler
 	db         *gorm.DB
+	altDB      *gorm.DB
 	config     *conf.GlobalConfiguration
 	httpClient *http.Client
 	version    string
@@ -73,15 +74,16 @@ func waitForTermination(log logrus.FieldLogger, done <-chan struct{}) {
 }
 
 // NewAPI instantiates a new REST API using the default version.
-func NewAPI(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB) *API {
-	return NewAPIWithVersion(context.Background(), globalConfig, log, db, defaultVersion)
+func NewAPI(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB, altDB *gorm.DB) *API {
+	return NewAPIWithVersion(context.Background(), globalConfig, log, db, altDB, defaultVersion)
 }
 
 // NewAPIWithVersion instantiates a new REST API.
-func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB, version string) *API {
+func NewAPIWithVersion(ctx context.Context, globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, db *gorm.DB, altDB *gorm.DB, version string) *API {
 	api := &API{
 		config:     globalConfig,
 		db:         db,
+		altDB:      altDB,
 		httpClient: &http.Client{},
 		version:    version,
 	}

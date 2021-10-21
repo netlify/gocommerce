@@ -26,10 +26,12 @@ require (
 	github.com/sebest/xff v0.0.0-20160910043805-6c115e0ffa35
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/cobra v0.0.4-0.20190321000552-67fc4837d267
-	github.com/stretchr/testify v1.4.0
+	github.com/stretchr/testify v1.6.1
 	github.com/stripe/stripe-go v62.9.0+incompatible
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/launchdarkly/go-sdk-common.v2 v2.5.0 // indirect
+	gopkg.in/launchdarkly/go-server-sdk.v5 v5.6.0 // indirect
 )
 
 go 1.13

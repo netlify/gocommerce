@@ -20,15 +20,15 @@ import (
 var Namespace string
 
 // Connect will connect to that storage engine
-func Connect(config *conf.GlobalConfiguration, log logrus.FieldLogger) (*gorm.DB, error) {
-	if config.DB.Namespace != "" {
-		Namespace = config.DB.Namespace
+func Connect(config conf.DBConfiguration, log logrus.FieldLogger) (*gorm.DB, error) {
+	if config.Namespace != "" {
+		Namespace = config.Namespace
 	}
 
-	if config.DB.Dialect == "" {
-		config.DB.Dialect = config.DB.Driver
+	if config.Dialect == "" {
+		config.Dialect = config.Driver
 	}
-	db, err := gorm.Open(config.DB.Dialect, config.DB.Driver, config.DB.URL)
+	db, err := gorm.Open(config.Dialect, config.Driver, config.URL)
 	if err != nil {
 		return nil, errors.Wrap(err, "opening database connection")
 	}
@@ -41,12 +41,16 @@ func Connect(config *conf.GlobalConfiguration, log logrus.FieldLogger) (*gorm.DB
 		return nil, errors.Wrap(err, "checking database connection")
 	}
 
-	if config.DB.Automigrate {
+	if config.Automigrate {
 		migDB := db.New()
 		migDB.SetLogger(NewDBLogger(log.WithField("task", "migration")))
 		if err := AutoMigrate(migDB); err != nil {
 			return nil, errors.Wrap(err, "migrating tables")
 		}
+	}
+
+	if config.Debug {
+		db = db.Debug()
 	}
 
 	return db, nil

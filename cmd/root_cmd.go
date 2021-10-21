@@ -5,6 +5,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/netlify/gocommerce/conf"
+	"github.com/netlify/gocommerce/featureflags"
 )
 
 var configFile = ""
@@ -29,6 +30,11 @@ func execWithConfig(cmd *cobra.Command, fn func(globalConfig *conf.GlobalConfigu
 	globalConfig, log, err := conf.LoadGlobal(configFile)
 	if err != nil {
 		logrus.Fatalf("Failed to load configuration: %+v", err)
+	}
+	if globalConfig.LaunchDarklyKey != "" {
+		if err := featureflags.Init(globalConfig.LaunchDarklyKey); err != nil {
+			logrus.WithError(err).Fatal("Failed to configure launch darkly")
+		}
 	}
 	config, err := conf.LoadConfig(configFile)
 	if err != nil {
