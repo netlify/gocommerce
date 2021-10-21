@@ -360,11 +360,12 @@ func extractPayload(t *testing.T, code int, recorder *httptest.ResponseRecorder,
 	require.Equal(t, code, recorder.Code, "code mismatch: %v", recorder.Body)
 
 	err := json.NewDecoder(recorder.Body).Decode(what)
-	require.NoError(t, err, "Failed to extract body: %s", string(recorder.Body.Bytes()))
+	require.NoError(t, err, "Failed to extract body: %s", recorder.Body.String())
 }
 
 type RouteTest struct {
 	DB           *gorm.DB
+	AltDB        *gorm.DB
 	GlobalConfig *conf.GlobalConfiguration
 	Config       *conf.Configuration
 	T            *testing.T
@@ -386,7 +387,7 @@ func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, toke
 	globalConfig := new(conf.GlobalConfiguration)
 	ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, r.Config, "")
 	require.NoError(r.T, err)
-	NewAPIWithVersion(ctx, r.GlobalConfig, logrus.StandardLogger(), r.DB, nil, "").handler.ServeHTTP(recorder, req)
+	NewAPIWithVersion(ctx, r.GlobalConfig, logrus.StandardLogger(), r.DB, r.AltDB, "").handler.ServeHTTP(recorder, req)
 
 	return recorder
 }

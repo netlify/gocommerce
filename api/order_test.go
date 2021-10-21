@@ -213,7 +213,7 @@ func TestOrderCreate(t *testing.T) {
 
 		settings := calculator.Settings{
 			MemberDiscounts: []*calculator.MemberDiscount{
-				&calculator.MemberDiscount{
+				{
 					Claims: map[string]string{
 						"email": test.Data.testUser.Email,
 					},
@@ -265,7 +265,7 @@ func TestOrderCreate(t *testing.T) {
 				))
 				return
 			case "/its/not/about/the/money":
-				fmt.Fprintf(w, productMetaFrame(
+				fmt.Fprint(w, productMetaFrame(
 					`{
 						"sku": "not-about-the-money",
 						"downloads": [{"title": "Second Download", "url": "/assets/second-download"}],
