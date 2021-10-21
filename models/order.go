@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jinzhu/gorm"
@@ -104,6 +105,8 @@ type Order struct {
 	CreatedAt time.Time  `json:"created_at" sql:"index"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	DeletedAt *time.Time `json:"-" sql:"index"`
+
+	ModificationLock sync.Mutex `json:"-" sql:"-"`
 }
 
 // TableName returns the database table name for the Order model.

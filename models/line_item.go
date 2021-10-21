@@ -285,7 +285,9 @@ func (i *LineItem) Process(config *conf.Configuration, userClaims map[string]int
 		i.AddonItems[index].Price = lowestPrice.cents
 	}
 
+	order.ModificationLock.Lock()
 	order.Downloads = append(order.Downloads, i.MissingDownloads(order, meta)...)
+	order.ModificationLock.Unlock()
 
 	return i.calculatePrice(userClaims, meta.Prices, order.Currency)
 }
