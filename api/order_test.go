@@ -781,7 +781,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("NewUserNoEmails", func(t *testing.T) {
-		db, _, _, _ := db(t)
+		db, _, _, _, _ := db(t)
 		simpleOrder := models.NewOrder("", "session", "", "USD")
 		claims := testToken("alfred", "").Claims.(*claims.JWTClaims)
 		err := setOrderEmail(db, simpleOrder, claims, testLogger)
@@ -789,7 +789,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, err.Code)
 	})
 	t.Run("KnownUserClaimsOnRequest", func(t *testing.T) {
-		db, _, _, testData := db(t)
+		db, _, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -799,7 +799,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserClaimsOnClaim", func(t *testing.T) {
-		db, _, _, testData := db(t)
+		db, _, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -809,7 +809,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserAllTheEmail", func(t *testing.T) {
-		db, _, _, testData := db(t)
+		db, _, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -819,7 +819,7 @@ func TestOrderSetUserIDLogic(t *testing.T) {
 		)
 	})
 	t.Run("KnownUserNoEmail", func(t *testing.T) {
-		db, _, _, testData := db(t)
+		db, _, _, _, testData := db(t)
 		validateExistingUserEmail(
 			t,
 			db,
@@ -1118,7 +1118,7 @@ func validateAllOrders(t *testing.T, actual []models.Order, expected *TestData) 
 }
 
 func validateNewUserEmail(t *testing.T, order *models.Order, claims *claims.JWTClaims, expectedUserEmail, expectedOrderEmail string) {
-	db, _, _, _ := db(t)
+	db, _, _, _, _ := db(t)
 	result := db.First(new(models.User), "id = ?", claims.Subject)
 	require.True(t, result.RecordNotFound(), "Unclean test env -- user exists with ID "+claims.Subject)
 

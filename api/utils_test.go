@@ -44,24 +44,35 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration, *TestData) {
+func buildDB(t *testing.T) (*gorm.DB, conf.DBConfiguration) {
 	f, err := ioutil.TempFile("", "test-db")
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 	dbFiles = append(dbFiles, f.Name())
 
-	globalConfig, config := testConfig()
-	globalConfig.DB.Driver = "sqlite3"
-	globalConfig.DB.URL = f.Name()
-
-	db, err := models.Connect(globalConfig.DB, logrus.StandardLogger())
-	if err != nil {
-		assert.FailNow(t, "failed to connect to db: "+err.Error())
+	dbc := conf.DBConfiguration{
+		Driver:      "sqlite3",
+		URL:         f.Name(),
+		Automigrate: true,
+		Namespace:   "test",
 	}
 
+	db, err := models.Connect(dbc, logrus.StandardLogger())
+	require.NoError(t, err, "failed to connect to db")
+	return db, dbc
+}
+
+func db(t *testing.T) (*gorm.DB, *gorm.DB, *conf.GlobalConfiguration, *conf.Configuration, *TestData) {
+	globalConfig, config := testConfig()
+	db, dbc := buildDB(t)
+	globalConfig.DB = dbc
+
+	altDB, altDBC := buildDB(t)
+	globalConfig.AltDB = &altDBC
+
 	data := loadTestData(t, db)
-	return db, globalConfig, config, data
+	_ = loadTestData(t, altDB)
+
+	return db, altDB, globalConfig, config, data
 }
 
 func testConfig() (*conf.GlobalConfiguration, *conf.Configuration) {
@@ -373,8 +384,15 @@ type RouteTest struct {
 }
 
 func NewRouteTest(t *testing.T) *RouteTest {
-	db, globalConfig, config, data := db(t)
-	return &RouteTest{db, globalConfig, config, t, data}
+	db, _, globalConfig, config, data := db(t)
+	return &RouteTest{
+		DB:           db,
+		AltDB:        nil,
+		GlobalConfig: globalConfig,
+		Config:       config,
+		T:            t,
+		Data:         data,
+	}
 }
 
 func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, token *jwt.Token) *httptest.ResponseRecorder {
