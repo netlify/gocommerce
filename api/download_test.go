@@ -56,7 +56,7 @@ func TestDownloadRefresh(t *testing.T) {
 	downloadsBefore := currentDownloads(test)
 
 	testSite := startTestSiteWithDownloads(t, []*DownloadMeta{
-		&DownloadMeta{
+		{
 			Title: "Updated Download",
 			URL:   "/my/special/new/url",
 		},

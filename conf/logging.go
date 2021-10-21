@@ -14,7 +14,7 @@ type LoggingConfig struct {
 	QuoteEmptyFields bool                   `mapstructure:"quote_empty_fields" split_words:"true" json:"quote_empty_fields"`
 	TSFormat         string                 `mapstructure:"ts_format" json:"ts_format"`
 	Fields           map[string]interface{} `mapstructure:"fields" json:"fields"`
-	UseNewLogger     bool                   `mapstructure:"use_new_logger",split_words:"true"`
+	UseNewLogger     bool                   `mapstructure:"use_new_logger" split_words:"true"`
 }
 
 func ConfigureLogging(config *LoggingConfig) (*logrus.Entry, error) {
