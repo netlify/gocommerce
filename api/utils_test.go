@@ -55,7 +55,7 @@ func db(t *testing.T) (*gorm.DB, *conf.GlobalConfiguration, *conf.Configuration,
 	globalConfig.DB.Driver = "sqlite3"
 	globalConfig.DB.URL = f.Name()
 
-	db, err := models.Connect(globalConfig, logrus.StandardLogger())
+	db, err := models.Connect(globalConfig.DB, logrus.StandardLogger())
 	if err != nil {
 		assert.FailNow(t, "failed to connect to db: "+err.Error())
 	}
@@ -386,7 +386,7 @@ func (r *RouteTest) TestEndpoint(method string, url string, body io.Reader, toke
 	globalConfig := new(conf.GlobalConfiguration)
 	ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, r.Config, "")
 	require.NoError(r.T, err)
-	NewAPIWithVersion(ctx, r.GlobalConfig, logrus.StandardLogger(), r.DB, "").handler.ServeHTTP(recorder, req)
+	NewAPIWithVersion(ctx, r.GlobalConfig, logrus.StandardLogger(), r.DB, nil, "").handler.ServeHTTP(recorder, req)
 
 	return recorder
 }
@@ -428,7 +428,7 @@ func productMetaFrame(meta string) string {
 	</script>
 </body>
 </html>`,
-	meta)
+		meta)
 }
 
 func handleTestProducts(w http.ResponseWriter, r *http.Request) {

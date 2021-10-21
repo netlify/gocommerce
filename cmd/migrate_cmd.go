@@ -16,7 +16,7 @@ var migrateCmd = cobra.Command{
 }
 
 func migrate(globalConfig *conf.GlobalConfiguration, log logrus.FieldLogger, config *conf.Configuration) {
-	db, err := models.Connect(globalConfig, log)
+	db, err := models.Connect(globalConfig.DB, log)
 	if err != nil {
 		logrus.Fatalf("Error opening database: %+v", err)
 	}

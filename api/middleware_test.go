@@ -24,10 +24,10 @@ func (ts *MiddlewareTestSuite) SetupTest() {
 	globalConfig, log, err := conf.LoadGlobal("test.env")
 	require.NoError(ts.T(), err)
 	globalConfig.MultiInstanceMode = true
-	db, err := models.Connect(globalConfig, log)
+	db, err := models.Connect(globalConfig.DB, log)
 	require.NoError(ts.T(), err)
 
-	api := NewAPI(globalConfig, log, db)
+	api := NewAPI(globalConfig, log, db, nil)
 	ts.API = api
 }
 

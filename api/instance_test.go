@@ -29,10 +29,10 @@ func (ts *InstanceTestSuite) SetupTest() {
 	require.NoError(ts.T(), err)
 	globalConfig.OperatorToken = operatorToken
 	globalConfig.MultiInstanceMode = true
-	db, err := models.Connect(globalConfig, log)
+	db, err := models.Connect(globalConfig.DB, log)
 	require.NoError(ts.T(), err)
 
-	api := NewAPI(globalConfig, log, db)
+	api := NewAPI(globalConfig, log, db, nil)
 	ts.API = api
 
 	// Cleanup existing instance

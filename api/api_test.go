@@ -26,7 +26,7 @@ func TestTraceWrapper(t *testing.T) {
 
 	ctx, err := WithInstanceConfig(context.Background(), globalConfig.SMTP, config, "")
 	require.NoError(t, err)
-	api := NewAPIWithVersion(ctx, globalConfig, logrus.StandardLogger(), nil, "")
+	api := NewAPIWithVersion(ctx, globalConfig, logrus.StandardLogger(), nil, nil, "")
 
 	server := httptest.NewServer(api.handler)
 	defer server.Close()

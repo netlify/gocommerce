@@ -11,8 +11,8 @@ import (
 // DBConfiguration holds all the database related configuration.
 type DBConfiguration struct {
 	Dialect     string
-	Driver      string `required:"true"`
-	URL         string `envconfig:"DATABASE_URL" required:"true"`
+	Driver      string
+	URL         string `envconfig:"DATABASE_URL"`
 	Namespace   string
 	Automigrate bool
 	Debug       bool
