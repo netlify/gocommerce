@@ -1,6 +1,7 @@
 package featureflags
 
 import (
+	"testing"
 	"time"
 
 	"gopkg.in/launchdarkly/go-sdk-common.v2/lduser"
@@ -9,14 +10,39 @@ import (
 
 var globalClient *ld.LDClient
 
-const (
-	UseAltDB Flag = "gocommerce_use_alt_db"
+var (
+	UseAltDB = Flag{key: "gocommerce_use_alt_db"}
 )
 
-type Flag string
+type Flag struct {
+	override     *bool
+	overrideKeys []string
 
-func (f Flag) Enabled(userID string) bool {
-	return Enabled(string(f), userID)
+	key string
+}
+
+func (f *Flag) Enabled(userID string) bool {
+	if f.override != nil {
+		if len(f.overrideKeys) == 0 {
+			// override is for all
+			return *f.override
+		}
+		for _, id := range f.overrideKeys {
+			if id == userID {
+				return *f.override
+			}
+		}
+		// no one else matched, go with default val
+		return false
+	}
+	return Enabled(string(f.key), userID)
+}
+
+func (f *Flag) Override(t *testing.T, val bool, ids ...string) {
+	f.override = &val
+	t.Cleanup(func() {
+		f.override = nil
+	})
 }
 
 func Init(apiKey string) error {
