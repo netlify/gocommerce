@@ -228,8 +228,6 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Saving payment failed").WithInternalError(err)
 	}
 
-	go sendOrderConfirmation(ctx, log, tr)
-
 	return sendJSON(w, http.StatusOK, tr)
 }
 
@@ -270,6 +268,8 @@ func (a *API) PaymentConfirm(w http.ResponseWriter, r *http.Request) error {
 	if order.PaymentProcessor == "" {
 		return badRequestError("Order does not specify a payment provider")
 	}
+
+	trans.Order = order
 
 	provider := gcontext.GetPaymentProviders(ctx)[order.PaymentProcessor]
 	if provider == nil {
