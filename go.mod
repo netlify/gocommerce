@@ -4,7 +4,7 @@ require (
 	github.com/GoogleCloudPlatform/cloudsql-proxy v0.0.0-20170623214735-571947b0f240
 	github.com/PuerkitoBio/goquery v1.1.0
 	github.com/go-chi/chi v4.0.2+incompatible
-	github.com/go-sql-driver/mysql v1.4.1
+	github.com/go-sql-driver/mysql v1.6.0
 	github.com/golang-jwt/jwt/v4 v4.2.0
 	github.com/jinzhu/gorm v1.9.10
 	github.com/joho/godotenv v1.3.0
@@ -20,7 +20,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/rs/cors v1.6.0
 	github.com/sebest/xff v0.0.0-20160910043805-6c115e0ffa35
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v0.0.4-0.20190321000552-67fc4837d267
 	github.com/stretchr/testify v1.4.0
 	github.com/stripe/stripe-go v62.9.0+incompatible
@@ -35,7 +35,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
 	github.com/logpacker/PayPal-Go-SDK v2.0.5+incompatible // indirect
 	github.com/netlify/netlify-commons v0.32.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -43,7 +42,7 @@ require (
 	go.opencensus.io v0.20.1 // indirect
 	golang.org/x/net v0.0.0-20190620200207-3b0461eec859 // indirect
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421 // indirect
-	golang.org/x/sys v0.0.0-20190616124812-15dcb6c0061f // indirect
+	golang.org/x/sys v0.0.0-20211209171907-798191bca915 // indirect
 	golang.org/x/text v0.3.2 // indirect
 	google.golang.org/api v0.3.1 // indirect
 	google.golang.org/appengine v1.6.0 // indirect
