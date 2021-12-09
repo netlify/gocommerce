@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v4"
 	"github.com/netlify/gocommerce/claims"
 	gcontext "github.com/netlify/gocommerce/context"
 	"github.com/netlify/gocommerce/models"

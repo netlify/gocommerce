@@ -3,7 +3,7 @@ package claims
 import (
 	"strings"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v4"
 )
 
 // JWTClaims represents the JWT claims information.

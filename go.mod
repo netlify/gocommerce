@@ -5,9 +5,9 @@ require (
 	github.com/PuerkitoBio/goquery v1.1.0
 	github.com/andybalholm/cascadia v0.0.0-20161224141413-349dd0209470 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190906004059-62cf760a6c9e // indirect
-	github.com/dgrijalva/jwt-go v3.0.0+incompatible
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/go-sql-driver/mysql v1.4.1
+	github.com/golang-jwt/jwt/v4 v4.2.0
 	github.com/jinzhu/gorm v1.9.10
 	github.com/joho/godotenv v1.3.0
 	github.com/kelseyhightower/envconfig v1.4.0

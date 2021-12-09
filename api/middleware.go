@@ -7,7 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	jwt "github.com/dgrijalva/jwt-go"
+	jwt "github.com/golang-jwt/jwt/v4"
 	"github.com/netlify/gocommerce/assetstores"
 	"github.com/netlify/gocommerce/conf"
 	gcontext "github.com/netlify/gocommerce/context"

@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/jinzhu/gorm"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -428,7 +428,7 @@ func productMetaFrame(meta string) string {
 	</script>
 </body>
 </html>`,
-	meta)
+		meta)
 }
 
 func handleTestProducts(w http.ResponseWriter, r *http.Request) {
