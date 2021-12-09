@@ -228,6 +228,8 @@ func (a *API) PaymentCreate(w http.ResponseWriter, r *http.Request) error {
 		return internalServerError("Saving payment failed").WithInternalError(err)
 	}
 
+	go sendOrderConfirmation(ctx, log, tr)
+
 	return sendJSON(w, http.StatusOK, tr)
 }
 
