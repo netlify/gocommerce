@@ -11,30 +11,30 @@ import (
 // DiscountItem provides details about a discount that was applied
 type DiscountItem struct {
 	Type       DiscountType `json:"type"`
-	Percentage uint64       `json:"percentage"`
-	Fixed      uint64       `json:"fixed"`
+	Percentage float64      `json:"percentage"`
+	Fixed      float64      `json:"fixed"`
 }
 
 // Price represents the total price of all line items.
 type Price struct {
 	Items []ItemPrice
 
-	Subtotal uint64
-	Discount uint64
-	NetTotal uint64
-	Taxes    uint64
-	Total    int64
+	Subtotal float64
+	Discount float64
+	NetTotal float64
+	Taxes    float64
+	Total    float64
 }
 
 // ItemPrice is the price of a single line item.
 type ItemPrice struct {
-	Quantity uint64
+	Quantity float64
 
-	Subtotal uint64
-	Discount uint64
-	NetTotal uint64
-	Taxes    uint64
-	Total    int64
+	Subtotal float64
+	Discount float64
+	NetTotal float64
+	Taxes    float64
+	Total    float64
 
 	DiscountItems []DiscountItem
 }
@@ -62,14 +62,14 @@ type Settings struct {
 
 // Tax represents a tax, potentially specific to countries and product types.
 type Tax struct {
-	Percentage   uint64   `json:"percentage"`
+	Percentage   float64  `json:"percentage"`
 	ProductTypes []string `json:"product_types"`
 	Countries    []string `json:"countries"`
 }
 
 type taxAmount struct {
-	price      uint64
-	percentage uint64
+	price      float64
+	percentage float64
 }
 
 // FixedMemberDiscount represents a fixed discount given to members.
@@ -82,7 +82,7 @@ type FixedMemberDiscount struct {
 // or a percentage.
 type MemberDiscount struct {
 	Claims       map[string]string      `json:"claims"`
-	Percentage   uint64                 `json:"percentage"`
+	Percentage   float64                `json:"percentage"`
 	FixedAmount  []*FixedMemberDiscount `json:"fixed"`
 	ProductTypes []string               `json:"product_types"`
 	Products     []string               `json:"products"`
@@ -125,34 +125,34 @@ func (d *MemberDiscount) ValidForProduct(productSku string) bool {
 // Item is the interface for a single line item needed to do price calculation.
 type Item interface {
 	ProductSku() string
-	PriceInLowestUnit() uint64
+	PriceInLowestUnit() float64
 	ProductType() string
-	FixedVAT() uint64
+	FixedVAT() float64
 	TaxableItems() []Item
-	GetQuantity() uint64
+	GetQuantity() float64
 }
 
 // Coupon is the interface for a coupon needed to do price calculation.
 type Coupon interface {
 	ValidForType(string) bool
-	ValidForPrice(string, uint64) bool
+	ValidForPrice(string, float64) bool
 	ValidForProduct(string) bool
-	PercentageDiscount() uint64
-	FixedDiscount(string) uint64
+	PercentageDiscount() float64
+	FixedDiscount(string) float64
 }
 
 // FixedDiscount returns what the fixed discount amount is for a particular currency.
-func (d *MemberDiscount) FixedDiscount(currency string) uint64 {
+func (d *MemberDiscount) FixedDiscount(currency string) float64 {
 	if d.FixedAmount != nil {
 		for _, discount := range d.FixedAmount {
 			if discount.Currency == currency {
 				amount, _ := strconv.ParseFloat(discount.Amount, 64)
-				return rint(amount * 100)
+				return amount * 100
 			}
 		}
 	}
 
-	return 0
+	return 0.0
 }
 
 // AppliesTo determines if the tax applies to the country AND product type provided.
@@ -215,13 +215,13 @@ func calculateAmountsForSingleItem(settings *Settings, lineLogger logrus.FieldLo
 		}
 	}
 
-	discountedPrice := uint64(0)
+	discountedPrice := 0.0
 	if itemPrice.Discount < singlePrice {
 		discountedPrice = singlePrice - itemPrice.Discount
 	}
 
 	itemPrice.Taxes, itemPrice.NetTotal = calculateTaxes(discountedPrice, item, params, settings)
-	itemPrice.Total = int64(itemPrice.NetTotal + itemPrice.Taxes)
+	itemPrice.Total = itemPrice.NetTotal + itemPrice.Taxes
 
 	return itemPrice
 }
@@ -280,10 +280,10 @@ func CalculatePrice(settings *Settings, jwtClaims map[string]interface{}, params
 	return price
 }
 
-func calculateDiscount(amountToDiscount, percentage, fixed uint64) uint64 {
-	var discount uint64
+func calculateDiscount(amountToDiscount, percentage, fixed float64) float64 {
+	var discount float64
 	if percentage > 0 {
-		discount = rint(float64(amountToDiscount) * float64(percentage) / 100)
+		discount = amountToDiscount * percentage / 100
 	}
 	discount += fixed
 
@@ -293,7 +293,7 @@ func calculateDiscount(amountToDiscount, percentage, fixed uint64) uint64 {
 	return discount
 }
 
-func calculateTaxes(amountToTax uint64, item Item, params PriceParameters, settings *Settings) (taxes uint64, subtotal uint64) {
+func calculateTaxes(amountToTax float64, item Item, params PriceParameters, settings *Settings) (taxes float64, subtotal float64) {
 	includeTaxes := settings != nil && settings.PricesIncludeTaxes
 	originalPrice := item.PriceInLowestUnit()
 
@@ -303,8 +303,8 @@ func calculateTaxes(amountToTax uint64, item Item, params PriceParameters, setti
 	} else if settings != nil && item.TaxableItems() != nil && len(item.TaxableItems()) > 0 {
 		for _, item := range item.TaxableItems() {
 			// because a discount may have been applied we need to determine the real price of this sub-item
-			priceShare := float64(item.PriceInLowestUnit()) / float64(originalPrice)
-			itemPrice := rint(float64(amountToTax) * priceShare)
+			priceShare := item.PriceInLowestUnit() / originalPrice
+			itemPrice := amountToTax * priceShare
 			amount := taxAmount{price: itemPrice}
 			for _, t := range settings.Taxes {
 				if t.AppliesTo(params.Country, item.ProductType()) {
@@ -332,11 +332,11 @@ func calculateTaxes(amountToTax uint64, item Item, params PriceParameters, setti
 	subtotal = 0
 	for _, tax := range taxAmounts {
 		if includeTaxes {
-			taxAmount := rint(float64(tax.price) / float64(100+tax.percentage) * 100 * (float64(tax.percentage) / 100))
+			taxAmount := tax.price / (100+tax.percentage) * 100 * tax.percentage / 100
 			tax.price -= taxAmount
 			taxes += taxAmount
 		} else {
-			taxes += rint(float64(tax.price) * float64(tax.percentage) / 100)
+			taxes += tax.price * tax.percentage / 100
 		}
 		subtotal += tax.price
 	}
@@ -355,7 +355,3 @@ const (
 	signMask = 1 << 63
 	fracMask = 1<<shift - 1
 )
-
-func rint(x float64) uint64 {
-	return uint64(math.Round(x))
-}

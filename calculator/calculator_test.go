@@ -15,18 +15,18 @@ var testLogger = logrus.NewEntry(logrus.StandardLogger())
 
 type TestItem struct {
 	sku      string
-	price    uint64
+	price    float64
 	itemType string
-	vat      uint64
+	vat      float64
 	items    []Item
-	quantity uint64
+	quantity float64
 }
 
 func (t *TestItem) ProductSku() string {
 	return t.sku
 }
 
-func (t *TestItem) PriceInLowestUnit() uint64 {
+func (t *TestItem) PriceInLowestUnit() float64 {
 	return t.price
 }
 
@@ -34,7 +34,7 @@ func (t *TestItem) ProductType() string {
 	return t.itemType
 }
 
-func (t *TestItem) FixedVAT() uint64 {
+func (t *TestItem) FixedVAT() float64 {
 	return t.vat
 }
 
@@ -42,11 +42,11 @@ func (t *TestItem) TaxableItems() []Item {
 	return t.items
 }
 
-func (t *TestItem) GetQuantity() uint64 {
+func (t *TestItem) GetQuantity() float64 {
 	if t.quantity > 0 {
 		return t.quantity
 	}
-	return 1
+	return 1.0
 }
 
 type TestCoupon struct {
@@ -65,111 +65,111 @@ func (c *TestCoupon) ValidForProduct(productSku string) bool {
 	return c.itemSku == productSku
 }
 
-func (c *TestCoupon) ValidForPrice(currency string, price uint64) bool {
+func (c *TestCoupon) ValidForPrice(currency string, price float64) bool {
 	return c.moreThan == 0 || price > c.moreThan
 }
 
-func (c *TestCoupon) PercentageDiscount() uint64 {
+func (c *TestCoupon) PercentageDiscount() float64 {
 	return c.percentage
 }
 
-func (c *TestCoupon) FixedDiscount(currency string) uint64 {
+func (c *TestCoupon) FixedDiscount(currency string) float64 {
 	return c.fixed
 }
 
 func validatePrice(t *testing.T, actual Price, expected Price) {
-	assert.Equal(t, expected.Subtotal, actual.Subtotal, fmt.Sprintf("Expected subtotal to be %d, got %d", expected.Subtotal, actual.Subtotal))
-	assert.Equal(t, expected.Taxes, actual.Taxes, fmt.Sprintf("Expected taxes to be %d, got %d", expected.Taxes, actual.Taxes))
-	assert.Equal(t, expected.NetTotal, actual.NetTotal, fmt.Sprintf("Expected net total to be %d, got %d", expected.NetTotal, actual.NetTotal))
-	assert.Equal(t, expected.Discount, actual.Discount, fmt.Sprintf("Expected discount to be %d, got %d", expected.Discount, actual.Discount))
-	assert.Equal(t, expected.Total, actual.Total, fmt.Sprintf("Expected total to be %d, got %d", expected.Total, actual.Total))
-	assert.Equal(t, int64(expected.NetTotal+expected.Taxes), expected.Total, "Your expected nettotal and taxes should add up to the expected total. Check your test!")
-	assert.Equal(t, int64(actual.NetTotal+actual.Taxes), actual.Total, "Expected nettotal and taxes to add up to total")
+	assert.Equal(t, expected.Subtotal, actual.Subtotal, fmt.Sprintf("Expected subtotal to be %f, got %f", expected.Subtotal, actual.Subtotal))
+	assert.Equal(t, expected.Taxes, actual.Taxes, fmt.Sprintf("Expected taxes to be %f, got %f", expected.Taxes, actual.Taxes))
+	assert.Equal(t, expected.NetTotal, actual.NetTotal, fmt.Sprintf("Expected net total to be %f, got %f", expected.NetTotal, actual.NetTotal))
+	assert.Equal(t, expected.Discount, actual.Discount, fmt.Sprintf("Expected discount to be %f, got %f", expected.Discount, actual.Discount))
+	assert.Equal(t, expected.Total, actual.Total, fmt.Sprintf("Expected total to be %f, got %f", expected.Total, actual.Total))
+	assert.Equal(t, float64(expected.NetTotal+expected.Taxes), expected.Total, "Your expected nettotal and taxes should add up to the expected total. Check your test!")
+	assert.Equal(t, float64(actual.NetTotal+actual.Taxes), actual.Total, "Expected nettotal and taxes to add up to total")
 }
 
 func TestNoItems(t *testing.T) {
 	params := PriceParameters{"USA", "USD", nil, nil}
 	price := CalculatePrice(nil, nil, params, testLogger)
 	validatePrice(t, price, Price{
-		Subtotal: 0,
-		Discount: 0,
-		NetTotal: 0,
-		Taxes:    0,
-		Total:    0,
+		Subtotal: 0.0,
+		Discount: 0.0,
+		NetTotal: 0.0,
+		Taxes:    0.0,
+		Total:    0.0,
 	})
 }
 
 func TestNoTaxes(t *testing.T) {
-	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}}}
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100.0, itemType: "test"}}}
 	price := CalculatePrice(nil, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
-		Subtotal: 100,
-		Discount: 0,
-		NetTotal: 100,
-		Taxes:    0,
-		Total:    100,
+		Subtotal: 100.0,
+		Discount: 0.0,
+		NetTotal: 100.0,
+		Taxes:    0.0,
+		Total:    100.0,
 	})
 }
 
 func TestFixedVAT(t *testing.T) {
-	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100.0, itemType: "test", vat: 9}}}
 	price := CalculatePrice(nil, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
-		Subtotal: 100,
-		Discount: 0,
-		NetTotal: 100,
-		Taxes:    9,
-		Total:    109,
+		Subtotal: 100.0,
+		Discount: 0.0,
+		NetTotal: 100.0,
+		Taxes:    9.0,
+		Total:    109.0,
 	})
 }
 
 func TestFixedVATWhenPricesIncludeTaxes(t *testing.T) {
-	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test", vat: 9}}}
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100.0, itemType: "test", vat: 9}}}
 	price := CalculatePrice(&Settings{PricesIncludeTaxes: true}, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
-		Subtotal: 92,
-		Discount: 0,
-		NetTotal: 92,
-		Taxes:    8,
-		Total:    100,
+		Subtotal: 92.0,
+		Discount: 0.0,
+		NetTotal: 92.0,
+		Taxes:    8.0,
+		Total:    100.0,
 	})
 }
 
 func TestCountryBasedVAT(t *testing.T) {
 	settings := &Settings{
 		Taxes: []*Tax{&Tax{
-			Percentage:   21,
+			Percentage:   21.0,
 			ProductTypes: []string{"test"},
 			Countries:    []string{"USA"},
 		}},
 	}
 
-	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100, itemType: "test"}}}
+	params := PriceParameters{"USA", "USD", nil, []Item{&TestItem{price: 100.0, itemType: "test"}}}
 	price := CalculatePrice(settings, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
-		Subtotal: 100,
-		Discount: 0,
-		NetTotal: 100,
-		Taxes:    21,
-		Total:    121,
+		Subtotal: 100.0,
+		Discount: 0.0,
+		NetTotal: 100.0,
+		Taxes:    21.0,
+		Total:    121.0,
 	})
 }
 
 func TestCouponWithNoTaxes(t *testing.T) {
-	coupon := &TestCoupon{itemType: "test", percentage: 10}
-	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100, itemType: "test"}}}
+	coupon := &TestCoupon{itemType: "test", percentage: 10.0}
+	params := PriceParameters{"USA", "USD", coupon, []Item{&TestItem{price: 100.0, itemType: "test"}}}
 	price := CalculatePrice(nil, nil, params, testLogger)
 
 	validatePrice(t, price, Price{
-		Subtotal: 100,
-		Discount: 10,
-		NetTotal: 90,
-		Taxes:    0,
-		Total:    90,
+		Subtotal: 100.0,
+		Discount: 10.0,
+		NetTotal: 90.0,
+		Taxes:    0.0,
+		Total:    90.0,
 	})
 }
 
