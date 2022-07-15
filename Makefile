@@ -10,7 +10,7 @@ arch = amd64
 
 build:
 	@echo "Making gocommerce for $(os)/$(arch)"
-	GOOS=$(os) GOARCH=$(arch) go build -ldflags "-X github.com/netlify/gocommerce/cmd.Version=`git rev-parse HEAD`"
+	GOOS=$(os) GOARCH=$(arch) CGO_CFLAGS="-g -O2 -Wno-return-local-addr" go build -ldflags "-X github.com/netlify/gocommerce/cmd.Version=`git rev-parse HEAD`"
 
 build_linux: override os=linux
 build_linux: build
